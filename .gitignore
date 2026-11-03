@@ -1,3 +1,16 @@
 build/
 .cache/
 compile_commands.json
+# macOS / Xcode
+.DS_Store
+*.xcuserstate
+xcuserdata/
+DerivedData/
+
+# IDE
+.idea/
+.vscode/
+*.user
+
+# Never vendor full JUCE
+/JUCE/
