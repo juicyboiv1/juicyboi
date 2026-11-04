@@ -77,7 +77,8 @@ inline void fillFmvCentres (ChannelVoicing& v)
 }
 
 /** Channel 1 — Red: modern / aggressive Dual Rec–style path.
-    Brighter FMV (680p treble cap), tighter cascade, more stage gain. */
+    Brighter FMV (680p treble cap), more stage gain than Orange, with a
+    fuller low end through the cascade (input tight ~65 Hz). */
 inline ChannelVoicing red()
 {
     ChannelVoicing v;
@@ -85,15 +86,19 @@ inline ChannelVoicing red()
     // Shared skeleton inspired by V1A → V2A → V2B (cold) → V3A (+ CF after)
     v.stages = {{
         //  HP     LP        gain   bias    pos    neg
-        {   35.0, 13000.0,  2.8f,  0.14f,  1.6f,  0.9f }, // V1A-ish
-        {  120.0, 10000.0,  7.5f,  0.28f,  1.9f,  1.0f }, // V2A-ish (after gain pot)
-        {  220.0,  8500.0,  6.5f,  0.32f,  2.0f,  1.1f }, // V2B cold-cathode bite
-        {   25.0,  7500.0,  2.2f,  0.08f,  1.3f,  1.0f }, // V3A → toward CF
+        // Fattened pre-Boost: lower coupling corners pass more low end into
+        // the cascade; ~20% more drive per gain stage for saturation that
+        // doesn't depend on the OD808. Stage 3 keeps the highest HP so the
+        // cold-cathode stage still tightens palm mutes.
+        {   30.0, 13000.0,  3.4f,  0.14f,  1.6f,  0.9f }, // V1A-ish
+        {   80.0, 10000.0,  9.0f,  0.28f,  1.9f,  1.0f }, // V2A-ish (after gain pot)
+        {  140.0,  8200.0,  7.6f,  0.32f,  2.0f,  1.1f }, // V2B cold-cathode bite
+        {   22.0,  7500.0,  2.4f,  0.08f,  1.3f,  1.0f }, // V3A → toward CF
     }};
     v.gainPotAfterStage = 0;
     v.gainPotMin = 0.025f;
-    v.gainPotMax = 1.15f;
-    v.inputTightHpHz = 95.0;
+    v.gainPotMax = 1.35f;
+    v.inputTightHpHz = 65.0;
     v.postLpHz = 7800.0;
     v.makeup = 0.58f;
 
