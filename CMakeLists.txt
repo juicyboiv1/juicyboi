@@ -27,6 +27,8 @@ juce_add_plugin(juicyboi
     PLUGIN_CODE Jcb1
     FORMATS ${JUICYBOI_FORMATS}
     PRODUCT_NAME "juicyboi"
+    MICROPHONE_PERMISSION_ENABLED TRUE
+    MICROPHONE_PERMISSION_TEXT "juicyboi needs microphone access to take guitar input from your audio interface."
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
