@@ -104,11 +104,10 @@ Tests/
 
 ## DSP stage notes
 
-- **Od808Stage**: input HP → op-amp gain leg high-passed at ~720 Hz (4.7k/47n),
-  so lows stay near unity and mids/highs get gain → feedback-cap LP whose corner
-  drops as drive rises → smooth diode-pair limit applied only to the amplified
-  part (`out = in + clip(gain·hp(in))`, the feedback-clipper character) → ~720 Hz
-  passive LP with a treble-restoring tone blend → level → output HP.
+- **Od808Stage**: OD-808 rev.1 BOM cues (4.7k/50n gain leg ≈677 Hz, R11=51k +
+  500kA drive, C1=50p feedback LP, 1N914 pair, 220n/1k tone ≈723 Hz + 20kA
+  treble restore, 100k Balance level). Feedback-clipper form
+  `out = in + clip(gain·hp(in))` — original DSP, not a product clone.
 - **PreampCascade**: tight HP → 4 triode-like stages, each with a coupling HP,
   a gain, an asymmetric soft-sat (positive half flattens harder, bias offset gives
   even harmonics, polarity inverts per stage), and a plate/Miller LP. The Gain pot
