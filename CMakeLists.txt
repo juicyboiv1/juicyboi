@@ -8,6 +8,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # JUCE location: override with -DJUCE_DIR=/path/to/JUCE
 set(JUCE_DIR "/workspace/JUCE" CACHE PATH "Path to the JUCE source tree")
+# Standalone: list interface inputs as mono (Scarlett 1/2/3/4), not stereo pairs
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchJuceStandaloneMonoInputs.cmake)
+
 add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/JUCE)
 
 # Linux: VST3 + Standalone (+ LV2). macOS: AU. macOS/Windows: AAX (Pro Tools).
