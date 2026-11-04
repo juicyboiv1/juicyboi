@@ -113,7 +113,7 @@ void JuicyboiAudioProcessorEditor::paint (juce::Graphics& g)
 
     g.setColour (juce::Colour (0xffd4af37));
     g.setFont (juce::FontOptions (26.0f, juce::Font::bold));
-    g.drawText ("juicyboi v1", header.reduced (16, 0), juce::Justification::centredLeft);
+    g.drawText ("juicyboi v2", header.reduced (16, 0), juce::Justification::centredLeft);
 
     g.setColour (juce::Colour (0xff7a9a5c));
     g.setFont (juce::FontOptions (12.0f));

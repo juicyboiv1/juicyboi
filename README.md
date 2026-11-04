@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (V1 scaffold)
+# juicyboi — heavy-riff preamp (v2)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -195,3 +195,15 @@ Tests/
 6. Smooth OD level and tone-coefficient changes per sample. Add an oversampling
    quality setting and presets.
 7. Custom UI / LookAndFeel.
+
+## v2 changelog
+
+- **Red channel fattened** — eased input/mid high-passes (input 95→65 Hz), cascade drive up ~15–30%, Gain pot max 1.15→1.35 for more gain and bass before Boost.
+- **Dual preamp** — Red and Orange channels, plus an **OD808** boost in front.
+- **Gate** with sidechain detection.
+- **Cab IR scaffold** (IR loading path in place; bundled IRs still minimal).
+- **Standalone: Scarlett mono inputs** — patched JUCE Standalone so multichannel interfaces (e.g. Scarlett 4i4) show inputs 1/2/3/4 individually.
+- **macOS microphone permission** — Standalone now ships `NSMicrophoneUsageDescription` so macOS prompts for input access.
+- **Green/gold GUI** refresh.
+
+Plugin identity (PLUGIN_CODE `Jcb1`) is unchanged, so hosts keep existing sessions.
