@@ -25,6 +25,10 @@ namespace id
     inline constexpr const char* cabMd421Axis = "cab_md421_axis";
     inline constexpr const char* cabMicBlend  = "cab_mic_blend";
     inline constexpr const char* cabLevel     = "cab_level";
+    inline constexpr const char* gateEnable    = "gate_enable";
+    inline constexpr const char* gateThreshold = "gate_threshold";
+    inline constexpr const char* gateHold      = "gate_hold";
+    inline constexpr const char* gateRelease   = "gate_release";
 }
 
 inline constexpr int versionHint = 1;

@@ -21,6 +21,16 @@ static std::unique_ptr<AudioParameterFloat> decibels (const char* pid, const Str
                                                       [] (float v, int) { return String (v, 1) + " dB"; }));
 }
 
+static std::unique_ptr<AudioParameterFloat> milliseconds (const char* pid, const String& name,
+                                                          float lo, float hi, float def)
+{
+    NormalisableRange<float> range (lo, hi, 0.1f);
+    range.setSkewForCentre (juce::jmin (hi, lo + 80.0f)); // finer control at short times
+    return std::make_unique<AudioParameterFloat> (ParameterID { pid, versionHint }, name, range, def,
+                                                  AudioParameterFloatAttributes().withLabel ("ms").withStringFromValueFunction (
+                                                      [] (float v, int) { return String (juce::roundToInt (v)) + " ms"; }));
+}
+
 AudioProcessorValueTreeState::ParameterLayout createLayout()
 {
     AudioProcessorValueTreeState::ParameterLayout layout;
@@ -51,6 +61,12 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
                                                        AudioParameterFloatAttributes().withStringFromValueFunction (
                                                            [] (float v, int) { return String (juce::roundToInt ((1.0f - v) * 100)) + "/" + String (juce::roundToInt (v * 100)); })));
     layout.add (decibels (id::cabLevel, "Cab Level", -24.0f, 24.0f, 0.0f));
+
+    // Gate: key = dry input (post trim), VCA after cab, before master
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::gateEnable, versionHint }, "Gate On", false));
+    layout.add (decibels (id::gateThreshold, "Gate Threshold", -80.0f, -20.0f, -60.0f));
+    layout.add (milliseconds (id::gateHold,    "Gate Hold",    0.0f, 500.0f, 60.0f));
+    layout.add (milliseconds (id::gateRelease, "Gate Release", 1.0f, 500.0f, 60.0f));
 
     layout.add (decibels (id::master, "Master", -60.0f, 12.0f, -6.0f));
 

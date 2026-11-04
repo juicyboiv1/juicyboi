@@ -56,6 +56,7 @@ Input trim
                               Riff B ┘  on channel switch
   └─► Tone stack (bass / mid / treble) + presence   (base rate)
   └─► Cab IR sim (optional; SM57 + MD421 blend)   (base rate)
+  └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
   └─► Master
   └─► Bypass crossfade against latency-aligned dry signal
 ```
@@ -82,6 +83,36 @@ Dual-mic 4x12 cabinet simulator after tone/presence, before Master.
 **No IRs are bundled.** Mesa/Boogie, Celestion Vintage 30, SM57 and MD421 are
 trademarks of their owners; supply IRs you own or are licensed to use.
 
+## Gate section
+
+Key/sidechain noise gate for tight high-gain riffing. Original DSP that follows
+general key + VCA gate principles: a clean detector driving a VCA placed after
+the gain. It was inspired by the public PedalPCB Muzzle (THAT4301-class
+VCA/RMS) gate architecture and the common two-knob-plus-hold control layout
+of popular guitar gates. It is not a clone of any commercial product, and no
+schematic is bundled.
+
+- **Key = dry guitar.** The detector taps the signal right after Input trim,
+  before Boost and the preamp. Its envelope follows your picking dynamics
+  instead of the hiss floor of the distorted signal, so the threshold behaves
+  the same whatever the Gain setting is.
+- **Mute = after Cab, before Master.** The VCA silences preamp hiss and cab
+  noise along with the note tail. (With Cab off, it sits right after tone/presence.)
+- Detector: 20 Hz DC block → rectify → peak follower (0.1 ms attack, 8 ms release),
+  4 dB hysteresis (closes 4 dB below the open threshold) to prevent chatter.
+- Gain law: Open → Hold → Closing → Closed. Fixed 0.5 ms open ramp (no click).
+  Release falls 60 dB over the Release time, then snaps to 0 below −80 dB.
+- Because the key is taken before the oversampler, it runs ~61 samples
+  (~1.3 ms @ 48 kHz) *ahead* of the wet path. That works as free look-ahead,
+  so pick attacks are never chopped.
+- **Gate off = true bypass.** After a 10 ms fade, there is no multiply and no
+  state change. Gate is off by default.
+- GUI LED: green = open, orange-red = closed, dim = gate bypassed.
+
+Tips: start with Threshold around −60 dB on a typical interface DI. Raise it
+until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
+(20–60 ms) and Release (30–80 ms). For sustained chords, use longer Hold/Release.
+
 ## Parameters
 
 | ID             | Name        | Range            | Default |
@@ -97,6 +128,15 @@ trademarks of their owners; supply IRs you own or are licensed to use.
 | `pre_mid`      | Mid         | 0 … 10 (5 = flat)| 4       |
 | `pre_treble`   | Treble      | 0 … 10 (5 = flat)| 5.5     |
 | `pre_presence` | Presence    | 0 … 10           | 5       |
+| `cab_enable`   | Cab On      | bool             | off     |
+| `cab_sm57_axis`| SM57 Axis   | On / Off-axis    | On      |
+| `cab_md421_axis`| MD421 Axis | On / Off-axis    | On      |
+| `cab_mic_blend`| Mic Blend   | 0 … 1            | 0.5     |
+| `cab_level`    | Cab Level   | -24 … +24 dB     | 0 dB    |
+| `gate_enable`  | Gate On     | bool             | off     |
+| `gate_threshold`| Gate Threshold | -80 … -20 dB (key envelope) | -60 dB |
+| `gate_hold`    | Gate Hold   | 0 … 500 ms       | 60 ms   |
+| `gate_release` | Gate Release| 1 … 500 ms (−60 dB fall time) | 60 ms |
 | `master`       | Master      | -60 … +12 dB     | -6 dB   |
 | `bypass`       | Bypass      | bool (host bypass param) | off |
 
@@ -117,6 +157,8 @@ Source/
     PreampCascade.h/.cpp   4× [coupling HP → gain → asym sat (inverting) → plate LP]
     ToneStack.h/.cpp       placeholder biquad TMB + presence shelf
     OversampledNonlinear.h juce::dsp::Oversampling wrapper (4x, FIR, integer latency)
+    CabSim.h/.cpp          dual-mic IR convolution (4 slots, blend, hard bypass)
+    NoiseGate.h/.cpp       key/sidechain gate (dry-input detector, VCA after cab)
 Tests/
   SmokeTest.cpp            headless run through every channel/boost/gain combo
 ```
@@ -148,8 +190,8 @@ Tests/
    level-dependent THD of reference circuits or SPICE sims you build).
 4. Fit the OD clipper knee to a SPICE diode model (or use a WDF / Newton solve
    of the feedback clipper).
-5. Add a power-amp stage with presence moved into its NFB loop, then cab IR
-   loading (convolution) and a noise gate (essential for heavy riffing).
+5. Add a power-amp stage with presence moved into its NFB loop. (Cab IR and the
+   key/sidechain noise gate are now in.)
 6. Smooth OD level and tone-coefficient changes per sample. Add an oversampling
    quality setting and presets.
 7. Custom UI / LookAndFeel.

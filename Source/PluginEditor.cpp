@@ -7,7 +7,7 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
 {
     setLookAndFeel (&lookAndFeel);
 
-    for (auto* g : { &inGroup, &odGroup, &preGroup, &outGroup, &cabGroup })
+    for (auto* g : { &inGroup, &odGroup, &preGroup, &outGroup, &cabGroup, &gateGroup })
         addAndMakeVisible (*g);
 
     setupKnob (input,    params::id::inputTrim, "Input");
@@ -65,9 +65,17 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
         addAndMakeVisible (*irZones[(size_t) sl]);
     }
 
+    // Gate section (key = dry input, VCA after cab)
+    setupKnob (gateThreshold, params::id::gateThreshold, "Threshold");
+    setupKnob (gateHold,      params::id::gateHold,      "Hold");
+    setupKnob (gateRelease,   params::id::gateRelease,   "Release");
+    addAndMakeVisible (gateEnable);
+    gateEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::gateEnable, gateEnable);
+    addAndMakeVisible (gateLed);
+
     setResizable (true, true);
-    setResizeLimits (900, 480, 1600, 800);
-    setSize (1040, 520);
+    setResizeLimits (1040, 500, 1800, 900);
+    setSize (1180, 540);
 }
 
 JuicyboiAudioProcessorEditor::~JuicyboiAudioProcessorEditor()
@@ -151,6 +159,59 @@ juce::Rectangle<int> JuicyboiAudioProcessorEditor::layoutCab (juce::Rectangle<in
     return bounds;
 }
 
+void JuicyboiAudioProcessorEditor::layoutGate (juce::Rectangle<int> bounds)
+{
+    gateGroup.setBounds (bounds);
+    auto r = bounds.reduced (10, 20);
+
+    auto top = r.removeFromTop (28);
+    gateEnable.setBounds (top.removeFromLeft (80));
+    gateLed.setBounds (top.removeFromLeft (22).withSizeKeepingCentre (16, 16));
+    r.removeFromTop (4);
+
+    auto place = [] (Knob& k, juce::Rectangle<int> kr)
+    {
+        k.label.setBounds (kr.removeFromTop (20));
+        k.slider.setBounds (kr.reduced (4));
+    };
+    const auto w = r.getWidth() / 3;
+    place (gateThreshold, r.removeFromLeft (w));
+    place (gateHold,      r.removeFromLeft (w));
+    place (gateRelease,   r);
+}
+
+void JuicyboiAudioProcessorEditor::GateLed::timerCallback()
+{
+    const auto nowOn = proc.isGateActive()
+                       && proc.apvts.getRawParameterValue (jb::params::id::gateEnable)->load() > 0.5f;
+    const auto amt = nowOn ? proc.getGateOpenAmount() : 0.0f;
+    if (nowOn != on || std::abs (amt - shown) > 0.02f)
+    {
+        on = nowOn;
+        shown = amt;
+        repaint();
+    }
+}
+
+void JuicyboiAudioProcessorEditor::GateLed::paint (juce::Graphics& g)
+{
+    auto b = getLocalBounds().toFloat().reduced (1.5f);
+    const auto closed = juce::Colour (0xffe0542a); // orange-red
+    const auto open   = juce::Colour (0xff4cd964); // green
+    const auto c = on ? closed.interpolatedWith (open, juce::jlimit (0.0f, 1.0f, shown))
+                      : juce::Colour (0xff2a3d20);
+
+    if (on)
+    {
+        g.setColour (c.withAlpha (0.35f));
+        g.fillEllipse (b.expanded (1.5f));
+    }
+    g.setColour (c);
+    g.fillEllipse (b);
+    g.setColour (juce::Colour (0xffd4af37).withAlpha (0.7f));
+    g.drawEllipse (b, 1.0f);
+}
+
 //==============================================================================
 JuicyboiAudioProcessorEditor::IRDropZone::IRDropZone (JuicyboiAudioProcessor& p, int s) : proc (p), slot (s)
 {
@@ -232,7 +293,10 @@ void JuicyboiAudioProcessorEditor::resized()
 
     // Cab row along the bottom
     {
-        auto r = layoutCab (area.removeFromBottom (juce::jmax (160, area.getHeight() * 2 / 5)));
+        auto bottom = area.removeFromBottom (juce::jmax (170, area.getHeight() * 2 / 5));
+        layoutGate (bottom.removeFromLeft (juce::jmax (270, bottom.getWidth() / 4)));
+        bottom.removeFromLeft (6);
+        auto r = layoutCab (bottom);
         juce::ignoreUnused (r);
     }
 

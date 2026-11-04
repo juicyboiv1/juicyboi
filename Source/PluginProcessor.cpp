@@ -27,6 +27,10 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pCab421Axis = apvts.getRawParameterValue (params::id::cabMd421Axis);
     pCabBlend   = apvts.getRawParameterValue (params::id::cabMicBlend);
     pCabLevel   = apvts.getRawParameterValue (params::id::cabLevel);
+    pGateEnable  = apvts.getRawParameterValue (params::id::gateEnable);
+    pGateThresh  = apvts.getRawParameterValue (params::id::gateThreshold);
+    pGateHold    = apvts.getRawParameterValue (params::id::gateHold);
+    pGateRelease = apvts.getRawParameterValue (params::id::gateRelease);
     bypassParam = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter (params::id::bypass));
 
     voicingA = dsp::voicings::riffA();
@@ -47,6 +51,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     riffB.prepare (osRate, voicingB);
     tone.prepare (sampleRate);
     cab.prepare (sampleRate, maxChunk, numCh);
+    gate.prepare (sampleRate);
+    keyBuffer.setSize (1, maxChunk, false, true, false);
 
     // Cab uses zero-latency convolution; its latency (if any) is added anyway.
     baseLatency = oversampler.getLatencySamples();
@@ -125,6 +131,8 @@ void JuicyboiAudioProcessor::updateParameters()
 
     cab.setParameters (pCabEnable->load() > 0.5f, pCab57Axis->load() > 0.5f, pCab421Axis->load() > 0.5f,
                        pCabBlend->load(), juce::Decibels::decibelsToGain (pCabLevel->load()));
+
+    gate.setParameters (pGateEnable->load() > 0.5f, pGateThresh->load(), pGateHold->load(), pGateRelease->load());
 }
 
 void JuicyboiAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -173,6 +181,20 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
             buffer.getWritePointer (ch, start)[i] *= g;
     }
 
+    // 1b) Gate key: clean post-trim guitar (mono sum), captured before any
+    //     gain stage so the detector follows picking, not preamp hiss.
+    {
+        auto* k = keyBuffer.getWritePointer (0);
+        const auto norm = 1.0f / (float) numProc;
+        for (int i = 0; i < len; ++i)
+        {
+            float sum = 0.0f;
+            for (int ch = 0; ch < numProc; ++ch)
+                sum += buffer.getReadPointer (ch, start)[i];
+            k[i] = sum * norm;
+        }
+    }
+
     // 2) Nonlinear section at 4x: OD-style boost -> dual-channel preamp
     auto block = juce::dsp::AudioBlock<float> (buffer)
                      .getSubsetChannelBlock (0, (size_t) numProc)
@@ -215,6 +237,16 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
     cab.process (juce::dsp::AudioBlock<float> (buffer)
                      .getSubsetChannelBlock (0, (size_t) numProc)
                      .getSubBlock ((size_t) start, (size_t) len));
+
+    // 4b) Gate VCA after cab, before master (true bypass when Gate is off).
+    //     The key runs ~oversampler-latency ahead of the wet path, which acts
+    //     as a tiny look-ahead so pick attacks are never clipped by the gate.
+    {
+        float* chans[dsp::kMaxChannels] {};
+        for (int ch = 0; ch < numProc; ++ch)
+            chans[ch] = buffer.getWritePointer (ch, start);
+        gate.process (keyBuffer.getReadPointer (0), chans, numProc, len);
+    }
 
     // 5) master, 6) bypass crossfade
     for (int i = 0; i < len; ++i)

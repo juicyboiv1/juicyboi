@@ -68,6 +68,67 @@ int main()
                              odOn, ch == 0 ? "Riff A" : "Riff B", gain, rmsDb, peak, ok ? "ok" : "FAIL");
             }
 
+    // Gate: off by default; when on, a -86 dBFS hiss key must be muted and a
+    // played note must pass. Measures output RMS for a given input generator.
+    {
+        auto& jp = dynamic_cast<JuicyboiAudioProcessor&> (*p);
+        const bool defOff = jp.apvts.getRawParameterValue (jb::params::id::gateEnable)->load() < 0.5f;
+        std::printf ("gate default off  %s\n", defOff ? "ok" : "FAIL");
+        if (! defOff) ++failures;
+
+        setParam (*p, jb::params::id::odEnable, 1.0f);
+        setParam (*p, jb::params::id::channel, 1.0f);
+        setParam (*p, jb::params::id::gain, 10.0f);
+
+        juce::Random rng (1234);
+        auto runRms = [&] (bool tone, int blocks)
+        {
+            double sumSq = 0.0; long n = 0; double ph = 0.0; bool fin = true;
+            for (int b = 0; b < blocks; ++b)
+            {
+                juce::AudioBuffer<float> gb (2, bs);
+                for (int i = 0; i < bs; ++i)
+                {
+                    auto s = 5.0e-5 * (rng.nextFloat() * 2.0 - 1.0); // ~-86 dBFS hiss
+                    if (tone) { s += 0.2 * std::sin (ph); ph += 2.0 * juce::MathConstants<double>::pi * 82.4 / sr; }
+                    gb.setSample (0, i, (float) s);
+                    gb.setSample (1, i, 0.0f);
+                }
+                p->processBlock (gb, midi);
+                if (b < blocks / 2) continue;
+                for (int c = 0; c < 2; ++c)
+                    for (int i = 0; i < bs; ++i)
+                    {
+                        const auto v = gb.getSample (c, i);
+                        if (! std::isfinite (v)) fin = false;
+                        sumSq += (double) v * v; ++n;
+                    }
+            }
+            const auto db = 10.0 * std::log10 (sumSq / (double) n + 1e-20);
+            return fin ? db : 999.0;
+        };
+
+        const auto hissOff = runRms (false, 100);
+        setParam (*p, jb::params::id::gateEnable, 1.0f);
+        const auto hissOn  = runRms (false, 100);
+        const auto noteOn  = runRms (true, 100);
+        const auto openAmt = jp.getGateOpenAmount();
+        const auto tail    = runRms (false, 100); // note stops -> gate must close again
+        const auto closedAmt = jp.getGateOpenAmount();
+
+        const bool gOk = hissOn < -100.0 && hissOff > hissOn + 30.0 && noteOn > -40.0 && noteOn < 20.0
+                         && openAmt > 0.99f && tail < -100.0 && closedAmt < 0.01f;
+        std::printf ("gate: hiss off=%6.1f  hiss on=%6.1f  note on=%6.1f  tail=%6.1f dBFS  open=%.2f closed=%.2f  %s\n",
+                     hissOff, hissOn, noteOn, tail, openAmt, closedAmt, gOk ? "ok" : "FAIL");
+        if (! gOk) ++failures;
+
+        setParam (*p, jb::params::id::gateEnable, 0.0f);
+        runRms (false, 10);
+        const bool bpGate = ! jp.isGateActive() && jp.getGateOpenAmount() > 0.999f;
+        std::printf ("gate off -> true bypass  %s\n", bpGate ? "ok" : "FAIL");
+        if (! bpGate) ++failures;
+    }
+
     // Bypass alignment: impulse should come out exactly `latency` samples later
     setParam (*p, jb::params::id::bypass, 1.0f);
     p->prepareToPlay (sr, bs); // snaps smoothers to bypassed state

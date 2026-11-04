@@ -9,12 +9,14 @@
 #include "dsp/ToneStack.h"
 #include "dsp/OversampledNonlinear.h"
 #include "dsp/CabSim.h"
+#include "dsp/NoiseGate.h"
 
 /** juicyboi — heavy-riff preamp.
     Signal chain:
       Input trim -> [oversampled: OD-style boost (blend on/off) ->
       dual-channel cascaded preamp (Red Ch1 / Orange Ch2 crossfade)] ->
-      tone stack + presence -> cab IR sim (optional, hard bypass) -> master -> (bypass crossfade vs delayed dry). */
+      tone stack + presence -> cab IR sim (optional, hard bypass) -> gate VCA (optional, true bypass;
+      keyed from the dry post-trim input) -> master -> (bypass crossfade vs delayed dry). */
 class JuicyboiAudioProcessor final : public juce::AudioProcessor
 {
 public:
@@ -59,6 +61,11 @@ public:
     juce::File getCabIRFile (int slot) const;
     bool hasCabIR (int slot) const { return cab.hasIR (slot); }
 
+    //== Gate status (any thread) ===============================================
+    /** 1 = open, 0 = closed (1 when the gate is bypassed). */
+    float getGateOpenAmount() const noexcept { return gate.getOpenAmount(); }
+    bool  isGateActive() const noexcept      { return gate.isActive(); }
+
 private:
     void updateParameters();
     void processChunk (juce::AudioBuffer<float>& buffer, int start, int len, int numProcChannels);
@@ -83,6 +90,10 @@ private:
     std::atomic<float>* pCab421Axis = nullptr;
     std::atomic<float>* pCabBlend  = nullptr;
     std::atomic<float>* pCabLevel  = nullptr;
+    std::atomic<float>* pGateEnable  = nullptr;
+    std::atomic<float>* pGateThresh  = nullptr;
+    std::atomic<float>* pGateHold    = nullptr;
+    std::atomic<float>* pGateRelease = nullptr;
     juce::AudioParameterBool* bypassParam = nullptr;
     int baseLatency = 0;
 
@@ -92,6 +103,7 @@ private:
     jb::dsp::PreampCascade riffA, riffB;
     jb::dsp::ToneStack tone;
     jb::dsp::CabSim cab;
+    jb::dsp::NoiseGate gate;
     std::array<juce::File, jb::dsp::CabSim::numSlots> cabFiles;
     jb::dsp::ChannelVoicing voicingA, voicingB;
 
@@ -100,6 +112,7 @@ private:
 
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay { 8192 };
     juce::AudioBuffer<float> dryBuffer;
+    juce::AudioBuffer<float> keyBuffer; // mono gate key: post-trim, pre-gain
 
     int maxChunk = 512;
     int lastChannel = -1;

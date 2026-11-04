@@ -106,6 +106,20 @@ private:
 
     void setupKnob (Knob&, const char* paramId, const juce::String& text);
     juce::Rectangle<int> layoutCab (juce::Rectangle<int>);
+    void layoutGate (juce::Rectangle<int>);
+
+    /** Dual-colour gate status LED: green = open, orange-red = closed,
+        dim when the gate is bypassed. Polls the processor at 30 Hz. */
+    struct GateLed final : juce::Component, juce::Timer
+    {
+        explicit GateLed (JuicyboiAudioProcessor& p) : proc (p) { startTimerHz (30); }
+        void timerCallback() override;
+        void paint (juce::Graphics&) override;
+
+        JuicyboiAudioProcessor& proc;
+        float shown = 1.0f;
+        bool on = false;
+    };
 
     /** Drag-and-drop IR target for one cab slot (.wav/.aif/.aiff/.flac). */
     struct IRDropZone final : juce::Component, juce::FileDragAndDropTarget
@@ -131,6 +145,11 @@ private:
     JuicyboiLookAndFeel lookAndFeel;
 
     Knob input, odDrive, odTone, odLevel, gain, bass, mid, treble, presence, master, cabBlend, cabLevel;
+    Knob gateThreshold, gateHold, gateRelease;
+
+    juce::ToggleButton gateEnable { "Gate" };
+    std::unique_ptr<APVTS::ButtonAttachment> gateEnableAttachment;
+    GateLed gateLed { processor };
 
     juce::ToggleButton cabEnable { "Cab" };
     std::unique_ptr<APVTS::ButtonAttachment> cabEnableAttachment;
@@ -147,7 +166,8 @@ private:
 
     juce::GroupComponent inGroup { {}, "Input" }, odGroup { {}, "Boost" },
                          preGroup { {}, "Preamp" }, outGroup { {}, "Output" },
-                         cabGroup { {}, "Cab  (Mesa-style 4x12 IR — user-supplied)" };
+                         cabGroup { {}, "Cab  (Mesa-style 4x12 IR - user-supplied)" },
+                         gateGroup { {}, "Gate" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JuicyboiAudioProcessorEditor)
 };

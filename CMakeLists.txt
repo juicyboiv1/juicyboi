@@ -47,7 +47,8 @@ target_sources(juicyboi
         Source/dsp/Od808Stage.cpp
         Source/dsp/PreampCascade.cpp
         Source/dsp/ToneStack.cpp
-        Source/dsp/CabSim.cpp)
+        Source/dsp/CabSim.cpp
+        Source/dsp/NoiseGate.cpp)
 
 target_include_directories(juicyboi PRIVATE Source)
 
