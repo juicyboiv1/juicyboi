@@ -41,6 +41,17 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (knob (id::treble,   "Treble",   5.5f));
     layout.add (knob (id::presence, "Presence", 5.0f));
 
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::cabEnable, versionHint }, "Cab On", false));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::cabSm57Axis, versionHint }, "SM57 Axis",
+                                                        StringArray { "On-axis", "Off-axis" }, 0));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::cabMd421Axis, versionHint }, "MD421 Axis",
+                                                        StringArray { "On-axis", "Off-axis" }, 0));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { id::cabMicBlend, versionHint }, "Mic Blend",
+                                                       NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f,
+                                                       AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                           [] (float v, int) { return String (juce::roundToInt ((1.0f - v) * 100)) + "/" + String (juce::roundToInt (v * 100)); })));
+    layout.add (decibels (id::cabLevel, "Cab Level", -24.0f, 24.0f, 0.0f));
+
     layout.add (decibels (id::master, "Master", -60.0f, 12.0f, -6.0f));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::bypass, versionHint }, "Bypass", false));

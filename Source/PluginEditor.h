@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
+#include <array>
 
 /** V1 editor with a green/gold LookAndFeel for clearer rotary knobs. */
 class JuicyboiAudioProcessorEditor final : public juce::AudioProcessorEditor
@@ -104,11 +105,38 @@ private:
     };
 
     void setupKnob (Knob&, const char* paramId, const juce::String& text);
+    juce::Rectangle<int> layoutCab (juce::Rectangle<int>);
+
+    /** Drag-and-drop IR target for one cab slot (.wav/.aif/.aiff/.flac). */
+    struct IRDropZone final : juce::Component, juce::FileDragAndDropTarget
+    {
+        IRDropZone (JuicyboiAudioProcessor& p, int s);
+        void paint (juce::Graphics&) override;
+        void resized() override;
+        bool isInterestedInFileDrag (const juce::StringArray& files) override;
+        void fileDragEnter (const juce::StringArray&, int, int) override { hovering = true; repaint(); }
+        void fileDragExit (const juce::StringArray&) override { hovering = false; repaint(); }
+        void filesDropped (const juce::StringArray& files, int, int) override;
+        void refresh();
+
+        JuicyboiAudioProcessor& proc;
+        const int slot;
+        bool hovering = false;
+        juce::TextButton clearButton { "x" };
+    };
+
+    std::array<std::unique_ptr<IRDropZone>, jb::dsp::CabSim::numSlots> irZones;
 
     JuicyboiAudioProcessor& processor;
     JuicyboiLookAndFeel lookAndFeel;
 
-    Knob input, odDrive, odTone, odLevel, gain, bass, mid, treble, presence, master;
+    Knob input, odDrive, odTone, odLevel, gain, bass, mid, treble, presence, master, cabBlend, cabLevel;
+
+    juce::ToggleButton cabEnable { "Cab" };
+    std::unique_ptr<APVTS::ButtonAttachment> cabEnableAttachment;
+    juce::ComboBox sm57Axis, md421Axis;
+    juce::Label sm57Label, md421Label, cabHint;
+    std::unique_ptr<APVTS::ComboBoxAttachment> sm57AxisAttachment, md421AxisAttachment;
 
     juce::ToggleButton odEnable { "Boost" }, bypass { "Bypass" };
     std::unique_ptr<APVTS::ButtonAttachment> odEnableAttachment, bypassAttachment;
@@ -118,7 +146,8 @@ private:
     std::unique_ptr<APVTS::ComboBoxAttachment> channelAttachment;
 
     juce::GroupComponent inGroup { {}, "Input" }, odGroup { {}, "Boost" },
-                         preGroup { {}, "Preamp" }, outGroup { {}, "Output" };
+                         preGroup { {}, "Preamp" }, outGroup { {}, "Output" },
+                         cabGroup { {}, "Cab  (Mesa-style 4x12 IR — user-supplied)" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JuicyboiAudioProcessorEditor)
 };

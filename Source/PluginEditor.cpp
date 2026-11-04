@@ -7,7 +7,7 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
 {
     setLookAndFeel (&lookAndFeel);
 
-    for (auto* g : { &inGroup, &odGroup, &preGroup, &outGroup })
+    for (auto* g : { &inGroup, &odGroup, &preGroup, &outGroup, &cabGroup })
         addAndMakeVisible (*g);
 
     setupKnob (input,    params::id::inputTrim, "Input");
@@ -35,9 +35,39 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     channelLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (channelLabel);
 
+    // Cab section
+    setupKnob (cabBlend, params::id::cabMicBlend, "Mic Blend");
+    setupKnob (cabLevel, params::id::cabLevel,    "Cab Level");
+    addAndMakeVisible (cabEnable);
+    cabEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::cabEnable, cabEnable);
+
+    for (auto* cb : { &sm57Axis, &md421Axis })
+    {
+        cb->addItemList ({ "On-axis", "Off-axis" }, 1);
+        addAndMakeVisible (*cb);
+    }
+    sm57AxisAttachment  = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::cabSm57Axis,  sm57Axis);
+    md421AxisAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::cabMd421Axis, md421Axis);
+
+    sm57Label .setText ("SM57",  juce::dontSendNotification);
+    md421Label.setText ("MD421", juce::dontSendNotification);
+    for (auto* l : { &sm57Label, &md421Label }) addAndMakeVisible (*l);
+
+    cabHint.setText ("Cab off = hard bypass (for analog power amp). No IRs loaded = passthrough.",
+                     juce::dontSendNotification);
+    cabHint.setFont (juce::FontOptions (11.0f));
+    cabHint.setColour (juce::Label::textColourId, juce::Colour (0xff7a9a5c));
+    addAndMakeVisible (cabHint);
+
+    for (int sl = 0; sl < dsp::CabSim::numSlots; ++sl)
+    {
+        irZones[(size_t) sl] = std::make_unique<IRDropZone> (processor, sl);
+        addAndMakeVisible (*irZones[(size_t) sl]);
+    }
+
     setResizable (true, true);
-    setResizeLimits (900, 340, 1600, 640);
-    setSize (1040, 360);
+    setResizeLimits (900, 480, 1600, 800);
+    setSize (1040, 520);
 }
 
 JuicyboiAudioProcessorEditor::~JuicyboiAudioProcessorEditor()
@@ -85,10 +115,126 @@ void JuicyboiAudioProcessorEditor::paint (juce::Graphics& g)
     g.fillRect (0, header.getBottom() - 1, getWidth(), 1);
 }
 
+juce::Rectangle<int> JuicyboiAudioProcessorEditor::layoutCab (juce::Rectangle<int> bounds)
+{
+    cabGroup.setBounds (bounds);
+    auto r = bounds.reduced (10, 20);
+    cabHint.setBounds (r.removeFromBottom (16));
+
+    auto controls = r.removeFromLeft (190);
+    cabEnable.setBounds (controls.removeFromTop (28).withWidth (90));
+    controls.removeFromTop (6);
+    auto row1 = controls.removeFromTop (26);
+    sm57Label.setBounds (row1.removeFromLeft (56));
+    sm57Axis.setBounds (row1.reduced (2));
+    controls.removeFromTop (4);
+    auto row2 = controls.removeFromTop (26);
+    md421Label.setBounds (row2.removeFromLeft (56));
+    md421Axis.setBounds (row2.reduced (2));
+
+    auto knobs = r.removeFromLeft (200);
+    auto place = [] (Knob& k, juce::Rectangle<int> kr)
+    {
+        k.label.setBounds (kr.removeFromTop (20));
+        k.slider.setBounds (kr.reduced (4));
+    };
+    place (cabBlend, knobs.removeFromLeft (100));
+    place (cabLevel, knobs);
+
+    r.removeFromLeft (8);
+    auto top = r.removeFromTop (r.getHeight() / 2);
+    const auto w = r.getWidth() / 2;
+    irZones[0]->setBounds (top.removeFromLeft (w).reduced (3));
+    irZones[1]->setBounds (top.reduced (3));
+    irZones[2]->setBounds (r.removeFromLeft (w).reduced (3));
+    irZones[3]->setBounds (r.reduced (3));
+    return bounds;
+}
+
+//==============================================================================
+JuicyboiAudioProcessorEditor::IRDropZone::IRDropZone (JuicyboiAudioProcessor& p, int s) : proc (p), slot (s)
+{
+    clearButton.setTooltip ("Clear IR");
+    clearButton.onClick = [this] { proc.clearCabIR (slot); refresh(); };
+    addAndMakeVisible (clearButton);
+    refresh();
+}
+
+void JuicyboiAudioProcessorEditor::IRDropZone::refresh()
+{
+    clearButton.setVisible (proc.hasCabIR (slot));
+    repaint();
+}
+
+void JuicyboiAudioProcessorEditor::IRDropZone::resized()
+{
+    clearButton.setBounds (getLocalBounds().removeFromRight (24).withSizeKeepingCentre (20, 20));
+}
+
+bool JuicyboiAudioProcessorEditor::IRDropZone::isInterestedInFileDrag (const juce::StringArray& files)
+{
+    for (auto& f : files)
+        if (juce::File (f).hasFileExtension ("wav;aif;aiff;flac"))
+            return true;
+    return false;
+}
+
+void JuicyboiAudioProcessorEditor::IRDropZone::filesDropped (const juce::StringArray& files, int, int)
+{
+    hovering = false;
+    for (auto& f : files)
+        if (juce::File (f).hasFileExtension ("wav;aif;aiff;flac"))
+        {
+            proc.loadCabIR (slot, juce::File (f));
+            break;
+        }
+    refresh();
+}
+
+void JuicyboiAudioProcessorEditor::IRDropZone::paint (juce::Graphics& g)
+{
+    auto b = getLocalBounds().toFloat().reduced (1.0f);
+    const auto loaded = proc.hasCabIR (slot);
+    g.setColour (hovering ? juce::Colour (0xff2f4a22) : juce::Colour (0xff1a2214));
+    g.fillRoundedRectangle (b, 5.0f);
+
+    juce::Path border;
+    border.addRoundedRectangle (b, 5.0f);
+    if (loaded)
+    {
+        g.setColour (juce::Colour (0xffd4af37));
+        g.strokePath (border, juce::PathStrokeType (1.5f));
+    }
+    else
+    {
+        juce::Path dashed;
+        const float dashes[] = { 5.0f, 4.0f };
+        juce::PathStrokeType (1.2f).createDashedStroke (dashed, border, dashes, 2);
+        g.setColour (juce::Colour (0xff5a7a44));
+        g.fillPath (dashed);
+    }
+
+    auto t = getLocalBounds().reduced (8, 2).withTrimmedRight (22);
+    g.setColour (juce::Colour (0xffd4af37));
+    g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+    g.drawText (jb::dsp::CabSim::slotName (slot), t.removeFromTop (t.getHeight() / 2), juce::Justification::bottomLeft);
+
+    g.setColour (loaded ? juce::Colour (0xffe8e0c8) : juce::Colour (0xff7a9a5c));
+    g.setFont (juce::FontOptions (11.0f));
+    g.drawText (loaded ? proc.getCabIRFile (slot).getFileName() : juce::String ("Drop IR..."),
+                t, juce::Justification::topLeft, true);
+}
+
 void JuicyboiAudioProcessorEditor::resized()
 {
     auto area = getLocalBounds().reduced (10);
     area.removeFromTop (40);
+
+    // Cab row along the bottom
+    {
+        auto r = layoutCab (area.removeFromBottom (juce::jmax (160, area.getHeight() * 2 / 5)));
+        juce::ignoreUnused (r);
+    }
 
     const auto unit = area.getWidth() / 12; // 12 columns: 1 in, 3 boost, 6 pre, 2 out
 

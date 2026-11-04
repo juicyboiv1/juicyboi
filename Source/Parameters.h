@@ -20,6 +20,11 @@ namespace id
     inline constexpr const char* presence   = "pre_presence";
     inline constexpr const char* master     = "master";
     inline constexpr const char* bypass     = "bypass";
+    inline constexpr const char* cabEnable  = "cab_enable";
+    inline constexpr const char* cabSm57Axis  = "cab_sm57_axis";
+    inline constexpr const char* cabMd421Axis = "cab_md421_axis";
+    inline constexpr const char* cabMicBlend  = "cab_mic_blend";
+    inline constexpr const char* cabLevel     = "cab_level";
 }
 
 inline constexpr int versionHint = 1;

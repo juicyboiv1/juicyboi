@@ -55,6 +55,7 @@ Input trim
           └─► Preamp cascade: Riff A ┐  both run; 20 ms crossfade
                               Riff B ┘  on channel switch
   └─► Tone stack (bass / mid / treble) + presence   (base rate)
+  └─► Cab IR sim (optional; SM57 + MD421 blend)   (base rate)
   └─► Master
   └─► Bypass crossfade against latency-aligned dry signal
 ```
@@ -62,6 +63,24 @@ Input trim
 Buses: mono→stereo (default, guitar DI), mono→mono, stereo→stereo.
 Latency: the oversampler's FIR latency (61 samples at 48 kHz), reported to the host.
 The dry/bypass path uses the same delay.
+
+## Cab (IR) section
+
+Dual-mic 4x12 cabinet simulator after tone/presence, before Master.
+
+- **Cab on/off** (`cab_enable`, default off). Off = hard bypass, no convolution
+  runs — use this to feed an analog power amp + real cab.
+- **Four IR slots**, loaded by drag-and-drop onto the GUI: SM57 On-axis,
+  SM57 Off-axis, MD421 On-axis, MD421 Off-axis (.wav/.aif/.aiff/.flac, mono or stereo).
+- **SM57 / MD421 axis** pickers choose which slot each mic uses.
+- **Mic Blend** 0 = all SM57, 1 = all MD421. **Cab Level** ±24 dB.
+- Empty slots: if a mic's selected IR is empty, the other mic gets 100%;
+  if neither is loaded, the cab passes audio through unchanged.
+- IR paths are saved in plugin state (absolute paths) and reloaded if the files still exist.
+- Zero-latency convolution, so no extra latency is reported.
+
+**No IRs are bundled.** Mesa/Boogie, Celestion Vintage 30, SM57 and MD421 are
+trademarks of their owners; supply IRs you own or are licensed to use.
 
 ## Parameters
 

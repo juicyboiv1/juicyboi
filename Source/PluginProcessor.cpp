@@ -22,6 +22,11 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pPresence  = apvts.getRawParameterValue (params::id::presence);
     pMaster    = apvts.getRawParameterValue (params::id::master);
     pBypass    = apvts.getRawParameterValue (params::id::bypass);
+    pCabEnable  = apvts.getRawParameterValue (params::id::cabEnable);
+    pCab57Axis  = apvts.getRawParameterValue (params::id::cabSm57Axis);
+    pCab421Axis = apvts.getRawParameterValue (params::id::cabMd421Axis);
+    pCabBlend   = apvts.getRawParameterValue (params::id::cabMicBlend);
+    pCabLevel   = apvts.getRawParameterValue (params::id::cabLevel);
     bypassParam = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter (params::id::bypass));
 
     voicingA = dsp::voicings::riffA();
@@ -41,8 +46,11 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     riffA.prepare (osRate, voicingA);
     riffB.prepare (osRate, voicingB);
     tone.prepare (sampleRate);
+    cab.prepare (sampleRate, maxChunk, numCh);
 
-    const auto latency = oversampler.getLatencySamples();
+    // Cab uses zero-latency convolution; its latency (if any) is added anyway.
+    baseLatency = oversampler.getLatencySamples();
+    const auto latency = baseLatency + cab.getLatencySamples();
     setLatencySamples (latency);
 
     dryDelay.prepare ({ sampleRate, (juce::uint32) maxChunk, (juce::uint32) numCh });
@@ -114,6 +122,9 @@ void JuicyboiAudioProcessor::updateParameters()
     }
 
     tone.setKnobs (pBass->load(), pMid->load(), pTreble->load(), pPresence->load());
+
+    cab.setParameters (pCabEnable->load() > 0.5f, pCab57Axis->load() > 0.5f, pCab421Axis->load() > 0.5f,
+                       pCabBlend->load(), juce::Decibels::decibelsToGain (pCabLevel->load()));
 }
 
 void JuicyboiAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -192,7 +203,20 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         }
     });
 
-    // 3) Tone stack + presence, 4) master, 5) bypass crossfade
+    // 3) Tone stack + presence
+    for (int ch = 0; ch < numProc; ++ch)
+    {
+        auto* d = buffer.getWritePointer (ch, start);
+        for (int i = 0; i < len; ++i)
+            d[i] = tone.process (d[i], ch);
+    }
+
+    // 4) Cab IR sim (no-op when Cab is off)
+    cab.process (juce::dsp::AudioBlock<float> (buffer)
+                     .getSubsetChannelBlock (0, (size_t) numProc)
+                     .getSubBlock ((size_t) start, (size_t) len));
+
+    // 5) master, 6) bypass crossfade
     for (int i = 0; i < len; ++i)
     {
         const auto m  = masterGain.getNextValue();
@@ -201,7 +225,7 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         for (int ch = 0; ch < numProc; ++ch)
         {
             auto* d = buffer.getWritePointer (ch, start);
-            const auto wet = tone.process (d[i], ch) * m;
+            const auto wet = d[i] * m;
             const auto dry = dryBuffer.getReadPointer (ch)[i];
             d[i] = wet + bp * (dry - wet);
         }
@@ -241,9 +265,35 @@ void JuicyboiAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buf
 }
 
 //==============================================================================
+static const char* irKeys[] = { "ir_sm57_on", "ir_sm57_off", "ir_md421_on", "ir_md421_off" };
+
+bool JuicyboiAudioProcessor::loadCabIR (int slot, const juce::File& file)
+{
+    if (slot < 0 || slot >= dsp::CabSim::numSlots || ! cab.loadImpulseResponse (slot, file))
+        return false;
+    cabFiles[(size_t) slot] = file;
+    return true;
+}
+
+void JuicyboiAudioProcessor::clearCabIR (int slot)
+{
+    if (slot < 0 || slot >= dsp::CabSim::numSlots) return;
+    cab.clearSlot (slot);
+    cabFiles[(size_t) slot] = juce::File();
+}
+
+juce::File JuicyboiAudioProcessor::getCabIRFile (int slot) const
+{
+    return (slot >= 0 && slot < dsp::CabSim::numSlots) ? cabFiles[(size_t) slot] : juce::File();
+}
+
 void JuicyboiAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    if (auto xml = apvts.copyState().createXml())
+    auto state = apvts.copyState();
+    for (int s = 0; s < dsp::CabSim::numSlots; ++s)
+        state.setProperty (irKeys[s], cabFiles[(size_t) s].getFullPathName(), nullptr);
+
+    if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
 }
 
@@ -251,7 +301,19 @@ void JuicyboiAudioProcessor::setStateInformation (const void* data, int sizeInBy
 {
     if (auto xml = getXmlFromBinary (data, sizeInBytes))
         if (xml->hasTagName (apvts.state.getType()))
-            apvts.replaceState (juce::ValueTree::fromXml (*xml));
+        {
+            auto tree = juce::ValueTree::fromXml (*xml);
+            apvts.replaceState (tree);
+
+            for (int s = 0; s < dsp::CabSim::numSlots; ++s)
+            {
+                const auto path = tree.getProperty (irKeys[s]).toString();
+                if (path.isNotEmpty() && juce::File::isAbsolutePath (path) && juce::File (path).existsAsFile())
+                    loadCabIR (s, juce::File (path));
+                else
+                    clearCabIR (s);
+            }
+        }
 }
 
 juce::AudioProcessorEditor* JuicyboiAudioProcessor::createEditor()
