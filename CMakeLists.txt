@@ -10,10 +10,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(JUCE_DIR "/workspace/JUCE" CACHE PATH "Path to the JUCE source tree")
 add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/JUCE)
 
-# Linux: VST3 + Standalone (+ LV2, built into JUCE). macOS also gets AU.
+# Linux: VST3 + Standalone (+ LV2). macOS: AU. macOS/Windows: AAX (Pro Tools).
+# AAX uses the SDK bundled with JUCE 9 under juce_audio_plugin_client/AAX/SDK
+# (override with juce_set_aax_sdk_path if you have a separate Avid SDK tree).
 set(JUICYBOI_FORMATS VST3 Standalone LV2)
 if(APPLE)
     list(APPEND JUICYBOI_FORMATS AU)
+endif()
+if(APPLE OR WIN32)
+    list(APPEND JUICYBOI_FORMATS AAX)
 endif()
 
 juce_add_plugin(juicyboi
@@ -29,6 +34,7 @@ juce_add_plugin(juicyboi
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE
     VST3_CATEGORIES Fx Distortion
+    AAX_CATEGORY Effect
     LV2URI "urn:juicyboi:juicyboi"
     NEEDS_WEB_BROWSER FALSE
     NEEDS_CURL FALSE)

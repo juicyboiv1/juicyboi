@@ -30,7 +30,20 @@ Artifacts (Linux):
 | Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi` |
 | LV2        | `build/juicyboi_artefacts/Release/LV2/juicyboi.lv2` |
 
-The build also makes AU on macOS. No VST2 or AAX (those need vendor SDKs).
+The build also makes AU on macOS, and AAX on macOS/Windows (JUCE 9 ships a
+bundled AAX SDK; you can point at a separate Avid tree with
+`juce_set_aax_sdk_path` before `juce_add_plugin` if needed). No VST2.
+
+| Format (macOS) | Path |
+|----------------|------|
+| AU | `build/juicyboi_artefacts/Release/AU/juicyboi.component` |
+| VST3 | `build/juicyboi_artefacts/Release/VST3/juicyboi.vst3` |
+| AAX | `build/juicyboi_artefacts/Release/AAX/juicyboi.aaxplugin` |
+
+Install AAX to `/Library/Application Support/Avid/Audio/Plug-Ins/` (needs sudo).
+Retail Pro Tools usually expects PACE-signed AAX; unsigned builds may not load
+until you wrap/sign with Avid’s tools.
+
 To install the VST3 on Linux, copy the bundle to `~/.vst3/`.
 
 ## Signal chain
