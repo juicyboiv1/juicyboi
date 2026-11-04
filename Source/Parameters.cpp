@@ -33,7 +33,7 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (decibels (id::odLevel, "Boost Level", -24.0f, 12.0f, 0.0f));
 
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::channel, versionHint }, "Channel",
-                                                        StringArray { "Riff A", "Riff B" }, 1));
+                                                        StringArray { "Red (Ch1)", "Orange (Ch2)" }, 0));
 
     layout.add (knob (id::gain,     "Gain",     6.0f));
     layout.add (knob (id::bass,     "Bass",     5.0f));

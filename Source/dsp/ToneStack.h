@@ -5,17 +5,14 @@
 
 namespace jb::dsp
 {
-/** PLACEHOLDER tone stack: three non-interacting biquads (low shelf, mid
-    peak, high shelf) plus a presence high shelf.
+/** Per-channel tone stack + presence.
 
-    Real passive treble/mid/bass networks are INTERACTING (each knob shifts
-    the others' curves) and lossy; presence in a tube amp lives in the power
-    amp's negative-feedback loop. Next step: replace the three biquads with an
-    analytic 3rd-order passive TMB transfer function (derived from your own
-    component values) discretised via bilinear transform, and move presence
-    into a future power-amp stage.
+    Centres come from the Red/Orange FMV component cues on ChannelVoicing
+    (Ct / Cm / Cb / Rs / pots). Still a non-interacting biquad stand-in for a
+    full bilinear passive TMB — next step is the analytic 3rd-order TF.
 
-    Knobs are 0..10, 5 = flat (presence 5 = mild lift). Runs at base rate. */
+    Presence models the NFB-shelf idea (Red schematic: ~22k + 3n ≈ 2.4 kHz).
+    Knobs 0..10; 5 ≈ neutral for TMB (presence 5 = mild lift). */
 class ToneStack
 {
 public:
@@ -37,7 +34,7 @@ private:
     void update();
 
     double fs = 44100.0;
-    double bassHz = 100.0, midHz = 650.0, midQ = 0.8, trebleHz = 2800.0, presenceHz = 4000.0;
+    double bassHz = 100.0, midHz = 650.0, midQ = 0.75, trebleHz = 2800.0, presenceHz = 2400.0;
     float kBass = 5.0f, kMid = 5.0f, kTreble = 5.0f, kPresence = 5.0f;
     bool dirty = true;
 

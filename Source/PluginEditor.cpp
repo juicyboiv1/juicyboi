@@ -27,7 +27,7 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     addAndMakeVisible (bypass);
     bypassAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::bypass, bypass);
 
-    channel.addItemList ({ "Riff A", "Riff B" }, 1);
+    channel.addItemList ({ "Red (Ch1)", "Orange (Ch2)" }, 1);
     addAndMakeVisible (channel);
     channelAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::channel, channel);
 

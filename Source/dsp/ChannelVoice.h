@@ -1,29 +1,31 @@
 #pragma once
 
-// Channel voicings for the dual-channel high-gain preamp.
+// Dual-channel high-gain preamp voicings derived from Dual Rectifier Rev E–era
+// preamp circuit *principles* (shared cascaded 12AX7 path + per-channel FMV
+// tone stacks). Original coefficients — not a product clone.
 //
-// The two "Riff" channels follow the general principles of a classic
-// two-channel, cascaded-triode high-gain American preamp design (Rev E-era
-// style): both channels share the same cascaded-stage skeleton but differ in
-// coupling/bypass corners (tightness), stage gain, stage bias (asymmetry),
-// HF rolloff and tone-stack centre frequencies.
-//
-// Every number here is an ORIGINAL starting point chosen by ear-target, not a
-// measured or copied product value. Replace with values derived from your own
-// circuit analysis / measurements as the project progresses.
+// Channel 1 = Red path. Channel 2 = Orange path.
+// Schematic cues used (RF-1F / Rev E family style):
+//   - Shared cascade: V1A → A250k gain → V2A → V2B → V3A → V3B cathode follower
+//   - Separate Red / Orange FMV stacks after the CF (LDR-switched)
+//   - Red TMB:   Ct=680p, Cmid=Cbass=22n, Rslope=47k; pots T=250k B=1M M=25k
+//   - Orange TMB: Ct=500p, same otherwise
+//   - Presence (Red path): 25k + ~22k + 3n ≈ 2.4 kHz NFB-shelf corner
+//   - Gain pot: audio taper, 250k (always)
 
 #include <array>
+#include <cmath>
 
 namespace jb::dsp
 {
 struct TriodeStageVoicing
 {
-    double couplingHpHz;  // coupling cap / cathode-bypass style low cut
-    double plateLpHz;     // Miller / plate-load style HF rolloff
-    float  gain;          // linear drive into the nonlinearity
-    float  bias;          // operating-point offset (asymmetry, even harmonics)
-    float  posHardness;   // positive half flattening (grid conduction)
-    float  negHardness;   // negative half flattening (cutoff)
+    double couplingHpHz;  // coupling / cathode-bypass style low cut
+    double plateLpHz;     // Miller / plate-load HF rolloff
+    float  gain;          // drive into nonlinearity
+    float  bias;          // operating-point offset (even harmonics)
+    float  posHardness;   // +half flattening (grid conduction)
+    float  negHardness;   // -half flattening (cutoff)
 };
 
 struct ChannelVoicing
@@ -33,64 +35,113 @@ struct ChannelVoicing
     int numStages = 4;
     std::array<TriodeStageVoicing, maxStages> stages {};
 
-    int    gainPotAfterStage = 0;   // stage index after which the Gain pot sits
-    float  gainPotMin = 0.02f;      // pot attenuation at Gain = 0
-    float  gainPotMax = 1.0f;       // pot attenuation at Gain = 10
+    int    gainPotAfterStage = 0;
+    float  gainPotMin = 0.02f;
+    float  gainPotMax = 1.0f;
 
-    double inputTightHpHz = 60.0;   // pre-cascade low cut (tightness)
-    double postLpHz = 7000.0;       // post-cascade fizz control
-    float  makeup = 0.6f;           // output level normalisation per channel
+    double inputTightHpHz = 60.0;
+    double postLpHz = 7000.0;
+    float  makeup = 0.6f;
 
-    // Tone stack / presence centre frequencies used by ToneStack
-    double bassHz = 100.0, midHz = 650.0, midQ = 0.8, trebleHz = 2800.0, presenceHz = 4000.0;
+    // Passive FMV component cues (ohms / farads) — used by ToneStack
+    double fmvCt = 680e-12;   // treble cap
+    double fmvCm = 22e-9;     // mid cap
+    double fmvCb = 22e-9;     // bass cap
+    double fmvRs = 47e3;      // slope resistor
+    double fmvRt = 250e3;     // treble pot
+    double fmvRb = 1e6;       // bass pot
+    double fmvRm = 25e3;      // mid pot
+
+    // Presence shelf corner (NFB-loop principle)
+    double presenceHz = 2400.0;
+
+    // Cached EQ centres filled by makeRed / makeOrange
+    double bassHz = 100.0, midHz = 650.0, midQ = 0.75, trebleHz = 2800.0;
 };
 
 namespace voicings
 {
-/** Riff A: vintage-leaning heavy rhythm. Fatter low-mids, slightly less
-    stage gain, warmer top. */
-inline ChannelVoicing riffA()
+inline void fillFmvCentres (ChannelVoicing& v)
+{
+    // Rough RC centres from the FMV network (starting points for the
+    // placeholder biquad stack; replace later with a full bilinear FMV TF).
+    const auto midCorner = 1.0 / (2.0 * 3.141592653589793 * v.fmvRm * v.fmvCm);
+    const auto bassCorner = 1.0 / (2.0 * 3.141592653589793 * v.fmvRb * v.fmvCb);
+    const auto trebleCorner = 1.0 / (2.0 * 3.141592653589793 * v.fmvRs * v.fmvCt);
+
+    v.bassHz   = std::clamp (bassCorner, 40.0, 200.0);
+    v.midHz    = std::clamp (midCorner,  400.0, 1200.0);
+    v.midQ     = 0.75;
+    // Treble shelf sits above the slope/Ct interaction band
+    v.trebleHz = std::clamp (trebleCorner * 2.5, 1800.0, 4500.0);
+}
+
+/** Channel 1 — Red: modern / aggressive Dual Rec–style path.
+    Brighter FMV (680p treble cap), tighter cascade, more stage gain. */
+inline ChannelVoicing red()
+{
+    ChannelVoicing v;
+    v.numStages = 4;
+    // Shared skeleton inspired by V1A → V2A → V2B (cold) → V3A (+ CF after)
+    v.stages = {{
+        //  HP     LP        gain   bias    pos    neg
+        {   35.0, 13000.0,  2.8f,  0.14f,  1.6f,  0.9f }, // V1A-ish
+        {  120.0, 10000.0,  7.5f,  0.28f,  1.9f,  1.0f }, // V2A-ish (after gain pot)
+        {  220.0,  8500.0,  6.5f,  0.32f,  2.0f,  1.1f }, // V2B cold-cathode bite
+        {   25.0,  7500.0,  2.2f,  0.08f,  1.3f,  1.0f }, // V3A → toward CF
+    }};
+    v.gainPotAfterStage = 0;
+    v.gainPotMin = 0.025f;
+    v.gainPotMax = 1.15f;
+    v.inputTightHpHz = 95.0;
+    v.postLpHz = 7800.0;
+    v.makeup = 0.58f;
+
+    v.fmvCt = 680e-12;
+    v.fmvCm = 22e-9;
+    v.fmvCb = 22e-9;
+    v.fmvRs = 47e3;
+    v.fmvRt = 250e3;
+    v.fmvRb = 1e6;
+    v.fmvRm = 25e3;
+    v.presenceHz = 2400.0;
+    fillFmvCentres (v);
+    return v;
+}
+
+/** Channel 2 — Orange: vintage / looser Dual Rec–style path.
+    Softer FMV (500p treble cap), fatter low-mids, slightly less gain. */
+inline ChannelVoicing orange()
 {
     ChannelVoicing v;
     v.numStages = 4;
     v.stages = {{
-        //  HP     LP       gain  bias   pos   neg
-        {   30.0, 12000.0, 2.5f, 0.15f, 1.6f, 0.9f },
-        {   80.0,  9000.0, 6.0f, 0.25f, 1.8f, 1.0f },
-        {  150.0,  7000.0, 5.0f, 0.20f, 1.7f, 1.0f },
-        {   20.0,  6500.0, 1.5f, 0.05f, 1.2f, 1.0f },  // softer "driver" stage
+        {   28.0, 12000.0,  2.4f,  0.14f,  1.55f, 0.9f },
+        {   85.0,  9200.0,  6.2f,  0.24f,  1.75f, 1.0f },
+        {  160.0,  7200.0,  5.2f,  0.22f,  1.7f,  1.0f },
+        {   20.0,  6500.0,  1.8f,  0.06f,  1.25f, 1.0f },
     }};
     v.gainPotAfterStage = 0;
     v.gainPotMin = 0.02f;
     v.gainPotMax = 1.0f;
-    v.inputTightHpHz = 60.0;
-    v.postLpHz = 6500.0;
-    v.makeup = 0.7f;
-    v.bassHz = 110.0; v.midHz = 600.0; v.midQ = 0.8; v.trebleHz = 2600.0; v.presenceHz = 3800.0;
+    v.inputTightHpHz = 55.0;
+    v.postLpHz = 6400.0;
+    v.makeup = 0.68f;
+
+    v.fmvCt = 500e-12;
+    v.fmvCm = 22e-9;
+    v.fmvCb = 22e-9;
+    v.fmvRs = 47e3;
+    v.fmvRt = 250e3;
+    v.fmvRb = 1e6;
+    v.fmvRm = 25e3;
+    v.presenceHz = 2200.0;
+    fillFmvCentres (v);
     return v;
 }
 
-/** Riff B: modern-leaning tight/saturated. Higher interstage low cut, more
-    gain, brighter, mid control centred a bit higher for scooped settings. */
-inline ChannelVoicing riffB()
-{
-    ChannelVoicing v;
-    v.numStages = 4;
-    v.stages = {{
-        //  HP     LP       gain  bias   pos   neg
-        {   40.0, 14000.0, 3.0f, 0.15f, 1.6f, 0.9f },
-        {  140.0, 10000.0, 8.0f, 0.30f, 1.9f, 1.0f },
-        {  250.0,  8000.0, 7.0f, 0.25f, 1.8f, 1.0f },
-        {   30.0,  7500.0, 2.0f, 0.08f, 1.3f, 1.0f },
-    }};
-    v.gainPotAfterStage = 0;
-    v.gainPotMin = 0.03f;
-    v.gainPotMax = 1.2f;
-    v.inputTightHpHz = 110.0;
-    v.postLpHz = 7500.0;
-    v.makeup = 0.55f;
-    v.bassHz = 90.0; v.midHz = 750.0; v.midQ = 0.7; v.trebleHz = 3200.0; v.presenceHz = 4500.0;
-    return v;
-}
+// Compatibility aliases used by the processor (A = ch1 Red, B = ch2 Orange)
+inline ChannelVoicing riffA() { return red(); }
+inline ChannelVoicing riffB() { return orange(); }
 } // namespace voicings
 } // namespace jb::dsp

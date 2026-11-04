@@ -12,7 +12,7 @@
 /** juicyboi — heavy-riff preamp.
     Signal chain:
       Input trim -> [oversampled: OD-style boost (blend on/off) ->
-      dual-channel cascaded preamp (Riff A / Riff B crossfade)] ->
+      dual-channel cascaded preamp (Red Ch1 / Orange Ch2 crossfade)] ->
       tone stack + presence -> master -> (bypass crossfade vs delayed dry). */
 class JuicyboiAudioProcessor final : public juce::AudioProcessor
 {
