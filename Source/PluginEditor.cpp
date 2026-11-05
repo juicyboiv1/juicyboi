@@ -7,7 +7,7 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
 {
     setLookAndFeel (&lookAndFeel);
 
-    for (auto* g : { &inGroup, &odGroup, &preGroup, &outGroup, &cabGroup, &gateGroup })
+    for (auto* g : { &inGroup, &odGroup, &preGroup, &outGroup, &cabGroup, &gateGroup, &eqGroup })
         addAndMakeVisible (*g);
 
     setupKnob (input,    params::id::inputTrim, "Input");
@@ -75,9 +75,23 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     gateEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::gateEnable, gateEnable);
     addAndMakeVisible (gateLed);
 
+    // Graphic EQ section (post-tone, pre-cab)
+    {
+        static const char* bandLabels[] = { "100", "200", "400", "800", "1.6k", "3.2k", "6.4k" };
+        for (size_t b = 0; b < eqBands.size(); ++b)
+            setupFader (eqBands[b], params::id::eqBands[b], bandLabels[b]);
+        setupFader (eqLevel, params::id::eqLevel, "Level");
+        eqLevel.label.setColour (juce::Label::textColourId, juce::Colour (0xffd4af37));
+        addAndMakeVisible (eqEnable);
+        eqEnable.setTooltip ("Graphic EQ on/off (off = true bypass)");
+        eqEnable.onStateChange = [this] { updateEqEnablement(); };
+        eqEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::eqEnable, eqEnable);
+        updateEqEnablement();
+    }
+
     setResizable (true, true);
-    setResizeLimits (1040, 500, 1800, 900);
-    setSize (1180, 540);
+    setResizeLimits (1200, 560, 1900, 1000);
+    setSize (1340, 600);
 }
 
 JuicyboiAudioProcessorEditor::~JuicyboiAudioProcessorEditor()
@@ -101,6 +115,52 @@ void JuicyboiAudioProcessorEditor::setupKnob (Knob& k, const char* paramId, cons
     addAndMakeVisible (k.label);
 
     k.attachment = std::make_unique<APVTS::SliderAttachment> (processor.apvts, paramId, k.slider);
+}
+
+void JuicyboiAudioProcessorEditor::setupFader (Knob& k, const char* paramId, const juce::String& text)
+{
+    k.slider.setSliderStyle (juce::Slider::LinearVertical);
+    k.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 52, 18);
+    k.slider.setTooltip ("Double-click to reset to 0 dB");
+    addAndMakeVisible (k.slider);
+
+    k.label.setText (text, juce::dontSendNotification);
+    k.label.setJustificationType (juce::Justification::centred);
+    k.label.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+    k.label.setColour (juce::Label::textColourId, juce::Colour (0xffe8e0c8));
+    addAndMakeVisible (k.label);
+
+    k.attachment = std::make_unique<APVTS::SliderAttachment> (processor.apvts, paramId, k.slider);
+    k.slider.setDoubleClickReturnValue (true, 0.0);
+}
+
+void JuicyboiAudioProcessorEditor::updateEqEnablement()
+{
+    const auto on = eqEnable.getToggleState();
+    for (auto* k : { &eqBands[0], &eqBands[1], &eqBands[2], &eqBands[3], &eqBands[4], &eqBands[5], &eqBands[6], &eqLevel })
+        k->slider.setAlpha (on ? 1.0f : 0.5f); // still editable while off (dial in, then engage)
+}
+
+void JuicyboiAudioProcessorEditor::layoutEq (juce::Rectangle<int> bounds)
+{
+    eqGroup.setBounds (bounds);
+    auto r = bounds.reduced (8, 18);
+
+    auto top = r.removeFromTop (24);
+    eqEnable.setBounds (top.removeFromLeft (60));
+    r.removeFromTop (2);
+
+    const auto cols = (int) eqBands.size() + 1;
+    const auto w = r.getWidth() / cols;
+    auto place = [] (Knob& k, juce::Rectangle<int> kr)
+    {
+        k.label.setBounds (kr.removeFromTop (16));
+        k.slider.setBounds (kr.reduced (1, 0));
+    };
+    for (auto& k : eqBands)
+        place (k, r.removeFromLeft (w));
+    r.removeFromLeft (juce::jmax (0, r.getWidth() - w));
+    place (eqLevel, r);
 }
 
 void JuicyboiAudioProcessorEditor::paint (juce::Graphics& g)
@@ -284,8 +344,10 @@ void JuicyboiAudioProcessorEditor::resized()
 
     // Cab row along the bottom
     {
-        auto bottom = area.removeFromBottom (juce::jmax (170, area.getHeight() * 2 / 5));
-        layoutGate (bottom.removeFromLeft (juce::jmax (270, bottom.getWidth() / 4)));
+        auto bottom = area.removeFromBottom (juce::jmax (230, area.getHeight() / 2));
+        layoutGate (bottom.removeFromLeft (juce::jmax (250, bottom.getWidth() / 5)));
+        bottom.removeFromLeft (6);
+        layoutEq (bottom.removeFromLeft (juce::jmax (440, bottom.getWidth() * 9 / 20)));
         bottom.removeFromLeft (6);
         auto r = layoutCab (bottom);
         juce::ignoreUnused (r);

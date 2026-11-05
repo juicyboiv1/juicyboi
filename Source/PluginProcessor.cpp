@@ -23,6 +23,10 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pPresence  = apvts.getRawParameterValue (params::id::presence);
     pMaster    = apvts.getRawParameterValue (params::id::master);
     pBypass    = apvts.getRawParameterValue (params::id::bypass);
+    pEqEnable  = apvts.getRawParameterValue (params::id::eqEnable);
+    for (size_t b = 0; b < pEqBands.size(); ++b)
+        pEqBands[b] = apvts.getRawParameterValue (params::id::eqBands[b]);
+    pEqLevel   = apvts.getRawParameterValue (params::id::eqLevel);
     pCabEnable  = apvts.getRawParameterValue (params::id::cabEnable);
     pCabBlend   = apvts.getRawParameterValue (params::id::cabMicBlend);
     pCabLevel   = apvts.getRawParameterValue (params::id::cabLevel);
@@ -83,6 +87,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
 
     lastChannel = -1;
     updateParameters();
+    graphicEq.prepare (sampleRate, maxChunk); // after params: snaps EQ to current settings (no fade-in on load)
 }
 
 void JuicyboiAudioProcessor::releaseResources()
@@ -140,6 +145,13 @@ void JuicyboiAudioProcessor::updateParameters()
     }
 
     tone.setKnobs (pBass->load(), pMid->load(), pTreble->load(), pPresence->load());
+
+    {
+        std::array<float, dsp::GraphicEq::numBands> eqDb {};
+        for (size_t b = 0; b < eqDb.size(); ++b)
+            eqDb[b] = pEqBands[b]->load();
+        graphicEq.setParameters (pEqEnable->load() > 0.5f, eqDb, pEqLevel->load());
+    }
 
     cab.setParameters (pCabEnable->load() > 0.5f, pCabBlend->load(), juce::Decibels::decibelsToGain (pCabLevel->load()));
 
@@ -268,6 +280,14 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         auto* d = buffer.getWritePointer (ch, start);
         for (int i = 0; i < len; ++i)
             d[i] = tone.process (d[i], ch);
+    }
+
+    // 3b) Graphic EQ: carve after the drive, before the cab (true bypass when off)
+    {
+        float* chans[dsp::kMaxChannels] {};
+        for (int ch = 0; ch < numProc; ++ch)
+            chans[ch] = buffer.getWritePointer (ch, start);
+        graphicEq.process (chans, numProc, len);
     }
 
     // 4) Cab IR sim (no-op when Cab is off)

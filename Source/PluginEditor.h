@@ -94,6 +94,61 @@ private:
             g.fillPath (pointer, juce::AffineTransform::rotation (toAngle).translated (centre.x, centre.y));
         }
 
+        /** Vertical EQ faders: dark slot, gold fill from the 0 dB centre,
+            green/gold cap. Other linear sliders fall back to the stock look. */
+        void drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
+                               float sliderPos, float minSliderPos, float maxSliderPos,
+                               juce::Slider::SliderStyle style, juce::Slider& slider) override
+        {
+            if (style != juce::Slider::LinearVertical)
+            {
+                LookAndFeel_V4::drawLinearSlider (g, x, y, width, height, sliderPos, minSliderPos, maxSliderPos, style, slider);
+                return;
+            }
+
+            const auto b = juce::Rectangle<float> ((float) x, (float) y, (float) width, (float) height);
+            const auto cx = b.getCentreX();
+            const auto top = b.getY() + 4.0f, bottom = b.getBottom() - 4.0f;
+            const auto zeroY = (float) slider.getPositionOfValue (0.0);
+            const auto slotW = 5.0f;
+
+            // Tick marks every 5 dB (±15)
+            g.setColour (juce::Colour (0xff3d5c2e));
+            for (int db = -15; db <= 15; db += 5)
+            {
+                const auto ty = (float) slider.getPositionOfValue ((double) db);
+                const auto tw = db == 0 ? 11.0f : 7.0f;
+                g.fillRect (cx - slotW - tw, ty - 0.5f, tw - 2.0f, 1.0f);
+                g.fillRect (cx + slotW + 2.0f, ty - 0.5f, tw - 2.0f, 1.0f);
+            }
+
+            // Slot
+            g.setColour (juce::Colour (0xff0b0e09));
+            g.fillRoundedRectangle (cx - slotW * 0.5f, top, slotW, bottom - top, 2.5f);
+            g.setColour (juce::Colour (0xff2a3d20));
+            g.drawRoundedRectangle (cx - slotW * 0.5f, top, slotW, bottom - top, 2.5f, 1.0f);
+
+            // Gold fill from 0 dB to the thumb
+            if (slider.isEnabled())
+            {
+                const auto y0 = juce::jmin (zeroY, sliderPos), y1 = juce::jmax (zeroY, sliderPos);
+                g.setColour (juce::Colour (0xffd4af37));
+                g.fillRoundedRectangle (cx - slotW * 0.5f + 1.0f, y0, slotW - 2.0f, juce::jmax (1.0f, y1 - y0), 1.5f);
+            }
+
+            // Fader cap
+            const auto capW = juce::jmin (30.0f, b.getWidth() - 6.0f), capH = 12.0f;
+            const auto cap = juce::Rectangle<float> (capW, capH).withCentre ({ cx, sliderPos });
+            juce::ColourGradient body (juce::Colour (0xff3a5c28), cx, cap.getY(),
+                                       juce::Colour (0xff1a2812), cx, cap.getBottom(), false);
+            g.setGradientFill (body);
+            g.fillRoundedRectangle (cap, 2.5f);
+            g.setColour (juce::Colour (0xffd4af37).withAlpha (slider.isEnabled() ? 0.9f : 0.4f));
+            g.drawRoundedRectangle (cap, 2.5f, 1.2f);
+            g.setColour (juce::Colour (0xfff5e6a3));
+            g.fillRect (cap.getX() + 3.0f, sliderPos - 0.75f, cap.getWidth() - 6.0f, 1.5f);
+        }
+
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JuicyboiLookAndFeel)
     };
 
@@ -107,6 +162,9 @@ private:
     void setupKnob (Knob&, const char* paramId, const juce::String& text);
     juce::Rectangle<int> layoutCab (juce::Rectangle<int>);
     void layoutGate (juce::Rectangle<int>);
+    void layoutEq (juce::Rectangle<int>);
+    void setupFader (Knob&, const char* paramId, const juce::String& text);
+    void updateEqEnablement();
 
     /** Dual-colour gate status LED: green = open, orange-red = closed,
         dim when the gate is bypassed. Polls the processor at 30 Hz. */
@@ -147,6 +205,12 @@ private:
     Knob input, odDrive, odTone, odLevel, gain, bass, mid, treble, presence, master, cabBlend, cabLevel;
     Knob gateThreshold, gateHold, gateRelease;
 
+    // Graphic EQ (post-ToneStack / pre-Cab): 7 vertical band faders + Level
+    std::array<Knob, jb::dsp::GraphicEq::numBands> eqBands;
+    Knob eqLevel;
+    juce::ToggleButton eqEnable { "On" };
+    std::unique_ptr<APVTS::ButtonAttachment> eqEnableAttachment;
+
     juce::ToggleButton gateEnable { "Gate" };
     std::unique_ptr<APVTS::ButtonAttachment> gateEnableAttachment;
     GateLed gateLed { processor };
@@ -171,7 +235,7 @@ private:
     juce::GroupComponent inGroup { {}, "Input" }, odGroup { {}, "Boost" },
                          preGroup { {}, "Preamp" }, outGroup { {}, "Output" },
                          cabGroup { {}, "Cab  (Mesa-style 4x12 IR - user-supplied)" },
-                         gateGroup { {}, "Gate" };
+                         gateGroup { {}, "Gate" }, eqGroup { {}, "Graphic EQ" };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (JuicyboiAudioProcessorEditor)
 };

@@ -21,6 +21,17 @@ namespace id
     inline constexpr const char* presence   = "pre_presence";
     inline constexpr const char* master     = "master";
     inline constexpr const char* bypass     = "bypass";
+    // Graphic EQ (post-ToneStack / pre-Cab): 7 bands ±15 dB + Level ±15 dB
+    inline constexpr const char* eqEnable   = "eq_enable";
+    inline constexpr const char* eq100      = "eq_100";
+    inline constexpr const char* eq200      = "eq_200";
+    inline constexpr const char* eq400      = "eq_400";
+    inline constexpr const char* eq800      = "eq_800";
+    inline constexpr const char* eq1k6      = "eq_1k6";
+    inline constexpr const char* eq3k2      = "eq_3k2";
+    inline constexpr const char* eq6k4      = "eq_6k4";
+    inline constexpr const char* eqLevel    = "eq_level";
+    inline constexpr const char* eqBands[] = { eq100, eq200, eq400, eq800, eq1k6, eq3k2, eq6k4 };
     inline constexpr const char* cabEnable  = "cab_enable";
     inline constexpr const char* cabMicBlend  = "cab_mic_blend"; // kept ID for session compat; UI = "IR Blend" (0 = IR A, 1 = IR B)
     inline constexpr const char* cabLevel     = "cab_level";

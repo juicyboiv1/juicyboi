@@ -54,6 +54,16 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (knob (id::treble,   "Treble",   5.5f));
     layout.add (knob (id::presence, "Presence", 5.0f));
 
+    // Graphic EQ: post-ToneStack / pre-Cab. Off by default = true bypass.
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::eqEnable, versionHint }, "EQ On", false));
+    {
+        static const char* bandNames[] = { "EQ 100 Hz", "EQ 200 Hz", "EQ 400 Hz", "EQ 800 Hz",
+                                           "EQ 1.6 kHz", "EQ 3.2 kHz", "EQ 6.4 kHz" };
+        for (int b = 0; b < 7; ++b)
+            layout.add (decibels (id::eqBands[b], bandNames[b], -15.0f, 15.0f, 0.0f));
+    }
+    layout.add (decibels (id::eqLevel, "EQ Level", -15.0f, 15.0f, 0.0f));
+
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::cabEnable, versionHint }, "Cab On", false));
     layout.add (std::make_unique<AudioParameterFloat> (ParameterID { id::cabMicBlend, versionHint }, "IR Blend",
                                                        NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f,

@@ -55,6 +55,7 @@ Input trim
           └─► Preamp cascade: Riff A ┐  both run; 20 ms crossfade
                               Riff B ┘  on channel switch
   └─► Tone stack (bass / mid / treble) + presence   (base rate)
+  └─► Graphic EQ (optional; 7 bands + Level, true bypass when off)   (base rate)
   └─► Cab IR sim (optional; IR A / IR B blend)   (base rate)
   └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
   └─► Master
@@ -64,6 +65,23 @@ Input trim
 Buses: mono→stereo (default, guitar DI), mono→mono, stereo→stereo.
 Latency: the oversampler's FIR latency (61 samples at 48 kHz), reported to the host.
 The dry/bypass path uses the same delay.
+
+## Graphic EQ section
+
+Original 7-band graphic EQ in the spirit of classic octave-spaced pedal EQs
+used to "carve after the drive" — not a clone of any commercial unit.
+Sits **post-ToneStack / pre-Cab**, so cuts and boosts shape what hits the IR.
+
+- Bands **100 / 200 / 400 / 800 / 1.6k / 3.2k / 6.4k Hz**, ±15 dB each
+  (default 0). 100–3.2k are peaking biquads (Q 1.3, ~1 octave, overlapping
+  like a gyrator EQ); **6.4k is a high shelf** (fizz / air control).
+- **Level** ±15 dB (default 0) after the bands.
+- **On** (`eq_enable`, default off). Off = 10 ms fade, then true bypass (no filtering).
+- Faders: double-click resets to 0 dB. Band moves are slewed per block (no zipper).
+
+Metal starting point: 100 −2, 200 −3, 400 −4, 800 +3, 1.6k +4, 3.2k +1, 6.4k −3 —
+tighter low end, mid push for thickness into the cab, less fizz. Big boosts add
+level: trim **EQ Level** (or **Master**) to keep the output out of the red.
 
 ## Cab (IR) section
 
@@ -127,6 +145,9 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `pre_mid`      | Mid         | 0 … 10 (5 = flat)| 4       |
 | `pre_treble`   | Treble      | 0 … 10 (5 = flat)| 5.5     |
 | `pre_presence` | Presence    | 0 … 10           | 5       |
+| `eq_enable`    | EQ On       | bool             | off     |
+| `eq_100` … `eq_6k4` | EQ 100 Hz … EQ 6.4 kHz (`eq_100`, `eq_200`, `eq_400`, `eq_800`, `eq_1k6`, `eq_3k2`, `eq_6k4`) | -15 … +15 dB | 0 dB |
+| `eq_level`     | EQ Level    | -15 … +15 dB     | 0 dB    |
 | `cab_enable`   | Cab On      | bool             | off     |
 | `cab_mic_blend`| IR Blend    | 0 … 1            | 0.5     |
 | `cab_level`    | Cab Level   | -24 … +24 dB     | 0 dB    |
@@ -153,6 +174,7 @@ Source/
     ChannelVoice.h         Red v1 / Red v2 / Orange voicing structs (stage corners, gains, bias)
     PreampCascade.h/.cpp   4× [coupling HP → gain → asym sat (inverting) → plate LP]
     ToneStack.h/.cpp       placeholder biquad TMB + presence shelf
+    GraphicEq.h/.cpp       7-band graphic EQ (6 peaks + 6.4k shelf) + Level, true bypass
     OversampledNonlinear.h juce::dsp::Oversampling wrapper (4x, FIR, integer latency)
     CabSim.h/.cpp          dual-mic IR convolution (4 slots, blend, hard bypass)
     NoiseGate.h/.cpp       key/sidechain gate (dry-input detector, VCA after cab)
@@ -212,6 +234,7 @@ bash ~/src/juicyboi/scripts/recover-standalone-mac.sh
 
 Or manually: quit juicyboi → delete that settings file → `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJUCE_DIR=~/src/JUCE && cmake --build build -j8 --target juicyboi_Standalone` → open the app → untick *Mute audio input*, tick Input 1, Direct Monitor off.
 
+- **Graphic EQ** — 7-band (100 Hz … 6.4 kHz, ±15 dB) + Level ±15 dB, post-ToneStack / pre-Cab, off by default (true bypass). Vertical green/gold faders between Gate and Cab. New params only; existing sessions load unchanged (EQ off).
 - **Cab streamlined to 2 IR slots** — IR A / IR B drop zones + IR Blend (0 = A, 1 = B). Removed the 4-slot layout and the `cab_sm57_axis` / `cab_md421_axis` params; old sessions load fine (those values are ignored). `cab_mic_blend` ID kept. IR paths now save as `ir_a` / `ir_b`, so IRs from old 4-slot sessions need re-dropping once.
 - **Red v1 / v2 A/B switch** — `red_voice` param (Preamp row, "Voice" box next to Channel; default **v2**). v1 = original tight Red; v2 = max-gain / fat-bottom Red (more cascade drive, Gain pot max 1.6, harder stage knees, tighter V2B HP to keep palm mutes crisp), roughly level-matched. Switching is a ~30 ms crossfade, so you can flip it while playing.
 - **Red channel fattened** — eased input/mid high-passes (input 95→65 Hz), cascade drive up ~15–30%, Gain pot max 1.15→1.35 for more gain and bass before Boost.
