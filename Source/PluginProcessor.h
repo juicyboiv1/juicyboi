@@ -14,7 +14,7 @@
 /** juicyboi — heavy-riff preamp.
     Signal chain:
       Input trim -> [oversampled: OD-style boost (blend on/off) ->
-      dual-channel cascaded preamp (Red Ch1 / Orange Ch2 crossfade)] ->
+      dual-channel cascaded preamp (Red Ch1 v1|v2 / Orange Ch2 crossfades)] ->
       tone stack + presence -> cab IR sim (optional, hard bypass) -> gate VCA (optional, true bypass;
       keyed from the dry post-trim input) -> master -> (bypass crossfade vs delayed dry). */
 class JuicyboiAudioProcessor final : public juce::AudioProcessor
@@ -78,6 +78,7 @@ private:
     std::atomic<float>* pOdTone    = nullptr;
     std::atomic<float>* pOdLevel   = nullptr;
     std::atomic<float>* pChannel   = nullptr;
+    std::atomic<float>* pRedVoice  = nullptr;
     std::atomic<float>* pGain      = nullptr;
     std::atomic<float>* pBass      = nullptr;
     std::atomic<float>* pMid       = nullptr;
@@ -100,15 +101,15 @@ private:
     // DSP
     jb::dsp::OversampledNonlinear oversampler;
     jb::dsp::Od808Stage od;
-    jb::dsp::PreampCascade riffA, riffB;
+    jb::dsp::PreampCascade riffA, riffAv1, riffB; // Red v2, Red v1, Orange
     jb::dsp::ToneStack tone;
     jb::dsp::CabSim cab;
     jb::dsp::NoiseGate gate;
     std::array<juce::File, jb::dsp::CabSim::numSlots> cabFiles;
-    jb::dsp::ChannelVoicing voicingA, voicingB;
+    jb::dsp::ChannelVoicing voicingA, voicingAv1, voicingB;
 
     juce::SmoothedValue<float> inputGain, masterGain, bypassMix; // base rate
-    juce::SmoothedValue<float> odMix, channelMix;                // oversampled rate
+    juce::SmoothedValue<float> odMix, channelMix, redVoiceMix;   // oversampled rate
 
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay { 8192 };
     juce::AudioBuffer<float> dryBuffer;

@@ -153,7 +153,7 @@ Source/
     Filters.h              OnePole (RC-style 6 dB/oct) + RBJ Biquad, per-channel state
     SoftClip.h             tanh, smooth diode-pair, asymmetric triode curve
     Od808Stage.h/.cpp      OD-style boost (feedback-diode topology principles)
-    ChannelVoice.h         Riff A / Riff B voicing structs (stage corners, gains, bias)
+    ChannelVoice.h         Red v1 / Red v2 / Orange voicing structs (stage corners, gains, bias)
     PreampCascade.h/.cpp   4× [coupling HP → gain → asym sat (inverting) → plate LP]
     ToneStack.h/.cpp       placeholder biquad TMB + presence shelf
     OversampledNonlinear.h juce::dsp::Oversampling wrapper (4x, FIR, integer latency)
@@ -198,6 +198,7 @@ Tests/
 
 ## v2 changelog
 
+- **Red v1 / v2 A/B switch** — `red_voice` param (Preamp row, "Voice" box next to Channel; default **v2**). v1 = original tight Red; v2 = max-gain / fat-bottom Red (more cascade drive, Gain pot max 1.6, harder stage knees, tighter V2B HP to keep palm mutes crisp), roughly level-matched. Switching is a ~30 ms crossfade, so you can flip it while playing.
 - **Red channel fattened** — eased input/mid high-passes (input 95→65 Hz), cascade drive up ~15–30%, Gain pot max 1.15→1.35 for more gain and bass before Boost.
 - **Dual preamp** — Red and Orange channels, plus an **OD808** boost in front.
 - **Gate** with sidechain detection.

@@ -44,6 +44,9 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
 
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::channel, versionHint }, "Channel",
                                                         StringArray { "Red (Ch1)", "Orange (Ch2)" }, 0));
+    // Red-channel A/B: v1 = original tight Red, v2 = max-gain / fat Red (default)
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::redVoice, versionHint }, "Red Voice",
+                                                        StringArray { "v1", "v2" }, 1));
 
     layout.add (knob (id::gain,     "Gain",     6.0f));
     layout.add (knob (id::bass,     "Bass",     5.0f));

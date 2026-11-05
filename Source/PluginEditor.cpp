@@ -35,6 +35,20 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     channelLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (channelLabel);
 
+    // Red v1 / v2 voicing switch (only meaningful on Red; dimmed on Orange)
+    redVoice.addItemList ({ "Red v1", "Red v2" }, 1);
+    redVoice.setTooltip ("A/B the Red channel: v1 = original tight Red, v2 = max-gain / fat-bottom Red");
+    addAndMakeVisible (redVoice);
+    redVoiceAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::redVoice, redVoice);
+
+    redVoiceLabel.setText ("Voice", juce::dontSendNotification);
+    redVoiceLabel.setJustificationType (juce::Justification::centredRight);
+    redVoiceLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd4af37));
+    addAndMakeVisible (redVoiceLabel);
+
+    channel.onChange = [this] { updateRedVoiceEnablement(); };
+    updateRedVoiceEnablement();
+
     // Cab section
     setupKnob (cabBlend, params::id::cabMicBlend, "Mic Blend");
     setupKnob (cabLevel, params::id::cabLevel,    "Cab Level");
@@ -339,6 +353,8 @@ void JuicyboiAudioProcessorEditor::resized()
         auto chRow = r.removeFromBottom (28);
         channelLabel.setBounds (chRow.removeFromLeft (72));
         channel.setBounds (chRow.removeFromLeft (130).reduced (2));
+        redVoiceLabel.setBounds (chRow.removeFromLeft (56));
+        redVoice.setBounds (chRow.removeFromLeft (96).reduced (2));
 
         const auto w = r.getWidth() / 5;
         placeKnob (gain,     r.removeFromLeft (w));
@@ -353,4 +369,12 @@ void JuicyboiAudioProcessorEditor::resized()
         bypass.setBounds (r.removeFromBottom (26).withSizeKeepingCentre (100, 26));
         placeKnob (master, r);
     }
+}
+
+void JuicyboiAudioProcessorEditor::updateRedVoiceEnablement()
+{
+    const auto isRed = channel.getSelectedItemIndex() <= 0;
+    redVoice.setEnabled (isRed);
+    redVoice.setAlpha (isRed ? 1.0f : 0.45f);
+    redVoiceLabel.setAlpha (isRed ? 1.0f : 0.45f);
 }

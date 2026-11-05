@@ -13,6 +13,7 @@ namespace id
     inline constexpr const char* odTone     = "od_tone";
     inline constexpr const char* odLevel    = "od_level";
     inline constexpr const char* channel    = "channel";
+    inline constexpr const char* redVoice   = "red_voice"; // Red (Ch1) voicing: 0 = v1, 1 = v2
     inline constexpr const char* gain       = "pre_gain";
     inline constexpr const char* bass       = "pre_bass";
     inline constexpr const char* mid        = "pre_mid";

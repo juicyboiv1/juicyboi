@@ -15,6 +15,7 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pOdTone    = apvts.getRawParameterValue (params::id::odTone);
     pOdLevel   = apvts.getRawParameterValue (params::id::odLevel);
     pChannel   = apvts.getRawParameterValue (params::id::channel);
+    pRedVoice  = apvts.getRawParameterValue (params::id::redVoice);
     pGain      = apvts.getRawParameterValue (params::id::gain);
     pBass      = apvts.getRawParameterValue (params::id::bass);
     pMid       = apvts.getRawParameterValue (params::id::mid);
@@ -33,7 +34,8 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pGateRelease = apvts.getRawParameterValue (params::id::gateRelease);
     bypassParam = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter (params::id::bypass));
 
-    voicingA = dsp::voicings::riffA();
+    voicingA   = dsp::voicings::riffA();   // Red v2
+    voicingAv1 = dsp::voicings::riffAv1(); // Red v1
     voicingB = dsp::voicings::riffB();
 }
 
@@ -48,6 +50,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
 
     od.prepare (osRate);
     riffA.prepare (osRate, voicingA);
+    riffAv1.prepare (osRate, voicingAv1);
     riffB.prepare (osRate, voicingB);
     tone.prepare (sampleRate);
     cab.prepare (sampleRate, maxChunk, numCh);
@@ -70,6 +73,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     bypassMix .reset (sampleRate, 0.03);
     odMix     .reset (osRate, 0.015);
     channelMix.reset (osRate, 0.02);
+    redVoiceMix.reset (osRate, 0.03);
 
     // Snap smoothers to current values so there is no fade-in on load
     inputGain .setCurrentAndTargetValue (juce::Decibels::decibelsToGain (pInputTrim->load()));
@@ -77,6 +81,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     bypassMix .setCurrentAndTargetValue (pBypass->load() > 0.5f ? 1.0f : 0.0f);
     odMix     .setCurrentAndTargetValue (pOdEnable->load() > 0.5f ? 1.0f : 0.0f);
     channelMix.setCurrentAndTargetValue (pChannel->load() > 0.5f ? 1.0f : 0.0f);
+    redVoiceMix.setCurrentAndTargetValue (pRedVoice->load() > 0.5f ? 1.0f : 0.0f);
 
     lastChannel = -1;
     updateParameters();
@@ -112,6 +117,7 @@ void JuicyboiAudioProcessor::updateParameters()
 
     const auto ch = pChannel->load() > 0.5f ? 1 : 0;
     channelMix.setTargetValue ((float) ch);
+    redVoiceMix.setTargetValue (pRedVoice->load() > 0.5f ? 1.0f : 0.0f); // 1 = v2
 
     // TODO: smooth OD level / tone-stack coefficient changes (currently per block)
     od.setParameters (pOdDrive->load() / 10.0f, pOdTone->load() / 10.0f,
@@ -119,6 +125,7 @@ void JuicyboiAudioProcessor::updateParameters()
 
     const auto gain01 = pGain->load() / 10.0f;
     riffA.setGain (gain01);
+    riffAv1.setGain (gain01);
     riffB.setGain (gain01);
 
     if (ch != lastChannel)
@@ -207,6 +214,7 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         {
             const auto odAmt = odMix.getNextValue();
             const auto chAmt = channelMix.getNextValue();
+            const auto rvAmt = redVoiceMix.getNextValue(); // 0 = Red v1, 1 = Red v2
 
             for (int ch = 0; ch < numProc; ++ch)
             {
@@ -217,9 +225,12 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                 // toggling it never clicks.
                 const auto boosted = x + odAmt * (od.process (x, ch) - x);
 
-                // Both channels run; switching is a short crossfade.
-                const auto a = riffA.process (boosted, ch);
-                const auto b = riffB.process (boosted, ch);
+                // All cascades run (state stays warm); Red v1/v2 and
+                // Red/Orange switching are short equal-gain crossfades.
+                const auto a2 = riffA.process (boosted, ch);
+                const auto a1 = riffAv1.process (boosted, ch);
+                const auto a  = a1 + rvAmt * (a2 - a1);
+                const auto b  = riffB.process (boosted, ch);
                 d[i] = a + chAmt * (b - a);
             }
         }

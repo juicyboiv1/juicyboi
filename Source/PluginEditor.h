@@ -164,6 +164,12 @@ private:
     juce::Label channelLabel;
     std::unique_ptr<APVTS::ComboBoxAttachment> channelAttachment;
 
+    // Red-channel voicing A/B (v1 = original tight Red, v2 = max-gain Red)
+    juce::ComboBox redVoice;
+    juce::Label redVoiceLabel;
+    std::unique_ptr<APVTS::ComboBoxAttachment> redVoiceAttachment;
+    void updateRedVoiceEnablement();
+
     juce::GroupComponent inGroup { {}, "Input" }, odGroup { {}, "Boost" },
                          preGroup { {}, "Preamp" }, outGroup { {}, "Output" },
                          cabGroup { {}, "Cab  (Mesa-style 4x12 IR - user-supplied)" },

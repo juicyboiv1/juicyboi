@@ -28,12 +28,22 @@ int main()
     int failures = 0;
     juce::MidiBuffer midi;
 
+    {
+        auto& jp0 = dynamic_cast<JuicyboiAudioProcessor&> (*p);
+        const bool rvDef = jp0.apvts.getRawParameterValue (jb::params::id::redVoice)->load() > 0.5f;
+        std::printf ("red_voice default v2  %s\n", rvDef ? "ok" : "FAIL");
+        if (! rvDef) ++failures;
+    }
+
+    // ch: 0 = Red v1, 1 = Red v2, 2 = Orange
+    static const char* chNames[] = { "Red v1", "Red v2", "Orange" };
     for (int odOn = 0; odOn < 2; ++odOn)
-        for (int ch = 0; ch < 2; ++ch)
+        for (int ch = 0; ch < 3; ++ch)
             for (float gain : { 0.0f, 6.0f, 10.0f })
             {
                 setParam (*p, jb::params::id::odEnable, (float) odOn);
-                setParam (*p, jb::params::id::channel, (float) ch);
+                setParam (*p, jb::params::id::channel, ch == 2 ? 1.0f : 0.0f);
+                setParam (*p, jb::params::id::redVoice, ch == 1 ? 1.0f : 0.0f);
                 setParam (*p, jb::params::id::gain, gain);
                 setParam (*p, jb::params::id::odDrive, 5.0f);
 
@@ -64,8 +74,8 @@ int main()
                 const auto rmsDb = 10.0 * std::log10 (sumSq / (double) n + 1e-20);
                 const bool ok = finite && peak < 4.0f && rmsDb > -60.0;
                 if (! ok) ++failures;
-                std::printf ("OD=%d ch=%s gain=%4.1f  rms=%6.1f dBFS  peak=%.3f  %s\n",
-                             odOn, ch == 0 ? "Riff A" : "Riff B", gain, rmsDb, peak, ok ? "ok" : "FAIL");
+                std::printf ("OD=%d ch=%-6s gain=%4.1f  rms=%6.1f dBFS  peak=%.3f  %s\n",
+                             odOn, chNames[ch], gain, rmsDb, peak, ok ? "ok" : "FAIL");
             }
 
     // Gate: off by default; when on, a -86 dBFS hiss key must be muted and a
