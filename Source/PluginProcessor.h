@@ -87,8 +87,6 @@ private:
     std::atomic<float>* pMaster    = nullptr;
     std::atomic<float>* pBypass    = nullptr;
     std::atomic<float>* pCabEnable = nullptr;
-    std::atomic<float>* pCab57Axis = nullptr;
-    std::atomic<float>* pCab421Axis = nullptr;
     std::atomic<float>* pCabBlend  = nullptr;
     std::atomic<float>* pCabLevel  = nullptr;
     std::atomic<float>* pGateEnable  = nullptr;

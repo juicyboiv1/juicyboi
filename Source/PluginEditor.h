@@ -153,9 +153,7 @@ private:
 
     juce::ToggleButton cabEnable { "Cab" };
     std::unique_ptr<APVTS::ButtonAttachment> cabEnableAttachment;
-    juce::ComboBox sm57Axis, md421Axis;
-    juce::Label sm57Label, md421Label, cabHint;
-    std::unique_ptr<APVTS::ComboBoxAttachment> sm57AxisAttachment, md421AxisAttachment;
+    juce::Label cabHint;
 
     juce::ToggleButton odEnable { "Boost" }, bypass { "Bypass" };
     std::unique_ptr<APVTS::ButtonAttachment> odEnableAttachment, bypassAttachment;

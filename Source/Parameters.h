@@ -22,9 +22,7 @@ namespace id
     inline constexpr const char* master     = "master";
     inline constexpr const char* bypass     = "bypass";
     inline constexpr const char* cabEnable  = "cab_enable";
-    inline constexpr const char* cabSm57Axis  = "cab_sm57_axis";
-    inline constexpr const char* cabMd421Axis = "cab_md421_axis";
-    inline constexpr const char* cabMicBlend  = "cab_mic_blend";
+    inline constexpr const char* cabMicBlend  = "cab_mic_blend"; // kept ID for session compat; UI = "IR Blend" (0 = IR A, 1 = IR B)
     inline constexpr const char* cabLevel     = "cab_level";
     inline constexpr const char* gateEnable    = "gate_enable";
     inline constexpr const char* gateThreshold = "gate_threshold";

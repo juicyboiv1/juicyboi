@@ -24,8 +24,6 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pMaster    = apvts.getRawParameterValue (params::id::master);
     pBypass    = apvts.getRawParameterValue (params::id::bypass);
     pCabEnable  = apvts.getRawParameterValue (params::id::cabEnable);
-    pCab57Axis  = apvts.getRawParameterValue (params::id::cabSm57Axis);
-    pCab421Axis = apvts.getRawParameterValue (params::id::cabMd421Axis);
     pCabBlend   = apvts.getRawParameterValue (params::id::cabMicBlend);
     pCabLevel   = apvts.getRawParameterValue (params::id::cabLevel);
     pGateEnable  = apvts.getRawParameterValue (params::id::gateEnable);
@@ -136,8 +134,7 @@ void JuicyboiAudioProcessor::updateParameters()
 
     tone.setKnobs (pBass->load(), pMid->load(), pTreble->load(), pPresence->load());
 
-    cab.setParameters (pCabEnable->load() > 0.5f, pCab57Axis->load() > 0.5f, pCab421Axis->load() > 0.5f,
-                       pCabBlend->load(), juce::Decibels::decibelsToGain (pCabLevel->load()));
+    cab.setParameters (pCabEnable->load() > 0.5f, pCabBlend->load(), juce::Decibels::decibelsToGain (pCabLevel->load()));
 
     gate.setParameters (pGateEnable->load() > 0.5f, pGateThresh->load(), pGateHold->load(), pGateRelease->load());
 }
@@ -308,7 +305,7 @@ void JuicyboiAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buf
 }
 
 //==============================================================================
-static const char* irKeys[] = { "ir_sm57_on", "ir_sm57_off", "ir_md421_on", "ir_md421_off" };
+static const char* irKeys[] = { "ir_a", "ir_b" };
 
 bool JuicyboiAudioProcessor::loadCabIR (int slot, const juce::File& file)
 {

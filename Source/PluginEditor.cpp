@@ -50,24 +50,12 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     updateRedVoiceEnablement();
 
     // Cab section
-    setupKnob (cabBlend, params::id::cabMicBlend, "Mic Blend");
+    setupKnob (cabBlend, params::id::cabMicBlend, "IR Blend");
     setupKnob (cabLevel, params::id::cabLevel,    "Cab Level");
     addAndMakeVisible (cabEnable);
     cabEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::cabEnable, cabEnable);
 
-    for (auto* cb : { &sm57Axis, &md421Axis })
-    {
-        cb->addItemList ({ "On-axis", "Off-axis" }, 1);
-        addAndMakeVisible (*cb);
-    }
-    sm57AxisAttachment  = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::cabSm57Axis,  sm57Axis);
-    md421AxisAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::cabMd421Axis, md421Axis);
-
-    sm57Label .setText ("SM57",  juce::dontSendNotification);
-    md421Label.setText ("MD421", juce::dontSendNotification);
-    for (auto* l : { &sm57Label, &md421Label }) addAndMakeVisible (*l);
-
-    cabHint.setText ("Cab off = hard bypass (for analog power amp). No IRs loaded = passthrough.",
+    cabHint.setText ("Cab off = hard bypass (for analog power amp). Blend: left = IR A, right = IR B. No IRs = passthrough.",
                      juce::dontSendNotification);
     cabHint.setFont (juce::FontOptions (11.0f));
     cabHint.setColour (juce::Label::textColourId, juce::Colour (0xff7a9a5c));
@@ -143,16 +131,8 @@ juce::Rectangle<int> JuicyboiAudioProcessorEditor::layoutCab (juce::Rectangle<in
     auto r = bounds.reduced (10, 20);
     cabHint.setBounds (r.removeFromBottom (16));
 
-    auto controls = r.removeFromLeft (190);
+    auto controls = r.removeFromLeft (100);
     cabEnable.setBounds (controls.removeFromTop (28).withWidth (90));
-    controls.removeFromTop (6);
-    auto row1 = controls.removeFromTop (26);
-    sm57Label.setBounds (row1.removeFromLeft (56));
-    sm57Axis.setBounds (row1.reduced (2));
-    controls.removeFromTop (4);
-    auto row2 = controls.removeFromTop (26);
-    md421Label.setBounds (row2.removeFromLeft (56));
-    md421Axis.setBounds (row2.reduced (2));
 
     auto knobs = r.removeFromLeft (200);
     auto place = [] (Knob& k, juce::Rectangle<int> kr)
@@ -164,12 +144,9 @@ juce::Rectangle<int> JuicyboiAudioProcessorEditor::layoutCab (juce::Rectangle<in
     place (cabLevel, knobs);
 
     r.removeFromLeft (8);
-    auto top = r.removeFromTop (r.getHeight() / 2);
     const auto w = r.getWidth() / 2;
-    irZones[0]->setBounds (top.removeFromLeft (w).reduced (3));
-    irZones[1]->setBounds (top.reduced (3));
-    irZones[2]->setBounds (r.removeFromLeft (w).reduced (3));
-    irZones[3]->setBounds (r.reduced (3));
+    irZones[0]->setBounds (r.removeFromLeft (w).reduced (3));
+    irZones[1]->setBounds (r.reduced (3));
     return bounds;
 }
 

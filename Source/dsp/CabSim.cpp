@@ -46,11 +46,9 @@ void CabSim::clearSlot (int slot)
         loaded[(size_t) slot] = false;
 }
 
-void CabSim::setParameters (bool enabled, bool sm57OffAxis, bool md421OffAxis, float blend01, float levelGain)
+void CabSim::setParameters (bool enabled, float blend01, float levelGain)
 {
     enableMix.setTargetValue (enabled ? 1.0f : 0.0f);
-    a57Off = sm57OffAxis;
-    b421Off = md421OffAxis;
     blend.setTargetValue (juce::jlimit (0.0f, 1.0f, blend01));
     level.setTargetValue (levelGain);
 }
@@ -75,8 +73,7 @@ void CabSim::process (juce::dsp::AudioBlock<float> block)
         return;
     }
 
-    const auto slotA = a57Off ? sm57Off : sm57On;
-    const auto slotB = b421Off ? md421Off : md421On;
+    constexpr int slotA = irA, slotB = irB;
     const bool hasA = hasIR (slotA), hasB = hasIR (slotB);
 
     for (int ch = 0; ch < nch; ++ch)
@@ -101,7 +98,7 @@ void CabSim::process (juce::dsp::AudioBlock<float> block)
 
         float wA = hasA ? 1.0f - bl : 0.0f;
         float wB = hasB ? bl : 0.0f;
-        if (hasA && ! hasB) wA = 1.0f;   // renormalise toward the loaded mic
+        if (hasA && ! hasB) wA = 1.0f;   // renormalise toward the loaded IR
         if (hasB && ! hasA) wB = 1.0f;
 
         for (int ch = 0; ch < nch; ++ch)

@@ -55,7 +55,7 @@ Input trim
           └─► Preamp cascade: Riff A ┐  both run; 20 ms crossfade
                               Riff B ┘  on channel switch
   └─► Tone stack (bass / mid / treble) + presence   (base rate)
-  └─► Cab IR sim (optional; SM57 + MD421 blend)   (base rate)
+  └─► Cab IR sim (optional; IR A / IR B blend)   (base rate)
   └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
   └─► Master
   └─► Bypass crossfade against latency-aligned dry signal
@@ -67,15 +67,14 @@ The dry/bypass path uses the same delay.
 
 ## Cab (IR) section
 
-Dual-mic 4x12 cabinet simulator after tone/presence, before Master.
+Two-IR cabinet simulator after tone/presence, before Master.
 
 - **Cab on/off** (`cab_enable`, default off). Off = hard bypass, no convolution
   runs — use this to feed an analog power amp + real cab.
-- **Four IR slots**, loaded by drag-and-drop onto the GUI: SM57 On-axis,
-  SM57 Off-axis, MD421 On-axis, MD421 Off-axis (.wav/.aif/.aiff/.flac, mono or stereo).
-- **SM57 / MD421 axis** pickers choose which slot each mic uses.
-- **Mic Blend** 0 = all SM57, 1 = all MD421. **Cab Level** ±24 dB.
-- Empty slots: if a mic's selected IR is empty, the other mic gets 100%;
+- **Two IR slots** (IR A, IR B), loaded by drag-and-drop onto the GUI
+  (.wav/.aif/.aiff/.flac, mono or stereo); "x" clears a slot.
+- **IR Blend** 0 = 100% IR A, 1 = 100% IR B (linear wet crossfade). **Cab Level** ±24 dB.
+- Empty slots: if one slot is empty, the loaded IR gets 100%;
   if neither is loaded, the cab passes audio through unchanged.
 - IR paths are saved in plugin state (absolute paths) and reloaded if the files still exist.
 - Zero-latency convolution, so no extra latency is reported.
@@ -129,9 +128,7 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `pre_treble`   | Treble      | 0 … 10 (5 = flat)| 5.5     |
 | `pre_presence` | Presence    | 0 … 10           | 5       |
 | `cab_enable`   | Cab On      | bool             | off     |
-| `cab_sm57_axis`| SM57 Axis   | On / Off-axis    | On      |
-| `cab_md421_axis`| MD421 Axis | On / Off-axis    | On      |
-| `cab_mic_blend`| Mic Blend   | 0 … 1            | 0.5     |
+| `cab_mic_blend`| IR Blend    | 0 … 1            | 0.5     |
 | `cab_level`    | Cab Level   | -24 … +24 dB     | 0 dB    |
 | `gate_enable`  | Gate On     | bool             | off     |
 | `gate_threshold`| Gate Threshold | -80 … -20 dB (key envelope) | -60 dB |
@@ -198,6 +195,7 @@ Tests/
 
 ## v2 changelog
 
+- **Cab streamlined to 2 IR slots** — IR A / IR B drop zones + IR Blend (0 = A, 1 = B). Removed the 4-slot layout and the `cab_sm57_axis` / `cab_md421_axis` params; old sessions load fine (those values are ignored). `cab_mic_blend` ID kept. IR paths now save as `ir_a` / `ir_b`, so IRs from old 4-slot sessions need re-dropping once.
 - **Red v1 / v2 A/B switch** — `red_voice` param (Preamp row, "Voice" box next to Channel; default **v2**). v1 = original tight Red; v2 = max-gain / fat-bottom Red (more cascade drive, Gain pot max 1.6, harder stage knees, tighter V2B HP to keep palm mutes crisp), roughly level-matched. Switching is a ~30 ms crossfade, so you can flip it while playing.
 - **Red channel fattened** — eased input/mid high-passes (input 95→65 Hz), cascade drive up ~15–30%, Gain pot max 1.15→1.35 for more gain and bass before Boost.
 - **Dual preamp** — Red and Orange channels, plus an **OD808** boost in front.
