@@ -195,6 +195,7 @@ Tests/
 
 ## v2 changelog
 
+- **Standalone: guitar input fixed** — stock JUCE Standalone starts with *Mute audio input* (Feedback Loop) ON and remembers it, so the Scarlett input reached juicyboi as silence. The patched Standalone now starts unmuted (setting stored under a new key, so an old saved "muted" is ignored), and sums every ticked interface input to one mono guitar signal → stereo out, so the guitar is heard whichever Scarlett input it's on. VST3/AU/AAX bus behaviour is unchanged.
 - **Cab streamlined to 2 IR slots** — IR A / IR B drop zones + IR Blend (0 = A, 1 = B). Removed the 4-slot layout and the `cab_sm57_axis` / `cab_md421_axis` params; old sessions load fine (those values are ignored). `cab_mic_blend` ID kept. IR paths now save as `ir_a` / `ir_b`, so IRs from old 4-slot sessions need re-dropping once.
 - **Red v1 / v2 A/B switch** — `red_voice` param (Preamp row, "Voice" box next to Channel; default **v2**). v1 = original tight Red; v2 = max-gain / fat-bottom Red (more cascade drive, Gain pot max 1.6, harder stage knees, tighter V2B HP to keep palm mutes crisp), roughly level-matched. Switching is a ~30 ms crossfade, so you can flip it while playing.
 - **Red channel fattened** — eased input/mid high-passes (input 95→65 Hz), cascade drive up ~15–30%, Gain pot max 1.15→1.35 for more gain and bass before Boost.

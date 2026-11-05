@@ -102,6 +102,13 @@ bool JuicyboiAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts)
     if (in == juce::AudioChannelSet::mono())
         return true;
 
+    // Standalone: the audio device hands us however many interface inputs are
+    // ticked in Audio/MIDI Settings (e.g. Scarlett 4i4 inputs 1..4). Accept any
+    // count; processBlock folds them down to one mono guitar signal, so the
+    // guitar is heard whichever input it is plugged into.
+    if (wrapperType == wrapperType_Standalone)
+        return ! in.isDisabled();
+
     return in == out;
 }
 
@@ -147,10 +154,12 @@ void JuicyboiAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     const auto numOut = getTotalNumOutputChannels();
     const auto numSamples = buffer.getNumSamples();
 
-    for (auto ch = numIn; ch < numOut; ++ch)
+    const auto mono = foldStandaloneInputsToMono (buffer);
+
+    for (auto ch = (mono ? 1 : numIn); ch < numOut; ++ch)
         buffer.clear (ch, 0, numSamples);
 
-    const auto numProc = juce::jmin (numIn, dsp::kMaxChannels, buffer.getNumChannels());
+    const auto numProc = mono ? 1 : juce::jmin (numIn, dsp::kMaxChannels, buffer.getNumChannels());
     if (numProc <= 0 || numSamples == 0)
         return;
 
@@ -160,7 +169,27 @@ void JuicyboiAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
     for (int start = 0; start < numSamples; start += maxChunk)
         processChunk (buffer, start, juce::jmin (maxChunk, numSamples - start), numProc);
 
-    finaliseOutputs (buffer);
+    finaliseOutputs (buffer, mono);
+}
+
+bool JuicyboiAudioProcessor::foldStandaloneInputsToMono (juce::AudioBuffer<float>& buffer) const
+{
+    const auto numIn = juce::jmin (getTotalNumInputChannels(), buffer.getNumChannels());
+
+    if (numIn <= 1)
+        return numIn == 1;
+
+    if (wrapperType != wrapperType_Standalone)
+        return false; // plugin hosts: keep true stereo-in -> stereo-out
+
+    // Standalone: sum every active interface input into channel 0, so a mono
+    // guitar on Scarlett input 1 (or 2/3/4) always reaches the preamp even when
+    // several input checkboxes are ticked or the device opens as stereo.
+    const auto n = buffer.getNumSamples();
+    for (int ch = 1; ch < numIn; ++ch)
+        buffer.addFrom (0, 0, buffer, ch, 0, n);
+
+    return true;
 }
 
 void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int start, int len, int numProc)
@@ -272,11 +301,11 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
     }
 }
 
-void JuicyboiAudioProcessor::finaliseOutputs (juce::AudioBuffer<float>& buffer)
+void JuicyboiAudioProcessor::finaliseOutputs (juce::AudioBuffer<float>& buffer, bool monoIn)
 {
     // Mono guitar in -> copy processed mono to remaining outputs
-    if (getTotalNumInputChannels() == 1)
-        for (int ch = 1; ch < getTotalNumOutputChannels(); ++ch)
+    if (monoIn)
+        for (int ch = 1; ch < juce::jmin (getTotalNumOutputChannels(), buffer.getNumChannels()); ++ch)
             buffer.copyFrom (ch, 0, buffer, 0, 0, buffer.getNumSamples());
 }
 
@@ -286,9 +315,10 @@ void JuicyboiAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buf
     juce::ScopedNoDenormals noDenormals;
     const auto numIn  = getTotalNumInputChannels();
     const auto numOut = getTotalNumOutputChannels();
-    const auto numProc = juce::jmin (numIn, dsp::kMaxChannels, buffer.getNumChannels());
+    const auto mono = foldStandaloneInputsToMono (buffer);
+    const auto numProc = mono ? 1 : juce::jmin (numIn, dsp::kMaxChannels, buffer.getNumChannels());
 
-    for (auto ch = numIn; ch < numOut; ++ch)
+    for (auto ch = (mono ? 1 : numIn); ch < numOut; ++ch)
         buffer.clear (ch, 0, buffer.getNumSamples());
 
     for (int ch = 0; ch < numProc; ++ch)
@@ -301,7 +331,7 @@ void JuicyboiAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buf
         }
     }
 
-    finaliseOutputs (buffer);
+    finaliseOutputs (buffer, mono);
 }
 
 //==============================================================================

@@ -155,6 +155,59 @@ int main()
     if (! bpOk) ++failures;
 
     p->releaseResources();
+
+    // Standalone input path: the JUCE Standalone player opens the processor
+    // with however many interface inputs are ticked (Scarlett 4i4: up to 4).
+    // A mono guitar on ANY one of them must reach the preamp and come out on
+    // both L and R. Plugin builds must still reject non-matching multi-in.
+    {
+        using ACS = juce::AudioChannelSet;
+        const bool pluginRejects = ! p->checkBusesLayoutSupported ({ { ACS::canonicalChannelSet (4) }, { ACS::stereo() } });
+        std::printf ("plugin wrapper rejects 4-in/2-out  %s\n", pluginRejects ? "ok" : "FAIL");
+        if (! pluginRejects) ++failures;
+
+        juce::AudioProcessor::setTypeOfNextNewPlugin (juce::AudioProcessor::wrapperType_Standalone);
+        std::unique_ptr<juce::AudioProcessor> sa (createPluginFilter());
+        juce::AudioProcessor::setTypeOfNextNewPlugin (juce::AudioProcessor::wrapperType_Undefined);
+
+        for (int numIns : { 1, 2, 4 })
+        {
+            const bool layoutOk = sa->checkBusesLayoutSupported ({ { ACS::canonicalChannelSet (numIns) }, { ACS::stereo() } });
+            sa->setPlayConfigDetails (numIns, 2, sr, bs);
+            sa->prepareToPlay (sr, bs);
+
+            for (int guitarCh = 0; guitarCh < numIns; ++guitarCh)
+            {
+                double l = 0.0, r = 0.0; double ph = 0.0; long n = 0; bool fin = true;
+                for (int b = 0; b < 100; ++b)
+                {
+                    juce::AudioBuffer<float> sb (juce::jmax (numIns, 2), bs);
+                    sb.clear();
+                    for (int i = 0; i < bs; ++i)
+                    {
+                        sb.setSample (guitarCh, i, (float) (0.25 * std::sin (ph)));
+                        ph += 2.0 * juce::MathConstants<double>::pi * 82.4 / sr;
+                    }
+                    sa->processBlock (sb, midi);
+                    if (b < 20) continue;
+                    for (int i = 0; i < bs; ++i)
+                    {
+                        const auto vl = sb.getSample (0, i), vr = sb.getSample (1, i);
+                        if (! std::isfinite (vl) || ! std::isfinite (vr)) fin = false;
+                        l += (double) vl * vl; r += (double) vr * vr; ++n;
+                    }
+                }
+                const auto lDb = 10.0 * std::log10 (l / (double) n + 1e-20);
+                const auto rDb = 10.0 * std::log10 (r / (double) n + 1e-20);
+                const bool ok = layoutOk && fin && lDb > -60.0 && std::abs (lDb - rDb) < 0.01;
+                std::printf ("standalone %d-in, guitar on input %d: L=%6.1f R=%6.1f dBFS  %s\n",
+                             numIns, guitarCh + 1, lDb, rDb, ok ? "ok" : "FAIL");
+                if (! ok) ++failures;
+            }
+            sa->releaseResources();
+        }
+    }
+
     std::printf (failures == 0 ? "ALL OK\n" : "%d FAILURES\n", failures);
     return failures == 0 ? 0 : 1;
 }

@@ -69,7 +69,8 @@ public:
 private:
     void updateParameters();
     void processChunk (juce::AudioBuffer<float>& buffer, int start, int len, int numProcChannels);
-    void finaliseOutputs (juce::AudioBuffer<float>& buffer);
+    void finaliseOutputs (juce::AudioBuffer<float>& buffer, bool monoIn);
+    bool foldStandaloneInputsToMono (juce::AudioBuffer<float>& buffer) const;
 
     // Cached parameter handles
     std::atomic<float>* pInputTrim = nullptr;
