@@ -50,6 +50,7 @@ target_sources(juicyboi
         Source/PluginEditor.cpp
         Source/Parameters.cpp
         Source/dsp/Od808Stage.cpp
+        Source/dsp/Sd1Stage.cpp
         Source/dsp/PreampCascade.cpp
         Source/dsp/ToneStack.cpp
         Source/dsp/GraphicEq.cpp

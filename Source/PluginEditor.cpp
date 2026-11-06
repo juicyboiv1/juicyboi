@@ -24,6 +24,16 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     addAndMakeVisible (odEnable);
     odEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::odEnable, odEnable);
 
+    boostType.addItemList ({ "OD-808", "SD-1" }, 1);
+    boostType.setTooltip ("Boost circuit: OD-808 (symmetric mid hump) or SD-1 (asymmetric, open-top Boutique voicing)");
+    addAndMakeVisible (boostType);
+    boostTypeAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::odType, boostType);
+
+    boostTypeLabel.setText ("Type", juce::dontSendNotification);
+    boostTypeLabel.setJustificationType (juce::Justification::centredRight);
+    boostTypeLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd4af37));
+    addAndMakeVisible (boostTypeLabel);
+
     addAndMakeVisible (bypass);
     bypassAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::bypass, bypass);
 
@@ -373,10 +383,13 @@ void JuicyboiAudioProcessorEditor::resized()
         placeKnob (input, r);
     }
 
-    // Boost (OD-style)
+    // Boost (OD-808 | SD-1)
     {
         auto r = layoutGroup (odGroup, area.removeFromLeft (unit * 3));
         odEnable.setBounds (r.removeFromBottom (26).withSizeKeepingCentre (100, 26));
+        auto typeRow = r.removeFromTop (28);
+        boostTypeLabel.setBounds (typeRow.removeFromLeft (44));
+        boostType.setBounds (typeRow.removeFromLeft (110).reduced (2));
         const auto w = r.getWidth() / 3;
         placeKnob (odDrive, r.removeFromLeft (w));
         placeKnob (odTone,  r.removeFromLeft (w));

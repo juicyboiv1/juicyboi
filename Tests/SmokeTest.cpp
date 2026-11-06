@@ -1,5 +1,5 @@
 // Headless smoke test: instantiates the processor, runs a guitar-ish test
-// signal through every channel/boost combination and checks output sanity,
+// signal through every channel/boost-type combination and checks output sanity,
 // reported latency, and bypass alignment.
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
@@ -33,50 +33,56 @@ int main()
         const bool rvDef = jp0.apvts.getRawParameterValue (jb::params::id::redVoice)->load() > 0.5f;
         std::printf ("red_voice default v2  %s\n", rvDef ? "ok" : "FAIL");
         if (! rvDef) ++failures;
+        const bool odTypeDef = jp0.apvts.getRawParameterValue (jb::params::id::odType)->load() < 0.5f;
+        std::printf ("od_type default OD-808  %s\n", odTypeDef ? "ok" : "FAIL");
+        if (! odTypeDef) ++failures;
     }
 
-    // ch: 0 = Red v1, 1 = Red v2, 2 = Orange
+    // ch: 0 = Red v1, 1 = Red v2, 2 = Orange; odType: 0 = OD-808, 1 = SD-1
     static const char* chNames[] = { "Red v1", "Red v2", "Orange" };
+    static const char* odNames[] = { "OD808", "SD-1" };
     for (int odOn = 0; odOn < 2; ++odOn)
-        for (int ch = 0; ch < 3; ++ch)
-            for (float gain : { 0.0f, 6.0f, 10.0f })
-            {
-                setParam (*p, jb::params::id::odEnable, (float) odOn);
-                setParam (*p, jb::params::id::channel, ch == 2 ? 1.0f : 0.0f);
-                setParam (*p, jb::params::id::redVoice, ch == 1 ? 1.0f : 0.0f);
-                setParam (*p, jb::params::id::gain, gain);
-                setParam (*p, jb::params::id::odDrive, 5.0f);
-
-                double sumSq = 0.0; float peak = 0.0f; bool finite = true; long n = 0;
-                double phase = 0.0;
-                for (int b = 0; b < 200; ++b) // ~1 s
+        for (int odType = 0; odType < 2; ++odType)
+            for (int ch = 0; ch < 3; ++ch)
+                for (float gain : { 0.0f, 6.0f, 10.0f })
                 {
-                    juce::AudioBuffer<float> buf (2, bs);
-                    for (int i = 0; i < bs; ++i)
+                    setParam (*p, jb::params::id::odEnable, (float) odOn);
+                    setParam (*p, jb::params::id::odType, (float) odType);
+                    setParam (*p, jb::params::id::channel, ch == 2 ? 1.0f : 0.0f);
+                    setParam (*p, jb::params::id::redVoice, ch == 1 ? 1.0f : 0.0f);
+                    setParam (*p, jb::params::id::gain, gain);
+                    setParam (*p, jb::params::id::odDrive, 5.0f);
+
+                    double sumSq = 0.0; float peak = 0.0f; bool finite = true; long n = 0;
+                    double phase = 0.0;
+                    for (int b = 0; b < 200; ++b) // ~1 s
                     {
-                        // decaying low-E-ish tone + harmonic, ~-12 dBFS peak
-                        const auto s = 0.25 * std::sin (phase) + 0.08 * std::sin (3.0 * phase);
-                        phase += 2.0 * juce::MathConstants<double>::pi * 82.4 / sr;
-                        buf.setSample (0, i, (float) s);
-                        buf.setSample (1, i, 0.0f);
-                    }
-                    p->processBlock (buf, midi);
-                    if (b < 20) continue; // skip settle
-                    for (int c = 0; c < 2; ++c)
+                        juce::AudioBuffer<float> buf (2, bs);
                         for (int i = 0; i < bs; ++i)
                         {
-                            const auto v = buf.getSample (c, i);
-                            if (! std::isfinite (v)) finite = false;
-                            peak = std::max (peak, std::abs (v));
-                            sumSq += (double) v * v; ++n;
+                            // decaying low-E-ish tone + harmonic, ~-12 dBFS peak
+                            const auto s = 0.25 * std::sin (phase) + 0.08 * std::sin (3.0 * phase);
+                            phase += 2.0 * juce::MathConstants<double>::pi * 82.4 / sr;
+                            buf.setSample (0, i, (float) s);
+                            buf.setSample (1, i, 0.0f);
                         }
+                        p->processBlock (buf, midi);
+                        if (b < 20) continue; // skip settle
+                        for (int c = 0; c < 2; ++c)
+                            for (int i = 0; i < bs; ++i)
+                            {
+                                const auto v = buf.getSample (c, i);
+                                if (! std::isfinite (v)) finite = false;
+                                peak = std::max (peak, std::abs (v));
+                                sumSq += (double) v * v; ++n;
+                            }
+                    }
+                    const auto rmsDb = 10.0 * std::log10 (sumSq / (double) n + 1e-20);
+                    const bool ok = finite && peak < 4.0f && rmsDb > -60.0;
+                    if (! ok) ++failures;
+                    std::printf ("OD=%d type=%-5s ch=%-6s gain=%4.1f  rms=%6.1f dBFS  peak=%.3f  %s\n",
+                                 odOn, odNames[odType], chNames[ch], gain, rmsDb, peak, ok ? "ok" : "FAIL");
                 }
-                const auto rmsDb = 10.0 * std::log10 (sumSq / (double) n + 1e-20);
-                const bool ok = finite && peak < 4.0f && rmsDb > -60.0;
-                if (! ok) ++failures;
-                std::printf ("OD=%d ch=%-6s gain=%4.1f  rms=%6.1f dBFS  peak=%.3f  %s\n",
-                             odOn, chNames[ch], gain, rmsDb, peak, ok ? "ok" : "FAIL");
-            }
 
     // Gate: off by default; when on, a -86 dBFS hiss key must be muted and a
     // played note must pass. Measures output RMS for a given input generator.

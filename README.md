@@ -51,7 +51,7 @@ To install the VST3 on Linux, copy the bundle to `~/.vst3/`.
 ```
 Input trim
   └─► [ 4x oversampled ]
-        Boost (OD-style)  ── blended in/out with a 15 ms crossfade
+        Boost (OD-808 | SD-1) ── type + on/off crossfades (~15–20 ms)
           └─► Preamp cascade: Riff A ┐  both run; 20 ms crossfade
                               Riff B ┘  on channel switch
   └─► Tone stack (bass / mid / treble) + presence   (base rate)
@@ -65,6 +65,21 @@ Input trim
 Buses: mono→stereo (default, guitar DI), mono→mono, stereo→stereo.
 Latency: the oversampler's FIR latency (61 samples at 48 kHz), reported to the host.
 The dry/bypass path uses the same delay.
+
+## Boost section
+
+Selectable front-end overdrive into the Dual Rec–style preamp. Shared **Drive /
+Tone / Level / On**; **Type** picks the circuit. Original DSP of publicly
+documented topology principles — not a product clone (no commercial branding).
+
+- **OD-808** (default): symmetric feedback-diode mid hump (classic TS-family
+  boost into high gain).
+- **SD-1**: asymmetric 3-diode clip with Boutique Overdrive Mod RC cues (fatter
+  coupling, 500 kΩ audio drive range, retuned mid, C6 omitted for an open top).
+  Voiced slightly hot for surplus thickness into Dual Rec–style gain.
+- Switching Type crossfades both circuits (state stays warm — no clicks).
+- Tip: when A/B'ing Type, match perceived loudness with **Boost Level** (SD-1
+  can hit a bit hotter at the same Drive).
 
 ## Graphic EQ section
 
@@ -136,6 +151,7 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 |----------------|-------------|------------------|---------|
 | `input_trim`   | Input       | -24 … +24 dB     | 0 dB    |
 | `od_enable`    | Boost On    | bool             | off     |
+| `od_type`      | Boost Type  | OD-808 / SD-1    | OD-808  |
 | `od_drive`     | Boost Drive | 0 … 10           | 2       |
 | `od_tone`      | Boost Tone  | 0 … 10           | 5       |
 | `od_level`     | Boost Level | -24 … +12 dB     | 0 dB    |
@@ -169,8 +185,9 @@ Source/
   Parameters.h/.cpp        parameter IDs + layout
   dsp/
     Filters.h              OnePole (RC-style 6 dB/oct) + RBJ Biquad, per-channel state
-    SoftClip.h             tanh, smooth diode-pair, asymmetric triode curve
-    Od808Stage.h/.cpp      OD-style boost (feedback-diode topology principles)
+    SoftClip.h             tanh, diode-pair, diodeAsym3, asymmetric triode curve
+    Od808Stage.h/.cpp      OD-808–style boost (symmetric feedback-diode)
+    Sd1Stage.h/.cpp        SD-1–style boost (asym 3-diode, Boutique OD RC cues)
     ChannelVoice.h         Red v1 / Red v2 / Orange voicing structs (stage corners, gains, bias)
     PreampCascade.h/.cpp   4× [coupling HP → gain → asym sat (inverting) → plate LP]
     ToneStack.h/.cpp       placeholder biquad TMB + presence shelf
@@ -179,7 +196,7 @@ Source/
     CabSim.h/.cpp          dual-mic IR convolution (4 slots, blend, hard bypass)
     NoiseGate.h/.cpp       key/sidechain gate (dry-input detector, VCA after cab)
 Tests/
-  SmokeTest.cpp            headless run through every channel/boost/gain combo
+  SmokeTest.cpp            headless run through every channel/boost-type/gain combo
 ```
 
 ## DSP stage notes
@@ -188,6 +205,11 @@ Tests/
   500kA drive, C1=50p feedback LP, 1N914 pair, 220n/1k tone ≈723 Hz + 20kA
   treble restore, 100k Balance level). Feedback-clipper form
   `out = in + clip(gain·hp(in))` — original DSP, not a product clone.
+- **Sd1Stage**: Boutique Overdrive Mod RC cues on an SD-1–topology path
+  (R6=1k/C3=0.22u ≈723 Hz mid, R5=10k + 500kA drive, asym 3-diode clip,
+  R7/C4 ≈1 kHz post LP, C6 omitted for open top, fatter ~8 Hz coupling).
+  Same `out = in + asym_clip(gain·hp(in))` form; slight makeup for Dual Rec
+  thickness. Original DSP, not a product clone.
 - **PreampCascade**: tight HP → 4 triode-like stages, each with a coupling HP,
   a gain, an asymmetric soft-sat (positive half flattens harder, bias offset gives
   even harmonics, polarity inverts per stage), and a plate/Miller LP. The Gain pot
@@ -238,7 +260,7 @@ Or manually: quit juicyboi → delete that settings file → `cmake -S . -B buil
 - **Cab streamlined to 2 IR slots** — IR A / IR B drop zones + IR Blend (0 = A, 1 = B). Removed the 4-slot layout and the `cab_sm57_axis` / `cab_md421_axis` params; old sessions load fine (those values are ignored). `cab_mic_blend` ID kept. IR paths now save as `ir_a` / `ir_b`, so IRs from old 4-slot sessions need re-dropping once.
 - **Red v1 / v2 A/B switch** — `red_voice` param (Preamp row, "Voice" box next to Channel; default **v2**). v1 = original tight Red; v2 = max-gain / fat-bottom Red (more cascade drive, Gain pot max 1.6, harder stage knees, tighter V2B HP to keep palm mutes crisp), roughly level-matched. Switching is a ~30 ms crossfade, so you can flip it while playing.
 - **Red channel fattened** — eased input/mid high-passes (input 95→65 Hz), cascade drive up ~15–30%, Gain pot max 1.15→1.35 for more gain and bass before Boost.
-- **Dual preamp** — Red and Orange channels, plus an **OD808** boost in front.
+- **Dual preamp** — Red and Orange channels, plus a selectable **Boost** (OD-808 | SD-1) in front.
 - **Gate** with sidechain detection.
 - **Cab IR scaffold** (IR loading path in place; bundled IRs still minimal).
 - **Standalone: Scarlett mono inputs** — patched JUCE Standalone so multichannel interfaces (e.g. Scarlett 4i4) show inputs 1/2/3/4 individually.

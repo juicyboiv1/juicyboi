@@ -11,6 +11,7 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
 {
     pInputTrim = apvts.getRawParameterValue (params::id::inputTrim);
     pOdEnable  = apvts.getRawParameterValue (params::id::odEnable);
+    pOdType    = apvts.getRawParameterValue (params::id::odType);
     pOdDrive   = apvts.getRawParameterValue (params::id::odDrive);
     pOdTone    = apvts.getRawParameterValue (params::id::odTone);
     pOdLevel   = apvts.getRawParameterValue (params::id::odLevel);
@@ -51,6 +52,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     const auto osRate = sampleRate * oversampler.getFactor();
 
     od.prepare (osRate);
+    sd1.prepare (osRate);
     riffA.prepare (osRate, voicingA);
     riffAv1.prepare (osRate, voicingAv1);
     riffB.prepare (osRate, voicingB);
@@ -74,6 +76,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     masterGain.reset (sampleRate, 0.02);
     bypassMix .reset (sampleRate, 0.03);
     odMix     .reset (osRate, 0.015);
+    odTypeMix .reset (osRate, 0.02);
     channelMix.reset (osRate, 0.02);
     redVoiceMix.reset (osRate, 0.03);
 
@@ -82,6 +85,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     masterGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (pMaster->load(), -60.0f));
     bypassMix .setCurrentAndTargetValue (pBypass->load() > 0.5f ? 1.0f : 0.0f);
     odMix     .setCurrentAndTargetValue (pOdEnable->load() > 0.5f ? 1.0f : 0.0f);
+    odTypeMix .setCurrentAndTargetValue (pOdType->load() > 0.5f ? 1.0f : 0.0f); // 1 = SD-1
     channelMix.setCurrentAndTargetValue (pChannel->load() > 0.5f ? 1.0f : 0.0f);
     redVoiceMix.setCurrentAndTargetValue (pRedVoice->load() > 0.5f ? 1.0f : 0.0f);
 
@@ -124,14 +128,18 @@ void JuicyboiAudioProcessor::updateParameters()
     masterGain.setTargetValue (juce::Decibels::decibelsToGain (pMaster->load(), -60.0f));
     bypassMix .setTargetValue (pBypass->load() > 0.5f ? 1.0f : 0.0f);
     odMix     .setTargetValue (pOdEnable->load() > 0.5f ? 1.0f : 0.0f);
+    odTypeMix .setTargetValue (pOdType->load() > 0.5f ? 1.0f : 0.0f); // 1 = SD-1
 
     const auto ch = pChannel->load() > 0.5f ? 1 : 0;
     channelMix.setTargetValue ((float) ch);
     redVoiceMix.setTargetValue (pRedVoice->load() > 0.5f ? 1.0f : 0.0f); // 1 = v2
 
     // TODO: smooth OD level / tone-stack coefficient changes (currently per block)
-    od.setParameters (pOdDrive->load() / 10.0f, pOdTone->load() / 10.0f,
-                      juce::Decibels::decibelsToGain (pOdLevel->load()));
+    const auto odDrive01 = pOdDrive->load() / 10.0f;
+    const auto odTone01  = pOdTone->load() / 10.0f;
+    const auto odLvl     = juce::Decibels::decibelsToGain (pOdLevel->load());
+    od.setParameters (odDrive01, odTone01, odLvl);
+    sd1.setParameters (odDrive01, odTone01, odLvl);
 
     const auto gain01 = pGain->load() / 10.0f;
     riffA.setGain (gain01);
@@ -250,18 +258,22 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         const auto n = (int) up.getNumSamples();
         for (int i = 0; i < n; ++i)
         {
-            const auto odAmt = odMix.getNextValue();
-            const auto chAmt = channelMix.getNextValue();
-            const auto rvAmt = redVoiceMix.getNextValue(); // 0 = Red v1, 1 = Red v2
+            const auto odAmt   = odMix.getNextValue();
+            const auto typeAmt = odTypeMix.getNextValue(); // 0 = OD-808, 1 = SD-1
+            const auto chAmt   = channelMix.getNextValue();
+            const auto rvAmt   = redVoiceMix.getNextValue(); // 0 = Red v1, 1 = Red v2
 
             for (int ch = 0; ch < numProc; ++ch)
             {
                 auto* d = up.getChannelPointer ((size_t) ch);
                 const auto x = d[i];
 
-                // OD always runs (state stays warm) and is blended in, so
-                // toggling it never clicks.
-                const auto boosted = x + odAmt * (od.process (x, ch) - x);
+                // Both Boost circuits always run (state stays warm); type and
+                // on/off are short equal-gain crossfades so switching never clicks.
+                const auto odOut  = od.process (x, ch);
+                const auto sd1Out = sd1.process (x, ch);
+                const auto wet    = odOut + typeAmt * (sd1Out - odOut);
+                const auto boosted = x + odAmt * (wet - x);
 
                 // All cascades run (state stays warm); Red v1/v2 and
                 // Red/Orange switching are short equal-gain crossfades.

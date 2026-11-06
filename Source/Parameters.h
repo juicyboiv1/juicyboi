@@ -9,6 +9,7 @@ namespace id
 {
     inline constexpr const char* inputTrim  = "input_trim";
     inline constexpr const char* odEnable   = "od_enable";
+    inline constexpr const char* odType     = "od_type"; // Boost type: 0 = OD-808, 1 = SD-1
     inline constexpr const char* odDrive    = "od_drive";
     inline constexpr const char* odTone     = "od_tone";
     inline constexpr const char* odLevel    = "od_level";

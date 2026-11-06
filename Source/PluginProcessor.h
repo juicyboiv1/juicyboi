@@ -5,6 +5,7 @@
 
 #include "Parameters.h"
 #include "dsp/Od808Stage.h"
+#include "dsp/Sd1Stage.h"
 #include "dsp/PreampCascade.h"
 #include "dsp/ToneStack.h"
 #include "dsp/GraphicEq.h"
@@ -14,7 +15,7 @@
 
 /** juicyboi — heavy-riff preamp.
     Signal chain:
-      Input trim -> [oversampled: OD-style boost (blend on/off) ->
+      Input trim -> [oversampled: Boost (OD-808 | SD-1, blend on/off) ->
       dual-channel cascaded preamp (Red Ch1 v1|v2 / Orange Ch2 crossfades)] ->
       tone stack + presence -> graphic EQ (optional, true bypass) -> cab IR sim (optional, hard bypass) -> gate VCA (optional, true bypass;
       keyed from the dry post-trim input) -> master -> (bypass crossfade vs delayed dry). */
@@ -79,6 +80,7 @@ private:
     // Cached parameter handles
     std::atomic<float>* pInputTrim = nullptr;
     std::atomic<float>* pOdEnable  = nullptr;
+    std::atomic<float>* pOdType    = nullptr;
     std::atomic<float>* pOdDrive   = nullptr;
     std::atomic<float>* pOdTone    = nullptr;
     std::atomic<float>* pOdLevel   = nullptr;
@@ -107,6 +109,7 @@ private:
     // DSP
     jb::dsp::OversampledNonlinear oversampler;
     jb::dsp::Od808Stage od;
+    jb::dsp::Sd1Stage   sd1;
     jb::dsp::PreampCascade riffA, riffAv1, riffB; // Red v2, Red v1, Orange
     jb::dsp::ToneStack tone;
     jb::dsp::GraphicEq graphicEq;
@@ -116,7 +119,7 @@ private:
     jb::dsp::ChannelVoicing voicingA, voicingAv1, voicingB;
 
     juce::SmoothedValue<float> inputGain, masterGain, bypassMix; // base rate
-    juce::SmoothedValue<float> odMix, channelMix, redVoiceMix;   // oversampled rate
+    juce::SmoothedValue<float> odMix, odTypeMix, channelMix, redVoiceMix; // oversampled rate
 
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay { 8192 };
     juce::AudioBuffer<float> dryBuffer;

@@ -38,6 +38,8 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (decibels (id::inputTrim, "Input", -24.0f, 24.0f, 0.0f));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::odEnable, versionHint }, "Boost On", false));
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::odType, versionHint }, "Boost Type",
+                                                        StringArray { "OD-808", "SD-1" }, 0));
     layout.add (knob (id::odDrive, "Boost Drive", 2.0f));
     layout.add (knob (id::odTone,  "Boost Tone",  5.0f));
     layout.add (decibels (id::odLevel, "Boost Level", -24.0f, 12.0f, 0.0f));

@@ -39,4 +39,16 @@ inline float triode (float x, float bias, float posHardness, float negHardness) 
 
     return curve (x + bias) - curve (bias);
 }
+/** Asymmetric "3-diode" soft clip (1 diode one polarity, 2 series the other).
+    posScale / negScale set the relative clip thresholds (e.g. 1.0 / 2.0).
+    Input should be pre-scaled by 1/Vf by the caller. Output roughly (-negScale, +posScale). */
+inline float diodeAsym3 (float x, float posScale = 1.0f, float negScale = 2.0f,
+                         float knee = 2.6f) noexcept
+{
+    const auto s = x >= 0.0f ? posScale : negScale;
+    const auto u = x / s;
+    const auto au = std::abs (u);
+    return s * u / std::pow (1.0f + std::pow (au, knee), 1.0f / knee);
+}
+
 } // namespace jb::dsp::shape

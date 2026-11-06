@@ -222,6 +222,11 @@ private:
     juce::ToggleButton odEnable { "Boost" }, bypass { "Bypass" };
     std::unique_ptr<APVTS::ButtonAttachment> odEnableAttachment, bypassAttachment;
 
+    // Boost circuit type A/B (OD-808 | SD-1); shared Drive / Tone / Level
+    juce::ComboBox boostType;
+    juce::Label boostTypeLabel;
+    std::unique_ptr<APVTS::ComboBoxAttachment> boostTypeAttachment;
+
     juce::ComboBox channel;
     juce::Label channelLabel;
     std::unique_ptr<APVTS::ComboBoxAttachment> channelAttachment;
