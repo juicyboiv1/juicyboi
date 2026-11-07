@@ -15,6 +15,7 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pOdDrive   = apvts.getRawParameterValue (params::id::odDrive);
     pOdTone    = apvts.getRawParameterValue (params::id::odTone);
     pOdLevel   = apvts.getRawParameterValue (params::id::odLevel);
+    pLeadPresence = apvts.getRawParameterValue (params::id::leadPresence);
     pPreampModel = apvts.getRawParameterValue (params::id::preampModel);
     pChannel   = apvts.getRawParameterValue (params::id::channel);
     pRedVoice  = apvts.getRawParameterValue (params::id::redVoice);
@@ -57,6 +58,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     lead.prepare (osRate);
     leadTone.setKnobs (pBass->load(), pMid->load(), pTreble->load());
     leadTone.prepare (sampleRate);
+    leadPresence.setPosition (pLeadPresence->load());
+    leadPresence.prepare (sampleRate);
     leadBuffer.setSize (numCh, maxChunk, false, true, false);
 
     od.prepare (osRate);
@@ -101,6 +104,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
 
     lastChannel = -1;
     updateParameters();
+    leadGraphicEq.prepare (sampleRate, maxChunk);
     graphicEq.prepare (sampleRate, maxChunk); // after params: snaps EQ to current settings (no fade-in on load)
 }
 
@@ -155,6 +159,7 @@ void JuicyboiAudioProcessor::updateParameters()
 
     const auto gain01 = pGain->load() / 10.0f;
     lead.setGain (gain01);
+    leadPresence.setPosition (pLeadPresence->load());
     leadTone.setKnobs (pBass->load(), pMid->load(), pTreble->load());
     riffA.setGain (gain01);
     riffAv1.setGain (gain01);
@@ -173,6 +178,7 @@ void JuicyboiAudioProcessor::updateParameters()
         for (size_t b = 0; b < eqDb.size(); ++b)
             eqDb[b] = pEqBands[b]->load();
         graphicEq.setParameters (pEqEnable->load() > 0.5f, eqDb, pEqLevel->load());
+        leadGraphicEq.setParameters (pEqEnable->load() > 0.5f, eqDb, pEqLevel->load());
     }
 
     cab.setParameters (pCabEnable->load() > 0.5f, pCabBlend->load(), juce::Decibels::decibelsToGain (pCabLevel->load()));
@@ -306,28 +312,45 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         }
     });
 
-    // 3) Both model-specific tones stay warm. Crossfade AFTER their tones;
-    // two identical 4x FIR paths have equal latency and even inversion count.
-    // Explicit endpoints retain bit-identical Rectifier output (no subtract/add).
+    // 3) Keep BOTH complete paths warm. The crossfade must follow the
+    // model-specific Presence: filtering the mixed signal would color Rectifier.
     for (int i = 0; i < len; ++i)
     {
         leadTone.beginFrame();
-        const auto mix = modelMix.getNextValue();
         for (int ch = 0; ch < numProc; ++ch)
         {
-            auto& sample = buffer.getWritePointer (ch, start)[i];
-            const auto rect = tone.process (sample, ch);
-            const auto alt = leadTone.process (leadBuffer.getReadPointer (ch)[i], ch);
-            sample = mix <= 0.0f ? rect : (mix >= 1.0f ? alt : rect + mix * (alt - rect));
+            auto& rect = buffer.getWritePointer (ch, start)[i];
+            auto& alt = leadBuffer.getWritePointer (ch)[i];
+            rect = tone.process (rect, ch);
+            alt = leadTone.process (alt, ch);
         }
     }
 
-    // 3b) Graphic EQ: carve after the drive, before the cab (true bypass when off)
+    // 3b) Independent EQ filter histories, identical shared settings. The legacy
+    // instance still receives exactly the old Rectifier samples/arithmetic.
     {
-        float* chans[dsp::kMaxChannels] {};
+        float* rect[dsp::kMaxChannels] {}, *alt[dsp::kMaxChannels] {};
         for (int ch = 0; ch < numProc; ++ch)
-            chans[ch] = buffer.getWritePointer (ch, start);
-        graphicEq.process (chans, numProc, len);
+        {
+            rect[ch] = buffer.getWritePointer (ch, start);
+            alt[ch] = leadBuffer.getWritePointer (ch);
+        }
+        graphicEq.process (rect, numProc, len);
+        leadGraphicEq.process (alt, numProc, len);
+    }
+
+    // 3c) 5150 Presence AFTER its EQ / BEFORE the shared Cab. Equal FIR latency,
+    // even inversion counts; explicit endpoints preserve legacy Rectifier null.
+    for (int i = 0; i < len; ++i)
+    {
+        leadPresence.beginFrame();
+        const auto mix = modelMix.getNextValue();
+        for (int ch = 0; ch < numProc; ++ch)
+        {
+            auto& rect = buffer.getWritePointer (ch, start)[i];
+            const auto alt = leadPresence.process (leadBuffer.getReadPointer (ch)[i], ch);
+            rect = mix <= 0.0f ? rect : (mix >= 1.0f ? alt : rect + mix * (alt - rect));
+        }
     }
 
     // 4) Cab IR sim (no-op when Cab is off)
@@ -441,6 +464,15 @@ void JuicyboiAudioProcessor::setStateInformation (const void* data, int sizeInBy
                 model.setProperty ("id", params::id::preampModel, nullptr);
                 model.setProperty ("value", 0.0f, nullptr);
                 tree.addChild (model, -1, nullptr);
+            }
+            // Existing 5150-branch sessions predate lead_presence. Reference=0
+            // is unity, even when loading over a processor currently set brighter.
+            if (! tree.getChildWithProperty ("id", params::id::leadPresence).isValid())
+            {
+                juce::ValueTree presence ("PARAM");
+                presence.setProperty ("id", params::id::leadPresence, nullptr);
+                presence.setProperty ("value", 0.0f, nullptr);
+                tree.addChild (presence, -1, nullptr);
             }
             apvts.replaceState (tree);
 

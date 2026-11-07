@@ -66,16 +66,19 @@ int modelValidation()
     };
     {
         JuicyboiAudioProcessor p;
-        check ("default Rectifier; parameter appended", get (p, "preamp_model") < 0.5f
-               && p.apvts.getParameter ("preamp_model")->getParameterIndex() == p.getParameters().size() - 1);
+        check ("default Rectifier; old/new indices preserved", get (p, "preamp_model") < 0.5f
+               && p.apvts.getParameter ("preamp_model")->getParameterIndex() == p.getParameters().size() - 2
+               && p.apvts.getParameter ("lead_presence")->getParameterIndex() == p.getParameters().size() - 1);
         set (p, "channel", 1.0f); set (p, "red_voice", 0.0f); set (p, "preamp_model", 1.0f);
+        set (p, "lead_presence", 9.0f);
         auto old = p.apvts.copyState();
         old.removeChild (old.getChildWithProperty ("id", "preamp_model"), nullptr);
+        old.removeChild (old.getChildWithProperty ("id", "lead_presence"), nullptr);
         juce::MemoryBlock state;
         juce::AudioProcessor::copyXmlToBinary (*old.createXml(), state);
         p.setStateInformation (state.getData(), (int) state.getSize());
         check ("old state resets active Lead to Rectifier", get (p, "preamp_model") < 0.5f
-               && get (p, "channel") > 0.5f && get (p, "red_voice") < 0.5f);
+               && get (p, "channel") > 0.5f && get (p, "red_voice") < 0.5f && get (p, "lead_presence") < 0.01f);
         set (p, "preamp_model", 1.0f); set (p, "pre_gain", 9.1f);
         p.getStateInformation (state);
         JuicyboiAudioProcessor restored;
@@ -231,6 +234,9 @@ int modelValidation()
         JuicyboiAudioProcessor p;
         set (p, "channel", 1.0f); set (p, "red_voice", 0.0f);
         std::unique_ptr<juce::AudioProcessorEditor> editor (p.createEditor());
+        juce::Slider* outputPresence = nullptr;
+        for (auto* child : editor->getChildren())
+            if (child->getComponentID() == "lead_presence") outputPresence = dynamic_cast<juce::Slider*> (child);
         juce::ComboBox* model = nullptr; juce::ComboBox* channel = nullptr; juce::ComboBox* voice = nullptr;
         for (auto* child : editor->getChildren())
             if (auto* combo = dynamic_cast<juce::ComboBox*> (child))
@@ -239,17 +245,17 @@ int modelValidation()
                 if (combo->getItemText (0) == "Red (Ch1)") channel = combo;
                 if (combo->getItemText (0) == "Red v1") voice = combo;
             }
-        bool uiOk = model && channel && voice;
+        bool uiOk = model && channel && voice && outputPresence;
         if (uiOk)
         {
             model->setSelectedItemIndex (1, juce::sendNotificationSync);
-            uiOk = ! channel->isEnabled() && ! voice->isEnabled()
+            uiOk = outputPresence->isEnabled() && ! channel->isEnabled() && ! voice->isEnabled()
                    && get (p, "channel") > 0.5f && get (p, "red_voice") < 0.5f;
             editor->setSize (1200, 560);
             const auto image = editor->createComponentSnapshot (editor->getLocalBounds());
             uiOk = uiOk && image.isValid() && model->getBounds().getWidth() >= 160;
             model->setSelectedItemIndex (0, juce::sendNotificationSync);
-            uiOk = uiOk && channel->isEnabled() && ! voice->isEnabled(); // Orange retained
+            uiOk = uiOk && ! outputPresence->isEnabled() && channel->isEnabled() && ! voice->isEnabled(); // Orange retained
         }
         check ("offscreen GUI dropdown dims/preserves Rectifier choices", uiOk);
     }

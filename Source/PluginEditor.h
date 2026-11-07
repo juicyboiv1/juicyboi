@@ -202,7 +202,7 @@ private:
     JuicyboiAudioProcessor& processor;
     JuicyboiLookAndFeel lookAndFeel;
 
-    Knob input, odDrive, odTone, odLevel, gain, bass, mid, treble, presence, master, cabBlend, cabLevel;
+    Knob input, odDrive, odTone, odLevel, gain, bass, mid, treble, presence, leadPresence, master, cabBlend, cabLevel;
     Knob gateThreshold, gateHold, gateRelease;
 
     // Graphic EQ (post-ToneStack / pre-Cab): 7 vertical band faders + Level

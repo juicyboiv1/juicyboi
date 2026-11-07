@@ -87,6 +87,9 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::preampModel, versionHint }, "Preamp Model",
                                                         StringArray { "Rectifier", "5150-inspired" }, 0));
 
+    // New parameter appended after preamp_model; existing indices stay stable.
+    layout.add (knob (id::leadPresence, "5150 Presence", 0.0f));
+
     return layout;
 }
 } // namespace jb::params

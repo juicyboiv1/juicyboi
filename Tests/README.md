@@ -12,3 +12,10 @@ minor compiler/platform math differences; local builds should null exactly.
 Do not regenerate this fixture from the feature processor to bless a failure.
 The capture-only code was removed after saving the baseline to avoid accidental
 regeneration with feature code.
+
+`PresenceTest.cpp` independently solves the declared loaded feedback-divider
+equations, measures digital sine magnitude/phase at 54 points, checks the
+bilinear-frequency mapping and raw analog-surrogate discrepancy, rapid sweeps,
+reference null, silence/DC, missing/new state recall and model/EQ transitions.
+This validates implementation against a documented nominal model, not against
+real amp measurements. See `docs/5150-presence.md`.

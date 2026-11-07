@@ -8,6 +8,7 @@
 #include "dsp/Sd1Stage.h"
 #include "dsp/PreampCascade.h"
 #include "dsp/Lead5150.h"
+#include "dsp/LeadPresence.h"
 #include "dsp/ToneStack.h"
 #include "dsp/GraphicEq.h"
 #include "dsp/OversampledNonlinear.h"
@@ -18,7 +19,8 @@
     Signal chain:
       Input trim -> [oversampled: Boost (OD-808 | SD-1, blend on/off) ->
       Rectifier (Red Ch1 v1|v2 / Orange Ch2) or 5150-inspired Lead] ->
-      respective tone -> model crossfade (Rectifier-only presence) -> graphic EQ (optional, true bypass) -> cab IR sim (optional, hard bypass) -> gate VCA (optional, true bypass;
+      respective tone (Rectifier-only preamp presence) -> graphic EQ ->
+      Lead-only feedback Presence -> model crossfade -> cab IR sim (optional, hard bypass) -> gate VCA (optional, true bypass;
       keyed from the dry post-trim input) -> master -> (bypass crossfade vs delayed dry). */
 class JuicyboiAudioProcessor final : public juce::AudioProcessor
 {
@@ -86,6 +88,7 @@ private:
     std::atomic<float>* pOdTone    = nullptr;
     std::atomic<float>* pOdLevel   = nullptr;
     std::atomic<float>* pPreampModel = nullptr;
+    std::atomic<float>* pLeadPresence = nullptr;
     std::atomic<float>* pChannel   = nullptr;
     std::atomic<float>* pRedVoice  = nullptr;
     std::atomic<float>* pGain      = nullptr;
@@ -116,13 +119,14 @@ private:
     jb::dsp::Sd1Stage   sd1;
     jb::dsp::PreampCascade riffA, riffAv1, riffB; // Red v2, Red v1, Orange
     jb::dsp::ToneStack tone;
-    jb::dsp::GraphicEq graphicEq;
+    jb::dsp::GraphicEq graphicEq, leadGraphicEq;
+    jb::dsp::LeadPresence leadPresence;
     jb::dsp::CabSim cab;
     jb::dsp::NoiseGate gate;
     std::array<juce::File, jb::dsp::CabSim::numSlots> cabFiles;
     jb::dsp::ChannelVoicing voicingA, voicingAv1, voicingB;
 
-    juce::SmoothedValue<float> modelMix; // base-rate, after independent model tones
+    juce::SmoothedValue<float> modelMix; // base-rate, after independent model tones/EQs/Lead Presence
     juce::SmoothedValue<float> inputGain, masterGain, bypassMix; // base rate
     juce::SmoothedValue<float> odMix, odTypeMix, channelMix, redVoiceMix; // oversampled rate
 

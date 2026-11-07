@@ -53,10 +53,9 @@ To install the VST3 on Linux, copy the bundle to `~/.vst3/`.
 Input trim
   └─► [ 4x oversampled ]
         Boost (OD-808 | SD-1) ── type + on/off crossfades (~15–20 ms)
-          ├─► Rectifier Red v1/v2 / Orange ─► Rectifier TMB + presence
-          └─► 5150-inspired Lead (6 stages) ─► Lead-specific TMB
-  └─► Preamp Model crossfade (30 ms; after respective base-rate tones)
-  └─► Graphic EQ (optional; 7 bands + Level, true bypass when off)   (base rate)
+          ├─► Rectifier Red v1/v2 / Orange ─► Rectifier TMB + presence ─► Graphic EQ
+          └─► 5150-inspired Lead (6 stages) ─► Lead TMB ─► Graphic EQ ─► Lead Presence
+  └─► Preamp Model crossfade (30 ms; after respective EQ / Presence paths)
   └─► Cab IR sim (optional; IR A / IR B blend)   (base rate)
   └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
   └─► Master
@@ -76,16 +75,17 @@ with a strongly asymmetric cold-stage approximation informed by V2A's 39 kΩ
 cathode resistor. Distributed attenuation, bass cuts and high-frequency
 rolloffs create a different compressed high-gain voice, not just output boost.
 Use Gain/Bass/Mid/Treble as usual, then match perceived loudness with Master.
-Channel, Red Voice and Presence are dimmed in Lead mode; their saved Rectifier
-values remain untouched. The new `preamp_model` parameter is appended to the
+Channel, Red Voice and **Preamp Presence** are dimmed in Lead mode; their saved
+Rectifier values remain untouched. **Output Presence** is enabled only for Lead. The new `preamp_model` parameter is appended to the
 layout, and states missing it explicitly restore Rectifier.
 
 Scope: schematic-informed filter/shaper DSP at the existing **4×** rate, DC
 rejection, sample-rate-aware filters and gain/tone smoothing. Filter frequencies
 and normalized gains are behavioral tuning, not naive unloaded RC calculations.
 The tone stack is a model-specific biquad approximation, not an interacting
-passive network solve. Both complete model paths stay warm, with matching FIR
-latency and even stage-inversion counts, and crossfade over 30 ms. Frequency-
+passive network solve. Both complete model paths stay warm through independent
+Graphic EQ histories and Lead-only Presence, with matching FIR latency and even
+stage-inversion counts, then crossfade over 30 ms. Frequency-
 dependent phase differences can still cause a brief timbral dip during a switch.
 This costs additional CPU even when Rectifier is selected.
 
@@ -94,7 +94,9 @@ These appear to describe the Peavey-era family; no precise production revision
 or later 5150 III identity is claimed. Six pre-tone gain stages are distinct
 from the downstream V3B follower/FX buffer, V3A recovery and V4A/B PI.
 **Not modeled:** Rhythm/Bright/Crunch switching, FX loop/recovery, phase inverter,
-power tubes, supply sag, dynamic grid/blocking behavior or NFB presence/resonance.
+power tubes, supply sag, dynamic grid/blocking behavior or speaker-dependent
+feedback/Resonance. The separate linear Presence surrogate below does not add
+those nonlinear power-amp behaviors.
 No schematic, IR or commercial model is bundled.
 
 Headless coverage includes a captured 348fc68 Rectifier null fixture, old/new
@@ -102,6 +104,32 @@ state recall, rate/block/channel/Boost matrix, silence/DC, warmed switching,
 gate/Standalone input regressions and offscreen GUI state/paint checks. See
 [Tests/README.md](Tests/README.md). Real Scarlett hardware, macOS/AU/AAX hosting
 and listening validation still require the user's machines.
+
+## Output Presence (5150 only)
+
+A circuit-informed **small-signal closed-loop response approximation** sits
+**after Lead Graphic EQ, before Cab**. It derives `T=A/(1+A*beta)` from the loaded
+feedback divider: R56=39k, nominal R57=4.7k load, VR9=10k and parallel C8=.1u /
+C62=.033u. It does not merely rename a generic shelf. Unknown forward-stage gain
+is explicitly assumed to be 20 V/V, resonance is fixed bypassed, and active PI /
+transformer / speaker loading is not solved. Pot taper is a documented nominal
+two-decade law, not a verified factory taper. Two stable bilinear/TPT poles,
+double-precision states and 30 ms resistance smoothing implement the relative
+change from the reference response without running an audio feedback loop.
+
+`lead_presence` is 0..10, default **0 = exact unchanged Lead tone**. Old feature-
+branch states missing it restore 0. The Output Presence knob is Lead-only; the
+existing Preamp Presence is Rectifier-only and remains bit-identical. Each has
+its own saved value. The extra Lead EQ state prevents the new stage from
+filtering the Rectifier contribution during a model crossfade.
+
+At 48k, tests predict about +4.36/+5.19 dB at 1k/10k for position 5, and
++5.80/+7.99 dB for position 10, relative to position 0. A small relative dip
+around 100 Hz is part of the normalized divider response, not added Resonance.
+These are measurements of the digital surrogate, **not of an analog amp**.
+See [derivation, sources, assumptions and test method](docs/5150-presence.md).
+Match loudness with Master; high Presence plus boosted EQ can still exceed
+0 dBFS. No limiter has been silently added to the legacy signal path.
 
 ## Boost section
 
@@ -195,6 +223,7 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `channel`      | Channel     | Red / Orange     | Red     |
 | `red_voice`    | Red Voice   | v1 / v2          | v2      |
 | `preamp_model` | Preamp Model | Rectifier / 5150-inspired Lead | Rectifier |
+| `lead_presence` | Output Presence (5150) | 0 … 10, reference-relative | 0 |
 | `pre_gain`     | Gain        | 0 … 10           | 6       |
 | `pre_bass`     | Bass        | 0 … 10 (5 = flat)| 5       |
 | `pre_mid`      | Mid         | 0 … 10 (5 = flat)| 4       |

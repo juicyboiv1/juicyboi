@@ -19,6 +19,9 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     setupKnob (mid,      params::id::mid,       "Mid");
     setupKnob (treble,   params::id::treble,    "Treble");
     setupKnob (presence, params::id::presence,  "Presence");
+    setupKnob (leadPresence, params::id::leadPresence, "Presence");
+    leadPresence.slider.setComponentID ("lead_presence");
+    leadPresence.slider.setTooltip ("5150-only feedback-response approximation, after EQ/before Cab. 0 = unchanged reference tone; no nonlinear power amp.");
     setupKnob (master,   params::id::master,    "Master");
 
     addAndMakeVisible (odEnable);
@@ -431,6 +434,7 @@ void JuicyboiAudioProcessorEditor::resized()
     {
         auto r = layoutGroup (outGroup, outArea);
         bypass.setBounds (r.removeFromBottom (26).withSizeKeepingCentre (100, 26));
+        placeKnob (leadPresence, r.removeFromLeft (r.getWidth() / 2));
         placeKnob (master, r);
     }
 }
@@ -443,7 +447,9 @@ void JuicyboiAudioProcessorEditor::updateRedVoiceEnablement()
     channelLabel.setAlpha (rectifier ? 1.0f : 0.45f);
     presence.slider.setEnabled (rectifier);
     presence.label.setAlpha (rectifier ? 1.0f : 0.45f);
-    presence.slider.setTooltip (rectifier ? "Rectifier presence" : "5150 PI/power-amp feedback not modeled; saved Rectifier value retained");
+    presence.slider.setTooltip (rectifier ? "Rectifier presence (legacy voicing)" : "Use Output Presence for 5150; saved Rectifier value retained");
+    leadPresence.slider.setEnabled (! rectifier);
+    leadPresence.label.setAlpha (rectifier ? 0.45f : 1.0f);
     const auto isRed = rectifier && channel.getSelectedItemIndex() <= 0;
     redVoice.setEnabled (isRed);
     redVoice.setAlpha (isRed ? 1.0f : 0.45f);
