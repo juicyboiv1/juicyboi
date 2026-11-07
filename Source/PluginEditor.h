@@ -227,6 +227,10 @@ private:
     juce::Label boostTypeLabel;
     std::unique_ptr<APVTS::ComboBoxAttachment> boostTypeAttachment;
 
+    juce::ComboBox preampModel;
+    juce::Label preampModelLabel;
+    std::unique_ptr<APVTS::ComboBoxAttachment> preampModelAttachment;
+
     juce::ComboBox channel;
     juce::Label channelLabel;
     std::unique_ptr<APVTS::ComboBoxAttachment> channelAttachment;

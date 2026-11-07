@@ -15,6 +15,7 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pOdDrive   = apvts.getRawParameterValue (params::id::odDrive);
     pOdTone    = apvts.getRawParameterValue (params::id::odTone);
     pOdLevel   = apvts.getRawParameterValue (params::id::odLevel);
+    pPreampModel = apvts.getRawParameterValue (params::id::preampModel);
     pChannel   = apvts.getRawParameterValue (params::id::channel);
     pRedVoice  = apvts.getRawParameterValue (params::id::redVoice);
     pGain      = apvts.getRawParameterValue (params::id::gain);
@@ -49,7 +50,14 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     const auto numCh = dsp::kMaxChannels;
 
     oversampler.prepare (numCh, maxChunk);
+    leadOversampler.prepare (numCh, maxChunk);
     const auto osRate = sampleRate * oversampler.getFactor();
+
+    lead.setGain (pGain->load() / 10.0f);
+    lead.prepare (osRate);
+    leadTone.setKnobs (pBass->load(), pMid->load(), pTreble->load());
+    leadTone.prepare (sampleRate);
+    leadBuffer.setSize (numCh, maxChunk, false, true, false);
 
     od.prepare (osRate);
     sd1.prepare (osRate);
@@ -72,6 +80,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     dryDelay.reset();
     dryBuffer.setSize (numCh, maxChunk, false, true, false);
 
+    modelMix.reset (sampleRate, 0.030);
+    modelMix.setCurrentAndTargetValue (pPreampModel->load() > 0.5f ? 1.0f : 0.0f);
     inputGain .reset (sampleRate, 0.02);
     masterGain.reset (sampleRate, 0.02);
     bypassMix .reset (sampleRate, 0.03);
@@ -97,6 +107,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
 void JuicyboiAudioProcessor::releaseResources()
 {
     oversampler.reset();
+    leadOversampler.reset();
 }
 
 bool JuicyboiAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -124,6 +135,7 @@ bool JuicyboiAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts)
 //==============================================================================
 void JuicyboiAudioProcessor::updateParameters()
 {
+    modelMix.setTargetValue (pPreampModel->load() > 0.5f ? 1.0f : 0.0f);
     inputGain .setTargetValue (juce::Decibels::decibelsToGain (pInputTrim->load()));
     masterGain.setTargetValue (juce::Decibels::decibelsToGain (pMaster->load(), -60.0f));
     bypassMix .setTargetValue (pBypass->load() > 0.5f ? 1.0f : 0.0f);
@@ -142,6 +154,8 @@ void JuicyboiAudioProcessor::updateParameters()
     sd1.setParameters (odDrive01, odTone01, odLvl);
 
     const auto gain01 = pGain->load() / 10.0f;
+    lead.setGain (gain01);
+    leadTone.setKnobs (pBass->load(), pMid->load(), pTreble->load());
     riffA.setGain (gain01);
     riffAv1.setGain (gain01);
     riffB.setGain (gain01);
@@ -253,11 +267,16 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                      .getSubsetChannelBlock (0, (size_t) numProc)
                      .getSubBlock ((size_t) start, (size_t) len);
 
-    oversampler.process (block, [this, numProc] (juce::dsp::AudioBlock<float>& up)
+    leadBuffer.clear();
+    auto leadBlock = juce::dsp::AudioBlock<float> (leadBuffer)
+                         .getSubsetChannelBlock (0, (size_t) numProc).getSubBlock (0, (size_t) len);
+    oversampler.processParallel (block, leadBlock, leadOversampler,
+        [this, numProc] (juce::dsp::AudioBlock<float>& up, juce::dsp::AudioBlock<float>& leadUp)
     {
         const auto n = (int) up.getNumSamples();
         for (int i = 0; i < n; ++i)
         {
+            lead.beginFrame();
             const auto odAmt   = odMix.getNextValue();
             const auto typeAmt = odTypeMix.getNextValue(); // 0 = OD-808, 1 = SD-1
             const auto chAmt   = channelMix.getNextValue();
@@ -282,16 +301,25 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                 const auto a  = a1 + rvAmt * (a2 - a1);
                 const auto b  = riffB.process (boosted, ch);
                 d[i] = a + chAmt * (b - a);
+                leadUp.getChannelPointer ((size_t) ch)[i] = lead.process (boosted, ch);
             }
         }
     });
 
-    // 3) Tone stack + presence
-    for (int ch = 0; ch < numProc; ++ch)
+    // 3) Both model-specific tones stay warm. Crossfade AFTER their tones;
+    // two identical 4x FIR paths have equal latency and even inversion count.
+    // Explicit endpoints retain bit-identical Rectifier output (no subtract/add).
+    for (int i = 0; i < len; ++i)
     {
-        auto* d = buffer.getWritePointer (ch, start);
-        for (int i = 0; i < len; ++i)
-            d[i] = tone.process (d[i], ch);
+        leadTone.beginFrame();
+        const auto mix = modelMix.getNextValue();
+        for (int ch = 0; ch < numProc; ++ch)
+        {
+            auto& sample = buffer.getWritePointer (ch, start)[i];
+            const auto rect = tone.process (sample, ch);
+            const auto alt = leadTone.process (leadBuffer.getReadPointer (ch)[i], ch);
+            sample = mix <= 0.0f ? rect : (mix >= 1.0f ? alt : rect + mix * (alt - rect));
+        }
     }
 
     // 3b) Graphic EQ: carve after the drive, before the cab (true bypass when off)
@@ -405,6 +433,15 @@ void JuicyboiAudioProcessor::setStateInformation (const void* data, int sizeInBy
         if (xml->hasTagName (apvts.state.getType()))
         {
             auto tree = juce::ValueTree::fromXml (*xml);
+            // Loading a pre-model session must select Rectifier even if the
+            // current processor was already set to Lead (not just fresh instances).
+            if (! tree.getChildWithProperty ("id", params::id::preampModel).isValid())
+            {
+                juce::ValueTree model ("PARAM");
+                model.setProperty ("id", params::id::preampModel, nullptr);
+                model.setProperty ("value", 0.0f, nullptr);
+                tree.addChild (model, -1, nullptr);
+            }
             apvts.replaceState (tree);
 
             for (int s = 0; s < dsp::CabSim::numSlots; ++s)

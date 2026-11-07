@@ -14,6 +14,9 @@ static void setParam (juce::AudioProcessor& p, const char* id, float plain)
     param->setValueNotifyingHost (param->convertTo0to1 (plain));
 }
 
+int legacyRegression();
+int modelValidation();
+
 int main()
 {
     juce::ScopedJuceInitialiser_GUI init;
@@ -25,7 +28,7 @@ int main()
     p->prepareToPlay (sr, bs);
     std::printf ("latency: %d samples\n", p->getLatencySamples());
 
-    int failures = 0;
+    int failures = legacyRegression() + modelValidation();
     juce::MidiBuffer midi;
 
     {

@@ -37,6 +37,15 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     addAndMakeVisible (bypass);
     bypassAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::bypass, bypass);
 
+    preampModel.addItemList ({ "Rectifier", "5150-inspired" }, 1);
+    preampModel.setTooltip ("5150-inspired Lead: six-stage behavioral preamp; no PI/power-amp simulation");
+    addAndMakeVisible (preampModel);
+    preampModelLabel.setText ("Preamp Model", juce::dontSendNotification);
+    preampModelLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd4af37));
+    addAndMakeVisible (preampModelLabel);
+    preampModelAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::preampModel, preampModel);
+    preampModel.onChange = [this] { updateRedVoiceEnablement(); };
+
     channel.addItemList ({ "Red (Ch1)", "Orange (Ch2)" }, 1);
     addAndMakeVisible (channel);
     channelAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::channel, channel);
@@ -403,6 +412,9 @@ void JuicyboiAudioProcessorEditor::resized()
     {
         auto r = layoutGroup (preGroup, area);
         auto chRow = r.removeFromBottom (28);
+        auto modelRow = r.removeFromTop (28);
+        preampModelLabel.setBounds (modelRow.removeFromLeft (106));
+        preampModel.setBounds (modelRow.removeFromLeft (180).reduced (2));
         channelLabel.setBounds (chRow.removeFromLeft (72));
         channel.setBounds (chRow.removeFromLeft (130).reduced (2));
         redVoiceLabel.setBounds (chRow.removeFromLeft (56));
@@ -425,7 +437,14 @@ void JuicyboiAudioProcessorEditor::resized()
 
 void JuicyboiAudioProcessorEditor::updateRedVoiceEnablement()
 {
-    const auto isRed = channel.getSelectedItemIndex() <= 0;
+    const auto rectifier = preampModel.getSelectedItemIndex() <= 0;
+    channel.setEnabled (rectifier);
+    channel.setAlpha (rectifier ? 1.0f : 0.45f);
+    channelLabel.setAlpha (rectifier ? 1.0f : 0.45f);
+    presence.slider.setEnabled (rectifier);
+    presence.label.setAlpha (rectifier ? 1.0f : 0.45f);
+    presence.slider.setTooltip (rectifier ? "Rectifier presence" : "5150 PI/power-amp feedback not modeled; saved Rectifier value retained");
+    const auto isRed = rectifier && channel.getSelectedItemIndex() <= 0;
     redVoice.setEnabled (isRed);
     redVoice.setAlpha (isRed ? 1.0f : 0.45f);
     redVoiceLabel.setAlpha (isRed ? 1.0f : 0.45f);
