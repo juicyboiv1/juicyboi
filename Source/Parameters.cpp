@@ -83,6 +83,10 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::bypass, versionHint }, "Bypass", false));
 
+    // Append: preserve every legacy parameter index as well as ID/default.
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::preampModel, versionHint }, "Preamp Model",
+                                                        StringArray { "Rectifier", "5150-inspired" }, 0));
+
     return layout;
 }
 } // namespace jb::params

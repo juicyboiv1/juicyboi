@@ -6,8 +6,9 @@ interface) built with JUCE 9.
 **This is original modeling.** The DSP is built from general circuit
 principles: an op-amp feedback-diode overdrive (green-overdrive family) feeding a
 two-channel, cascaded-triode high-gain preamp (Rev E-era American dual-channel
-style). No commercial plugin code, product values, or trademarks are used. All
-coefficients are original starting points meant to be tuned.
+style), with a selectable 5150-inspired Lead voice. No commercial plugin code
+is used; behavioral coefficients are original tuning, not an exact circuit solve.
+Descriptive product names belong to their respective owners; no affiliation is implied.
 
 ## Build
 
@@ -52,9 +53,9 @@ To install the VST3 on Linux, copy the bundle to `~/.vst3/`.
 Input trim
   └─► [ 4x oversampled ]
         Boost (OD-808 | SD-1) ── type + on/off crossfades (~15–20 ms)
-          └─► Preamp cascade: Riff A ┐  both run; 20 ms crossfade
-                              Riff B ┘  on channel switch
-  └─► Tone stack (bass / mid / treble) + presence   (base rate)
+          ├─► Rectifier Red v1/v2 / Orange ─► Rectifier TMB + presence
+          └─► 5150-inspired Lead (6 stages) ─► Lead-specific TMB
+  └─► Preamp Model crossfade (30 ms; after respective base-rate tones)
   └─► Graphic EQ (optional; 7 bands + Level, true bypass when off)   (base rate)
   └─► Cab IR sim (optional; IR A / IR B blend)   (base rate)
   └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
@@ -65,6 +66,42 @@ Input trim
 Buses: mono→stereo (default, guitar DI), mono→mono, stereo→stereo.
 Latency: the oversampler's FIR latency (61 samples at 48 kHz), reported to the host.
 The dry/bypass path uses the same delay.
+
+## Preamp Model
+
+**Rectifier** (default) preserves Red v1/v2 and Orange, including all old
+parameter IDs, indices, defaults and DSP coefficients. **5150-inspired** is
+Lead-only: six gain stages mapped to V1A → V1B → V2A → V2B → V5B → V5A,
+with a strongly asymmetric cold-stage approximation informed by V2A's 39 kΩ
+cathode resistor. Distributed attenuation, bass cuts and high-frequency
+rolloffs create a different compressed high-gain voice, not just output boost.
+Use Gain/Bass/Mid/Treble as usual, then match perceived loudness with Master.
+Channel, Red Voice and Presence are dimmed in Lead mode; their saved Rectifier
+values remain untouched. The new `preamp_model` parameter is appended to the
+layout, and states missing it explicitly restore Rectifier.
+
+Scope: schematic-informed filter/shaper DSP at the existing **4×** rate, DC
+rejection, sample-rate-aware filters and gain/tone smoothing. Filter frequencies
+and normalized gains are behavioral tuning, not naive unloaded RC calculations.
+The tone stack is a model-specific biquad approximation, not an interacting
+passive network solve. Both complete model paths stay warm, with matching FIR
+latency and even stage-inversion counts, and crossfade over 30 ms. Frequency-
+dependent phase differences can still cause a brief timbral dip during a switch.
+This costs additional CPU even when Rectifier is selected.
+
+Reference: [public EVH 5150 schematic sheets, pp. 1–3](https://www.prowessamplifiers.com/schematics/post/peavey_evh5150.pdf).
+These appear to describe the Peavey-era family; no precise production revision
+or later 5150 III identity is claimed. Six pre-tone gain stages are distinct
+from the downstream V3B follower/FX buffer, V3A recovery and V4A/B PI.
+**Not modeled:** Rhythm/Bright/Crunch switching, FX loop/recovery, phase inverter,
+power tubes, supply sag, dynamic grid/blocking behavior or NFB presence/resonance.
+No schematic, IR or commercial model is bundled.
+
+Headless coverage includes a captured 348fc68 Rectifier null fixture, old/new
+state recall, rate/block/channel/Boost matrix, silence/DC, warmed switching,
+gate/Standalone input regressions and offscreen GUI state/paint checks. See
+[Tests/README.md](Tests/README.md). Real Scarlett hardware, macOS/AU/AAX hosting
+and listening validation still require the user's machines.
 
 ## Boost section
 
@@ -155,7 +192,9 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `od_drive`     | Boost Drive | 0 … 10           | 2       |
 | `od_tone`      | Boost Tone  | 0 … 10           | 5       |
 | `od_level`     | Boost Level | -24 … +12 dB     | 0 dB    |
-| `channel`      | Channel     | Riff A / Riff B  | Riff B  |
+| `channel`      | Channel     | Red / Orange     | Red     |
+| `red_voice`    | Red Voice   | v1 / v2          | v2      |
+| `preamp_model` | Preamp Model | Rectifier / 5150-inspired Lead | Rectifier |
 | `pre_gain`     | Gain        | 0 … 10           | 6       |
 | `pre_bass`     | Bass        | 0 … 10 (5 = flat)| 5       |
 | `pre_mid`      | Mid         | 0 … 10 (5 = flat)| 4       |

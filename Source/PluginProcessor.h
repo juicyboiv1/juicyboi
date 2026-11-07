@@ -7,6 +7,7 @@
 #include "dsp/Od808Stage.h"
 #include "dsp/Sd1Stage.h"
 #include "dsp/PreampCascade.h"
+#include "dsp/Lead5150.h"
 #include "dsp/ToneStack.h"
 #include "dsp/GraphicEq.h"
 #include "dsp/OversampledNonlinear.h"
@@ -16,8 +17,8 @@
 /** juicyboi — heavy-riff preamp.
     Signal chain:
       Input trim -> [oversampled: Boost (OD-808 | SD-1, blend on/off) ->
-      dual-channel cascaded preamp (Red Ch1 v1|v2 / Orange Ch2 crossfades)] ->
-      tone stack + presence -> graphic EQ (optional, true bypass) -> cab IR sim (optional, hard bypass) -> gate VCA (optional, true bypass;
+      Rectifier (Red Ch1 v1|v2 / Orange Ch2) or 5150-inspired Lead] ->
+      respective tone -> model crossfade (Rectifier-only presence) -> graphic EQ (optional, true bypass) -> cab IR sim (optional, hard bypass) -> gate VCA (optional, true bypass;
       keyed from the dry post-trim input) -> master -> (bypass crossfade vs delayed dry). */
 class JuicyboiAudioProcessor final : public juce::AudioProcessor
 {
@@ -84,6 +85,7 @@ private:
     std::atomic<float>* pOdDrive   = nullptr;
     std::atomic<float>* pOdTone    = nullptr;
     std::atomic<float>* pOdLevel   = nullptr;
+    std::atomic<float>* pPreampModel = nullptr;
     std::atomic<float>* pChannel   = nullptr;
     std::atomic<float>* pRedVoice  = nullptr;
     std::atomic<float>* pGain      = nullptr;
@@ -107,7 +109,9 @@ private:
     int baseLatency = 0;
 
     // DSP
-    jb::dsp::OversampledNonlinear oversampler;
+    jb::dsp::OversampledNonlinear oversampler, leadOversampler;
+    jb::dsp::Lead5150 lead;
+    jb::dsp::Lead5150Tone leadTone;
     jb::dsp::Od808Stage od;
     jb::dsp::Sd1Stage   sd1;
     jb::dsp::PreampCascade riffA, riffAv1, riffB; // Red v2, Red v1, Orange
@@ -118,11 +122,12 @@ private:
     std::array<juce::File, jb::dsp::CabSim::numSlots> cabFiles;
     jb::dsp::ChannelVoicing voicingA, voicingAv1, voicingB;
 
+    juce::SmoothedValue<float> modelMix; // base-rate, after independent model tones
     juce::SmoothedValue<float> inputGain, masterGain, bypassMix; // base rate
     juce::SmoothedValue<float> odMix, odTypeMix, channelMix, redVoiceMix; // oversampled rate
 
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay { 8192 };
-    juce::AudioBuffer<float> dryBuffer;
+    juce::AudioBuffer<float> dryBuffer, leadBuffer;
     juce::AudioBuffer<float> keyBuffer; // mono gate key: post-trim, pre-gain
 
     int maxChunk = 512;

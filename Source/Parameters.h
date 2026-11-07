@@ -13,6 +13,7 @@ namespace id
     inline constexpr const char* odDrive    = "od_drive";
     inline constexpr const char* odTone     = "od_tone";
     inline constexpr const char* odLevel    = "od_level";
+    inline constexpr const char* preampModel = "preamp_model"; // 0 Rectifier, 1 5150-inspired Lead
     inline constexpr const char* channel    = "channel";
     inline constexpr const char* redVoice   = "red_voice"; // Red (Ch1) voicing: 0 = v1, 1 = v2
     inline constexpr const char* gain       = "pre_gain";

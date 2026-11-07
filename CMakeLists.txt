@@ -78,12 +78,13 @@ target_link_libraries(juicyboi
 option(JUICYBOI_BUILD_TESTS "Build the headless smoke test" ON)
 if(JUICYBOI_BUILD_TESTS)
     juce_add_console_app(juicyboi_smoketest PRODUCT_NAME "juicyboi_smoketest")
-    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp)
+    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp)
     # Reuse the plugin's JUCE module objects/includes/defines rather than
     # compiling the modules a second time.
     target_include_directories(juicyboi_smoketest PRIVATE Source
         $<TARGET_PROPERTY:juicyboi,INCLUDE_DIRECTORIES>)
     target_compile_definitions(juicyboi_smoketest PRIVATE
+        JUICYBOI_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Tests"
         $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
     target_link_libraries(juicyboi_smoketest PRIVATE juicyboi juce::juce_recommended_config_flags)
 endif()
