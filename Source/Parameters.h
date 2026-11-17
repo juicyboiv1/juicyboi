@@ -14,6 +14,7 @@ namespace id
     inline constexpr const char* odTone     = "od_tone";
     inline constexpr const char* odLevel    = "od_level";
     inline constexpr const char* leadPresence = "lead_presence"; // 5150 closed-loop approximation, 0=reference
+    inline constexpr const char* leadResonance = "lead_resonance"; // 5150 NFB Resonance (VR8/C12), 0=reference
     inline constexpr const char* preampModel = "preamp_model"; // 0 Rectifier, 1 5150-inspired Lead
     inline constexpr const char* channel    = "channel";
     inline constexpr const char* redVoice   = "red_voice"; // Red (Ch1) voicing: 0 = v1, 1 = v2

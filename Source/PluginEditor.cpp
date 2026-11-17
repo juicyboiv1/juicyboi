@@ -22,6 +22,9 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     setupKnob (leadPresence, params::id::leadPresence, "Presence");
     leadPresence.slider.setComponentID ("lead_presence");
     leadPresence.slider.setTooltip ("5150-only feedback-response approximation, after EQ/before Cab. 0 = unchanged reference tone; no nonlinear power amp.");
+    setupKnob (leadResonance, params::id::leadResonance, "Resonance");
+    leadResonance.slider.setComponentID ("lead_resonance");
+    leadResonance.slider.setTooltip ("5150-only NFB Resonance (VR8 1M + C12 .0068u), after EQ/before Cab. 0 = unchanged reference tone; more = less low-frequency feedback = more bass. Resistive load, no speaker/power-amp model.");
     setupKnob (master,   params::id::master,    "Master");
 
     addAndMakeVisible (odEnable);
@@ -375,7 +378,7 @@ void JuicyboiAudioProcessorEditor::resized()
         juce::ignoreUnused (r);
     }
 
-    const auto unit = area.getWidth() / 12; // 12 columns: 1 in, 3 boost, 6 pre, 2 out
+    const auto unit = area.getWidth() / 12; // 12 columns: 1 in, 3 boost, 5 pre, 3 out
 
     auto placeKnob = [] (Knob& k, juce::Rectangle<int> r)
     {
@@ -409,7 +412,7 @@ void JuicyboiAudioProcessorEditor::resized()
     }
 
     // Output (laid out from the right so preamp gets the rest)
-    auto outArea = area.removeFromRight (unit * 2);
+    auto outArea = area.removeFromRight (unit * 3);
 
     // Preamp
     {
@@ -434,7 +437,9 @@ void JuicyboiAudioProcessorEditor::resized()
     {
         auto r = layoutGroup (outGroup, outArea);
         bypass.setBounds (r.removeFromBottom (26).withSizeKeepingCentre (100, 26));
-        placeKnob (leadPresence, r.removeFromLeft (r.getWidth() / 2));
+        const auto w = r.getWidth() / 3;
+        placeKnob (leadPresence, r.removeFromLeft (w));
+        placeKnob (leadResonance, r.removeFromLeft (w));
         placeKnob (master, r);
     }
 }
@@ -450,6 +455,8 @@ void JuicyboiAudioProcessorEditor::updateRedVoiceEnablement()
     presence.slider.setTooltip (rectifier ? "Rectifier presence (legacy voicing)" : "Use Output Presence for 5150; saved Rectifier value retained");
     leadPresence.slider.setEnabled (! rectifier);
     leadPresence.label.setAlpha (rectifier ? 0.45f : 1.0f);
+    leadResonance.slider.setEnabled (! rectifier);
+    leadResonance.label.setAlpha (rectifier ? 0.45f : 1.0f);
     const auto isRed = rectifier && channel.getSelectedItemIndex() <= 0;
     redVoice.setEnabled (isRed);
     redVoice.setAlpha (isRed ? 1.0f : 0.45f);

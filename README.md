@@ -54,7 +54,7 @@ Input trim
   └─► [ 4x oversampled ]
         Boost (OD-808 | SD-1) ── type + on/off crossfades (~15–20 ms)
           ├─► Rectifier Red v1/v2 / Orange ─► Rectifier TMB + presence ─► Graphic EQ
-          └─► 5150-inspired Lead (6 stages) ─► Lead TMB ─► Graphic EQ ─► Lead Presence
+          └─► 5150-inspired Lead (6 stages) ─► Lead TMB ─► Graphic EQ ─► Lead Presence ─► Lead Resonance
   └─► Preamp Model crossfade (30 ms; after respective EQ / Presence paths)
   └─► Cab IR sim (optional; IR A / IR B blend)   (base rate)
   └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
@@ -69,7 +69,8 @@ The dry/bypass path uses the same delay.
 ## Preamp Model
 
 **Rectifier** (default) preserves Red v1/v2 and Orange, including all old
-parameter IDs, indices, defaults and DSP coefficients. **5150-inspired** is
+parameter IDs, indices, defaults and DSP coefficients (one deliberate exception:
+the Bass shelf centre is now 100 Hz; Bass 5 output is bit-identical). **5150-inspired** is
 Lead-only: six gain stages mapped to V1A → V1B → V2A → V2B → V5B → V5A,
 with a strongly asymmetric cold-stage approximation informed by V2A's 39 kΩ
 cathode resistor. Distributed attenuation, bass cuts and high-frequency
@@ -95,7 +96,7 @@ or later 5150 III identity is claimed. Six pre-tone gain stages are distinct
 from the downstream V3B follower/FX buffer, V3A recovery and V4A/B PI.
 **Not modeled:** Rhythm/Bright/Crunch switching, FX loop/recovery, phase inverter,
 power tubes, supply sag, dynamic grid/blocking behavior or speaker-dependent
-feedback/Resonance. The separate linear Presence surrogate below does not add
+feedback. The separate linear Presence/Resonance surrogates below do not add
 those nonlinear power-amp behaviors.
 No schematic, IR or commercial model is bundled.
 
@@ -130,6 +131,22 @@ These are measurements of the digital surrogate, **not of an analog amp**.
 See [derivation, sources, assumptions and test method](docs/5150-presence.md).
 Match loudness with Master; high Presence plus boosted EQ can still exceed
 0 dBFS. No limiter has been silently added to the legacy signal path.
+
+## Output Resonance (5150 only)
+
+Same declared closed-loop reduction as Output Presence, adding the 5150's
+Resonance network: **VR8 1 MΩ audio (rheostat) in parallel with C12 .0068 µF,
+in series with R56 39k**. Turning it up removes low-frequency negative feedback,
+so the closed-loop gain rises below roughly 1/(2π·VR8·C12). Sits right after
+Lead Presence (after Lead Graphic EQ, before Cab), and is one exact factor of the
+same loop, so Presence and Resonance interact as in a single NFB path.
+
+`lead_resonance` is 0..10, default **0 = VR8 shorted = exact unchanged Lead tone**
+(bit-identical). States saved without it restore 0. Knob is Lead-only.
+Assumptions: forward gain 20 V/V and a **resistive** load, so the result is a
+broad low shelf (≈ +3.6 / +6.8 dB at 80 Hz relative to 1 kHz at 5 / 10), not
+the speaker-impedance peak a real cab produces; no OT/speaker/damping model.
+See [derivation, tables and tests](docs/5150-resonance.md).
 
 ## Boost section
 
@@ -224,8 +241,9 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `red_voice`    | Red Voice   | v1 / v2          | v2      |
 | `preamp_model` | Preamp Model | Rectifier / 5150-inspired Lead | Rectifier |
 | `lead_presence` | Output Presence (5150) | 0 … 10, reference-relative | 0 |
+| `lead_resonance` | Output Resonance (5150) | 0 … 10 (VR8 0 Ω … 1 MΩ) | 0 |
 | `pre_gain`     | Gain        | 0 … 10           | 6       |
-| `pre_bass`     | Bass        | 0 … 10 (5 = flat)| 5       |
+| `pre_bass`     | Bass        | 0 … 10 (5 = flat, ±12 dB shelf @100 Hz on Rectifier) | 5 |
 | `pre_mid`      | Mid         | 0 … 10 (5 = flat)| 4       |
 | `pre_treble`   | Treble      | 0 … 10 (5 = flat)| 5.5     |
 | `pre_presence` | Presence    | 0 … 10           | 5       |
@@ -324,6 +342,8 @@ bash ~/src/juicyboi/scripts/recover-standalone-mac.sh
 
 Or manually: quit juicyboi → delete that settings file → `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJUCE_DIR=~/src/JUCE && cmake --build build -j8 --target juicyboi_Standalone` → open the app → untick *Mute audio input*, tick Input 1, Direct Monitor off.
 
+- **Rectifier Bass now works in the guitar range** — the FMV Bass shelf centre moved from a 40 Hz clamp (the old 1/(2π·1M·22n) = 7.2 Hz estimate) to **100 Hz**, range still ±12 dB. Bass 10 now lifts 80 Hz by about +8 dB vs Bass 5 (was +1 dB); Bass 0 cuts about −8 dB. **Bass 5 (default) is bit-identical** to before (null-tested), so default and Bass-5 sessions sound the same; sessions saved with Bass ≠ 5 will sound bassier/leaner than before.
+- **5150 Output Resonance** — `lead_resonance` (0–10, default 0 = unchanged), VR8 1M / C12 .0068 µF NFB network, Lead-only, next to Output Presence. See `docs/5150-resonance.md`.
 - **Graphic EQ** — 7-band (100 Hz … 6.4 kHz, ±15 dB) + Level ±15 dB, post-ToneStack / pre-Cab, off by default (true bypass). Vertical green/gold faders between Gate and Cab. New params only; existing sessions load unchanged (EQ off).
 - **Cab streamlined to 2 IR slots** — IR A / IR B drop zones + IR Blend (0 = A, 1 = B). Removed the 4-slot layout and the `cab_sm57_axis` / `cab_md421_axis` params; old sessions load fine (those values are ignored). `cab_mic_blend` ID kept. IR paths now save as `ir_a` / `ir_b`, so IRs from old 4-slot sessions need re-dropping once.
 - **Red v1 / v2 A/B switch** — `red_voice` param (Preamp row, "Voice" box next to Channel; default **v2**). v1 = original tight Red; v2 = max-gain / fat-bottom Red (more cascade drive, Gain pot max 1.6, harder stage knees, tighter V2B HP to keep palm mutes crisp), roughly level-matched. Switching is a ~30 ms crossfade, so you can flip it while playing.

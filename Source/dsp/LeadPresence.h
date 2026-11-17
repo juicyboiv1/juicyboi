@@ -53,6 +53,10 @@ public:
         }
     }
 
+    /** Current (slewed) VR9 resistance in ohms. LeadResonance shares the same
+        feedback divider, so it needs this to stay an exact factor of the loop. */
+    double resistance() const noexcept { return currentR; }
+
     float process (float sample, int ch) noexcept
     {
         const auto x = (double) sample;

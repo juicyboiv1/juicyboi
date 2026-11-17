@@ -18,9 +18,9 @@ remain unchanged.
 - C8 0.1 uF and C62 0.033 uF are **parallel**, giving 0.133 uF. C8's `P10`
   suffix is not used as a guessed extra capacitance. The clearer scan confirms
   C62=.033; do not substitute the .068 cap from other 5150-family amplifiers.
-- The separate VR8/C12 (.0068 uF) network is Resonance, not Presence. It is fixed
-  at the bypassed/minimum-series-resistance reference here; no Resonance control
-  or LF resonance boost is implemented.
+- The separate VR8 (1M audio) / C12 (.0068 uF) network is Resonance, not Presence.
+  Presence uses its bypassed/minimum-series-resistance (0 ohm) reference. The
+  Resonance control is a separate exact loop factor: see `docs/5150-resonance.md`.
 - The feedback node reaches the PI tail through a 22 uF coupling capacitor
   (its designator is fuzzy in the redraw). That cap is approximated as an AC
   short in the Presence band. R85=220k and R81=2.2M ground the **signal-input

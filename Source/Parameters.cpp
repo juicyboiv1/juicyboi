@@ -89,6 +89,8 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
 
     // New parameter appended after preamp_model; existing indices stay stable.
     layout.add (knob (id::leadPresence, "5150 Presence", 0.0f));
+    // Appended after lead_presence. 0 = VR8 shorted = exact pre-Resonance sound.
+    layout.add (knob (id::leadResonance, "5150 Resonance", 0.0f));
 
     return layout;
 }

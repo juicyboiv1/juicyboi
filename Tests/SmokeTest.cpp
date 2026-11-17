@@ -17,6 +17,7 @@ static void setParam (juce::AudioProcessor& p, const char* id, float plain)
 int legacyRegression();
 int modelValidation();
 int presenceValidation();
+int resonanceValidation();
 
 int main()
 {
@@ -29,7 +30,7 @@ int main()
     p->prepareToPlay (sr, bs);
     std::printf ("latency: %d samples\n", p->getLatencySamples());
 
-    int failures = legacyRegression() + modelValidation() + presenceValidation();
+    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation();
     juce::MidiBuffer midi;
 
     {

@@ -16,6 +16,7 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pOdTone    = apvts.getRawParameterValue (params::id::odTone);
     pOdLevel   = apvts.getRawParameterValue (params::id::odLevel);
     pLeadPresence = apvts.getRawParameterValue (params::id::leadPresence);
+    pLeadResonance = apvts.getRawParameterValue (params::id::leadResonance);
     pPreampModel = apvts.getRawParameterValue (params::id::preampModel);
     pChannel   = apvts.getRawParameterValue (params::id::channel);
     pRedVoice  = apvts.getRawParameterValue (params::id::redVoice);
@@ -60,6 +61,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     leadTone.prepare (sampleRate);
     leadPresence.setPosition (pLeadPresence->load());
     leadPresence.prepare (sampleRate);
+    leadResonance.setPosition (pLeadResonance->load());
+    leadResonance.prepare (sampleRate, leadPresence.resistance());
     leadBuffer.setSize (numCh, maxChunk, false, true, false);
 
     od.prepare (osRate);
@@ -160,6 +163,7 @@ void JuicyboiAudioProcessor::updateParameters()
     const auto gain01 = pGain->load() / 10.0f;
     lead.setGain (gain01);
     leadPresence.setPosition (pLeadPresence->load());
+    leadResonance.setPosition (pLeadResonance->load());
     leadTone.setKnobs (pBass->load(), pMid->load(), pTreble->load());
     riffA.setGain (gain01);
     riffAv1.setGain (gain01);
@@ -339,16 +343,18 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         leadGraphicEq.process (alt, numProc, len);
     }
 
-    // 3c) 5150 Presence AFTER its EQ / BEFORE the shared Cab. Equal FIR latency,
-    // even inversion counts; explicit endpoints preserve legacy Rectifier null.
+    // 3c) 5150 Presence + Resonance (one shared NFB loop) AFTER its EQ / BEFORE
+    // the shared Cab. Equal FIR latency, even inversion counts; explicit
+    // endpoints preserve legacy Rectifier null. Resonance 0 is bit-identical.
     for (int i = 0; i < len; ++i)
     {
         leadPresence.beginFrame();
+        leadResonance.beginFrame (leadPresence.resistance());
         const auto mix = modelMix.getNextValue();
         for (int ch = 0; ch < numProc; ++ch)
         {
             auto& rect = buffer.getWritePointer (ch, start)[i];
-            const auto alt = leadPresence.process (leadBuffer.getReadPointer (ch)[i], ch);
+            const auto alt = leadResonance.process (leadPresence.process (leadBuffer.getReadPointer (ch)[i], ch), ch);
             rect = mix <= 0.0f ? rect : (mix >= 1.0f ? alt : rect + mix * (alt - rect));
         }
     }
@@ -473,6 +479,14 @@ void JuicyboiAudioProcessor::setStateInformation (const void* data, int sizeInBy
                 presence.setProperty ("id", params::id::leadPresence, nullptr);
                 presence.setProperty ("value", 0.0f, nullptr);
                 tree.addChild (presence, -1, nullptr);
+            }
+            // Sessions saved before lead_resonance: 0 = VR8 shorted = their sound.
+            if (! tree.getChildWithProperty ("id", params::id::leadResonance).isValid())
+            {
+                juce::ValueTree resonance ("PARAM");
+                resonance.setProperty ("id", params::id::leadResonance, nullptr);
+                resonance.setProperty ("value", 0.0f, nullptr);
+                tree.addChild (resonance, -1, nullptr);
             }
             apvts.replaceState (tree);
 

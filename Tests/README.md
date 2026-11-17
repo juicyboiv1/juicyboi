@@ -19,3 +19,13 @@ bilinear-frequency mapping and raw analog-surrogate discrepancy, rapid sweeps,
 reference null, silence/DC, missing/new state recall and model/EQ transitions.
 This validates implementation against a documented nominal model, not against
 real amp measurements. See `docs/5150-presence.md`.
+
+`ResonanceTest.cpp` checks the 5150 Resonance stage (VR8 1M || C12 .0068u in
+series with R56) against independent nodal equations at 90 points, including
+Presence interaction, bit-exact reference at 0, sweeps, silence/DC, state
+migration and model-crossfade isolation. `lead-62a1239.f32` (40,960 floats,
+5 configurations from `LeadFixture.h`) was captured once from unmodified
+commit `62a1239`: three 5150 configurations (must null at default Resonance)
+and two Rectifier configurations at Bass 5 with other tone knobs, Boost and EQ
+non-default (must null after the FMV Bass-centre move to 100 Hz). Do not
+regenerate it from feature code to bless a failure.

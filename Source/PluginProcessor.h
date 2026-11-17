@@ -9,6 +9,7 @@
 #include "dsp/PreampCascade.h"
 #include "dsp/Lead5150.h"
 #include "dsp/LeadPresence.h"
+#include "dsp/LeadResonance.h"
 #include "dsp/ToneStack.h"
 #include "dsp/GraphicEq.h"
 #include "dsp/OversampledNonlinear.h"
@@ -89,6 +90,7 @@ private:
     std::atomic<float>* pOdLevel   = nullptr;
     std::atomic<float>* pPreampModel = nullptr;
     std::atomic<float>* pLeadPresence = nullptr;
+    std::atomic<float>* pLeadResonance = nullptr;
     std::atomic<float>* pChannel   = nullptr;
     std::atomic<float>* pRedVoice  = nullptr;
     std::atomic<float>* pGain      = nullptr;
@@ -121,6 +123,7 @@ private:
     jb::dsp::ToneStack tone;
     jb::dsp::GraphicEq graphicEq, leadGraphicEq;
     jb::dsp::LeadPresence leadPresence;
+    jb::dsp::LeadResonance leadResonance;
     jb::dsp::CabSim cab;
     jb::dsp::NoiseGate gate;
     std::array<juce::File, jb::dsp::CabSim::numSlots> cabFiles;

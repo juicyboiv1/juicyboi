@@ -62,15 +62,23 @@ struct ChannelVoicing
 
 namespace voicings
 {
+/** Bass shelf centre shared by Red v1/v2 and Orange (see fillFmvCentres). */
+inline constexpr double fmvBassShelfHz = 100.0;
+
 inline void fillFmvCentres (ChannelVoicing& v)
 {
     // Rough RC centres from the FMV network (starting points for the
     // placeholder biquad stack; replace later with a full bilinear FMV TF).
     const auto midCorner = 1.0 / (2.0 * 3.141592653589793 * v.fmvRm * v.fmvCm);
-    const auto bassCorner = 1.0 / (2.0 * 3.141592653589793 * v.fmvRb * v.fmvCb);
     const auto trebleCorner = 1.0 / (2.0 * 3.141592653589793 * v.fmvRs * v.fmvCt);
 
-    v.bassHz   = std::clamp (bassCorner, 40.0, 200.0);
+    // Bass shelf centre. The old 1/(2*pi*Rb*Cb) = 1/(2*pi*1M*22n) = 7.2 Hz was
+    // clamped to 40 Hz, which left Bass almost inert at 80-150 Hz (+0.7 dB at
+    // 100 Hz with Bass 10). The analytic FMV transfer for these parts (Yeh/Smith
+    // TMB form, Ct/Cb/Cm, Rt/Rb/Rm/Rs above) moves 40-250 Hz when Bass turns,
+    // so the stand-in shelf is centred at 100 Hz. Behavioral, not an exact FMV.
+    // A 0 dB RBJ shelf is an exact identity at any centre, so Bass 5 is unchanged.
+    v.bassHz   = fmvBassShelfHz;
     v.midHz    = std::clamp (midCorner,  400.0, 1200.0);
     v.midQ     = 0.75;
     // Treble shelf sits above the slope/Ct interaction band
