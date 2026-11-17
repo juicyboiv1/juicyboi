@@ -1,4 +1,5 @@
 #include "Parameters.h"
+#include "LevelTaper.h"
 
 namespace jb::params
 {
@@ -21,6 +22,17 @@ static std::unique_ptr<AudioParameterFloat> decibels (const char* pid, const Str
                                                       [] (float v, int) { return String (v, 1) + " dB"; }));
 }
 
+/** Amp-style 0–10 level knob (Input / Master). Continuous (no snapping) so legacy dB
+    sessions migrate to the exact same gain; text = knob value with one decimal. */
+static std::unique_ptr<AudioParameterFloat> levelKnob (const char* pid, const String& name, float def)
+{
+    return std::make_unique<AudioParameterFloat> (ParameterID { pid, versionHint }, name,
+                                                  NormalisableRange<float> (0.0f, 10.0f), def,
+                                                  AudioParameterFloatAttributes().withLabel ("")
+                                                      .withStringFromValueFunction ([] (float v, int) { return String (v, 1); })
+                                                      .withValueFromStringFunction ([] (const String& t) { return jlimit (0.0f, 10.0f, t.getFloatValue()); }));
+}
+
 static std::unique_ptr<AudioParameterFloat> milliseconds (const char* pid, const String& name,
                                                           float lo, float hi, float def)
 {
@@ -35,7 +47,8 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
 {
     AudioProcessorValueTreeState::ParameterLayout layout;
 
-    layout.add (decibels (id::inputTrim, "Input", -24.0f, 24.0f, 0.0f));
+    // Input: 0–10, 5 = unity (0 dB), 4.8 dB per number. See LevelTaper.h.
+    layout.add (levelKnob (id::inputTrim, "Input", taper::inputDefaultKnob));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::odEnable, versionHint }, "Boost On", false));
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::odType, versionHint }, "Boost Type",
@@ -79,7 +92,8 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (milliseconds (id::gateHold,    "Gate Hold",    0.0f, 500.0f, 60.0f));
     layout.add (milliseconds (id::gateRelease, "Gate Release", 1.0f, 500.0f, 60.0f));
 
-    layout.add (decibels (id::master, "Master", -60.0f, 12.0f, -6.0f));
+    // Master: 0–10 audio taper, 0 = mute, 6.5 = -6 dB (default), 7.5 = unity, 10 = +12 dB.
+    layout.add (levelKnob (id::master, "Master", taper::masterDefaultKnob));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::bypass, versionHint }, "Bypass", false));
 

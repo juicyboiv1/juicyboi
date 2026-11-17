@@ -18,6 +18,7 @@ int legacyRegression();
 int modelValidation();
 int presenceValidation();
 int resonanceValidation();
+int levelTaperValidation();
 
 int main()
 {
@@ -30,7 +31,7 @@ int main()
     p->prepareToPlay (sr, bs);
     std::printf ("latency: %d samples\n", p->getLatencySamples());
 
-    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation();
+    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation() + levelTaperValidation();
     juce::MidiBuffer midi;
 
     {

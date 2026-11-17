@@ -66,6 +66,44 @@ Buses: mono→stereo (default, guitar DI), mono→mono, stereo→stereo.
 Latency: the oversampler's FIR latency (61 samples at 48 kHz), reported to the host.
 The dry/bypass path uses the same delay.
 
+## Input & Master (amp-style 0–10)
+
+Both knobs read **0.0–10.0** like an amp (one decimal); hover a knob to see the
+equivalent dB. The sound for a given dB level is unchanged — only the scale moved.
+
+- **Input** — linear in dB, **4.8 dB per number**: `dB = −24 + 4.8 × knob`.
+  **5 = unity (0 dB)**, the default. Above 5 hits the first stage harder (more
+  saturation/compression), below 5 cleans it up.
+- **Master** — smooth audio taper with a hard mute at 0:
+  `t = knob / 10`, `dB = −60 + (9224 t − 2352 t² − 320 t³) / 91` for knob > 0,
+  **knob 0 = silence**. Monotonic, ~10 dB per number at the bottom down to ~4 dB
+  per number at the top. **6.5 = −6 dB (default)**, **7.5 = unity (0 dB)**,
+  **10 = +12 dB**.
+
+| Knob | Input (dB) | Master (dB) |
+|-----:|-----------:|------------:|
+| 0 | -24.0 | mute (silent) |
+| 1 | -19.2 | -50.1 |
+| 2 | -14.4 | -40.8 |
+| 3 | -9.6 | -32.0 |
+| 4 | -4.8 | -23.8 |
+| 5 | +0.0 | -16.2 |
+| 6 | +4.8 | -9.2 |
+| 6.5 | +7.2 | **−6.0 (default)** |
+| 7 | +9.6 | -2.9 |
+| 7.5 | +12.0 | **0.0 (unity)** |
+| 8 | +14.4 | +2.7 |
+| 9 | +19.2 | +7.7 |
+| 10 | +24.0 | +12.0 |
+
+**Old sessions:** saved states now carry `jb_state_version = 2`. States without
+it (everything saved before this change) store Input/Master in dB and are
+converted on load to the knob value with the same gain (old −60 dB Master,
+which was already silent, becomes 0). Parameter IDs (`input_trim`, `master`)
+are unchanged. Host *automation lanes* recorded against the old dB ranges:
+Input lanes play back identically (same normalised position); Master lanes
+will not match the old levels and should be re-recorded.
+
 ## Preamp Model
 
 **Rectifier** (default) preserves Red v1/v2 and Orange, including all old
@@ -231,7 +269,7 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 
 | ID             | Name        | Range            | Default |
 |----------------|-------------|------------------|---------|
-| `input_trim`   | Input       | -24 … +24 dB     | 0 dB    |
+| `input_trim`   | Input       | 0 … 10 (5 = 0 dB, 4.8 dB/number) | 5 (= 0 dB) |
 | `od_enable`    | Boost On    | bool             | off     |
 | `od_type`      | Boost Type  | OD-808 / SD-1    | OD-808  |
 | `od_drive`     | Boost Drive | 0 … 10           | 2       |
@@ -257,7 +295,7 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `gate_threshold`| Gate Threshold | -80 … -20 dB (key envelope) | -60 dB |
 | `gate_hold`    | Gate Hold   | 0 … 500 ms       | 60 ms   |
 | `gate_release` | Gate Release| 1 … 500 ms (−60 dB fall time) | 60 ms |
-| `master`       | Master      | -60 … +12 dB     | -6 dB   |
+| `master`       | Master      | 0 … 10 audio taper (0 = mute, 7.5 = 0 dB, 10 = +12 dB) | 6.5 (= −6 dB) |
 | `bypass`       | Bypass      | bool (host bypass param) | off |
 
 All parameter IDs use version hint 1.
@@ -343,6 +381,7 @@ bash ~/src/juicyboi/scripts/recover-standalone-mac.sh
 Or manually: quit juicyboi → delete that settings file → `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJUCE_DIR=~/src/JUCE && cmake --build build -j8 --target juicyboi_Standalone` → open the app → untick *Mute audio input*, tick Input 1, Direct Monitor off.
 
 - **Rectifier Bass now works in the guitar range** — the FMV Bass shelf centre moved from a 40 Hz clamp (the old 1/(2π·1M·22n) = 7.2 Hz estimate) to **100 Hz**, range still ±12 dB. Bass 10 now lifts 80 Hz by about +8 dB vs Bass 5 (was +1 dB); Bass 0 cuts about −8 dB. **Bass 5 (default) is bit-identical** to before (null-tested), so default and Bass-5 sessions sound the same; sessions saved with Bass ≠ 5 will sound bassier/leaner than before.
+- **Input / Master are amp-style 0–10 knobs** — Input 5 = unity (4.8 dB/number), Master 0 = mute, 6.5 = −6 dB default, 7.5 = unity, 10 = +12 dB; hover for dB. Old sessions are converted on load to the same level (see *Input & Master*).
 - **5150 Output Resonance** — `lead_resonance` (0–10, default 0 = unchanged), VR8 1M / C12 .0068 µF NFB network, Lead-only, next to Output Presence. See `docs/5150-resonance.md`.
 - **Graphic EQ** — 7-band (100 Hz … 6.4 kHz, ±15 dB) + Level ±15 dB, post-ToneStack / pre-Cab, off by default (true bypass). Vertical green/gold faders between Gate and Cab. New params only; existing sessions load unchanged (EQ off).
 - **Cab streamlined to 2 IR slots** — IR A / IR B drop zones + IR Blend (0 = A, 1 = B). Removed the 4-slot layout and the `cab_sm57_axis` / `cab_md421_axis` params; old sessions load fine (those values are ignored). `cab_mic_blend` ID kept. IR paths now save as `ir_a` / `ir_b`, so IRs from old 4-slot sessions need re-dropping once.

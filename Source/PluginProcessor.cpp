@@ -1,5 +1,6 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "LevelTaper.h"
 
 using namespace jb;
 
@@ -9,6 +10,9 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "juicyboi", params::createLayout())
 {
+    // Fresh state is already in the 0–10 Input/Master format (copyState() carries it).
+    apvts.state.setProperty (stateVersionKey, taper::stateVersion, nullptr);
+
     pInputTrim = apvts.getRawParameterValue (params::id::inputTrim);
     pOdEnable  = apvts.getRawParameterValue (params::id::odEnable);
     pOdType    = apvts.getRawParameterValue (params::id::odType);
@@ -97,8 +101,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     redVoiceMix.reset (osRate, 0.03);
 
     // Snap smoothers to current values so there is no fade-in on load
-    inputGain .setCurrentAndTargetValue (juce::Decibels::decibelsToGain (pInputTrim->load()));
-    masterGain.setCurrentAndTargetValue (juce::Decibels::decibelsToGain (pMaster->load(), -60.0f));
+    inputGain .setCurrentAndTargetValue (taper::inputKnobToGain (pInputTrim->load()));
+    masterGain.setCurrentAndTargetValue (taper::masterKnobToGain (pMaster->load()));
     bypassMix .setCurrentAndTargetValue (pBypass->load() > 0.5f ? 1.0f : 0.0f);
     odMix     .setCurrentAndTargetValue (pOdEnable->load() > 0.5f ? 1.0f : 0.0f);
     odTypeMix .setCurrentAndTargetValue (pOdType->load() > 0.5f ? 1.0f : 0.0f); // 1 = SD-1
@@ -143,8 +147,8 @@ bool JuicyboiAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts)
 void JuicyboiAudioProcessor::updateParameters()
 {
     modelMix.setTargetValue (pPreampModel->load() > 0.5f ? 1.0f : 0.0f);
-    inputGain .setTargetValue (juce::Decibels::decibelsToGain (pInputTrim->load()));
-    masterGain.setTargetValue (juce::Decibels::decibelsToGain (pMaster->load(), -60.0f));
+    inputGain .setTargetValue (taper::inputKnobToGain (pInputTrim->load()));
+    masterGain.setTargetValue (taper::masterKnobToGain (pMaster->load()));
     bypassMix .setTargetValue (pBypass->load() > 0.5f ? 1.0f : 0.0f);
     odMix     .setTargetValue (pOdEnable->load() > 0.5f ? 1.0f : 0.0f);
     odTypeMix .setTargetValue (pOdType->load() > 0.5f ? 1.0f : 0.0f); // 1 = SD-1
@@ -449,6 +453,7 @@ juce::File JuicyboiAudioProcessor::getCabIRFile (int slot) const
 void JuicyboiAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
+    state.setProperty (stateVersionKey, taper::stateVersion, nullptr);
     for (int s = 0; s < dsp::CabSim::numSlots; ++s)
         state.setProperty (irKeys[s], cabFiles[(size_t) s].getFullPathName(), nullptr);
 
@@ -488,6 +493,20 @@ void JuicyboiAudioProcessor::setStateInformation (const void* data, int sizeInBy
                 resonance.setProperty ("value", 0.0f, nullptr);
                 tree.addChild (resonance, -1, nullptr);
             }
+            // State version 1 (no property) stored Input/Master in dB. Convert to
+            // the 0–10 knobs so the session plays at exactly the same level.
+            if ((int) tree.getProperty (stateVersionKey, 1) < taper::stateVersion)
+            {
+                auto convert = [&tree] (const char* pid, auto&& dbToKnob)
+                {
+                    auto child = tree.getChildWithProperty ("id", pid);
+                    if (child.isValid() && child.hasProperty ("value"))
+                        child.setProperty ("value", (float) dbToKnob ((double) child.getProperty ("value")), nullptr);
+                };
+                convert (params::id::inputTrim, taper::inputDbToKnob);
+                convert (params::id::master,    taper::masterDbToKnob);
+            }
+            tree.setProperty (stateVersionKey, taper::stateVersion, nullptr);
             apvts.replaceState (tree);
 
             for (int s = 0; s < dsp::CabSim::numSlots; ++s)

@@ -61,6 +61,9 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
+    /** Root state property: 2 = Input/Master are 0–10 knobs (absent = 1 = dB). */
+    static constexpr const char* stateVersionKey = "jb_state_version";
+
     //== Cab IR slots (message thread) =========================================
     bool loadCabIR (int slot, const juce::File& file);
     void clearCabIR (int slot);

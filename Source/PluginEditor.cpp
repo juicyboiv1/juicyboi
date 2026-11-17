@@ -1,4 +1,5 @@
 #include "PluginEditor.h"
+#include "LevelTaper.h"
 
 using namespace jb;
 
@@ -26,6 +27,23 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     leadResonance.slider.setComponentID ("lead_resonance");
     leadResonance.slider.setTooltip ("5150-only NFB Resonance (VR8 1M + C12 .0068u), after EQ/before Cab. 0 = unchanged reference tone; more = less low-frequency feedback = more bass. Resistive load, no speaker/power-amp model.");
     setupKnob (master,   params::id::master,    "Master");
+
+    // Amp-style 0–10 Input/Master: hover shows the equivalent dB.
+    input.slider.onValueChange = [this]
+    {
+        input.slider.setTooltip ("Input " + juce::String (input.slider.getValue(), 1) + " = "
+                                 + juce::String (taper::inputKnobToDb (input.slider.getValue()), 1)
+                                 + " dB (5 = unity, 4.8 dB per number)");
+    };
+    master.slider.onValueChange = [this]
+    {
+        const auto v = master.slider.getValue();
+        master.slider.setTooltip ("Master " + juce::String (v, 1) + " = "
+                                  + (v > 0.0 ? juce::String (taper::masterKnobToDb (v), 1) + " dB" : juce::String ("mute"))
+                                  + " (7.5 = unity, 10 = +12 dB, 0 = silent)");
+    };
+    input.slider.onValueChange();
+    master.slider.onValueChange();
 
     addAndMakeVisible (odEnable);
     odEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::odEnable, odEnable);

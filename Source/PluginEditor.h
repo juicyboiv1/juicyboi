@@ -202,6 +202,7 @@ private:
     JuicyboiAudioProcessor& processor;
     JuicyboiLookAndFeel lookAndFeel;
 
+    juce::TooltipWindow tooltipWindow { this, 700 };
     Knob input, odDrive, odTone, odLevel, gain, bass, mid, treble, presence, leadPresence, leadResonance, master, cabBlend, cabLevel;
     Knob gateThreshold, gateHold, gateRelease;
 
