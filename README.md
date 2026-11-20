@@ -66,9 +66,9 @@ Buses: mono→stereo (default, guitar DI), mono→mono, stereo→stereo.
 Latency: the oversampler's FIR latency (61 samples at 48 kHz), reported to the host.
 The dry/bypass path uses the same delay.
 
-## Input & Master (amp-style 0–10)
+## Input, Master, Boost Level & Cab Level (amp-style 0–10)
 
-Both knobs read **0.0–10.0** like an amp (one decimal); hover a knob to see the
+All four level knobs read **0.0–10.0** like an amp (one decimal); hover a knob to see the
 equivalent dB. The sound for a given dB level is unchanged — only the scale moved.
 
 - **Input** — linear in dB, **4.8 dB per number**: `dB = −24 + 4.8 × knob`.
@@ -96,13 +96,39 @@ equivalent dB. The sound for a given dB level is unchanged — only the scale mo
 | 9 | +19.2 | +7.7 |
 | 10 | +24.0 | +12.0 |
 
-**Old sessions:** saved states now carry `jb_state_version = 2`. States without
-it (everything saved before this change) store Input/Master in dB and are
-converted on load to the knob value with the same gain (old −60 dB Master,
-which was already silent, becomes 0). Parameter IDs (`input_trim`, `master`)
-are unchanged. Host *automation lanes* recorded against the old dB ranges:
-Input lanes play back identically (same normalised position); Master lanes
-will not match the old levels and should be re-recorded.
+- **Boost Level** — linear in dB, **3.6 dB per number**: `dB = −24 + 3.6 × knob`
+  (0 = −24 dB, 10 = +12 dB). **6.7 (exactly 20/3) = unity (0 dB)**, the default.
+  Because 20/3 isn't exact in floating point, anything within 0.0001 dB of 0 is
+  treated as exactly 0 dB, so the default is bit-identical to the old 0 dB.
+- **Cab Level** — same law as Input: `dB = −24 + 4.8 × knob`, **5 = unity**, default 5.0.
+
+| Knob | Boost Level (dB) | Cab Level (dB) |
+|-----:|-----------:|------------:|
+| 0 | -24.0 | -24.0 |
+| 1 | -20.4 | -19.2 |
+| 2 | -16.8 | -14.4 |
+| 3 | -13.2 | -9.6 |
+| 4 | -9.6 | -4.8 |
+| 5 | -6.0 | **0.0 (unity, default)** |
+| 6 | -2.4 | +4.8 |
+| 6.7 (20/3) | **0.0 (unity, default)** | +8.0 |
+| 7 | +1.2 | +9.6 |
+| 8 | +4.8 | +14.4 |
+| 9 | +8.4 | +19.2 |
+| 10 | +12.0 | +24.0 |
+
+EQ faders (±15 dB) and Gate controls (dB / ms) stay in their real units.
+
+**Old sessions:** saved states carry `jb_state_version`. Version 1 (no
+property; everything saved before 73125d5) stores Input, Master, Boost Level and
+Cab Level in dB. Version 2 (73125d5) stores Input/Master as knobs but Boost/Cab
+Level in dB. Current builds write version 3 and, on load, convert exactly the
+dB-valued ones to the knob value with the same gain (old −60 dB Master, which
+was already silent, becomes 0). Parameter IDs (`input_trim`, `master`,
+`od_level`, `cab_level`) are unchanged. Host *automation lanes* recorded against
+the old dB ranges: Input, Boost Level and Cab Level lanes play back identically
+(the dB laws are linear across the same old ranges, so normalised positions are
+unchanged); Master lanes will not match the old levels and should be re-recorded.
 
 ## Preamp Model
 
@@ -226,7 +252,7 @@ Two-IR cabinet simulator after tone/presence, before Master.
   runs — use this to feed an analog power amp + real cab.
 - **Two IR slots** (IR A, IR B), loaded by drag-and-drop onto the GUI
   (.wav/.aif/.aiff/.flac, mono or stereo); "x" clears a slot.
-- **IR Blend** 0 = 100% IR A, 1 = 100% IR B (linear wet crossfade). **Cab Level** ±24 dB.
+- **IR Blend** 0 = 100% IR A, 1 = 100% IR B (linear wet crossfade). **Cab Level** 0–10 (5 = 0 dB, 4.8 dB per number; ±24 dB).
 - Empty slots: if one slot is empty, the loaded IR gets 100%;
   if neither is loaded, the cab passes audio through unchanged.
 - IR paths are saved in plugin state (absolute paths) and reloaded if the files still exist.
@@ -274,7 +300,7 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `od_type`      | Boost Type  | OD-808 / SD-1    | OD-808  |
 | `od_drive`     | Boost Drive | 0 … 10           | 2       |
 | `od_tone`      | Boost Tone  | 0 … 10           | 5       |
-| `od_level`     | Boost Level | -24 … +12 dB     | 0 dB    |
+| `od_level`     | Boost Level | 0 … 10 (3.6 dB/number, 6.67 = 0 dB) | 6.67 = 20/3 (= 0 dB) |
 | `channel`      | Channel     | Red / Orange     | Red     |
 | `red_voice`    | Red Voice   | v1 / v2          | v2      |
 | `preamp_model` | Preamp Model | Rectifier / 5150-inspired Lead | Rectifier |
@@ -290,7 +316,7 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `eq_level`     | EQ Level    | -15 … +15 dB     | 0 dB    |
 | `cab_enable`   | Cab On      | bool             | off     |
 | `cab_mic_blend`| IR Blend    | 0 … 1            | 0.5     |
-| `cab_level`    | Cab Level   | -24 … +24 dB     | 0 dB    |
+| `cab_level`    | Cab Level   | 0 … 10 (5 = 0 dB, 4.8 dB/number) | 5 (= 0 dB) |
 | `gate_enable`  | Gate On     | bool             | off     |
 | `gate_threshold`| Gate Threshold | -80 … -20 dB (key envelope) | -60 dB |
 | `gate_hold`    | Gate Hold   | 0 … 500 ms       | 60 ms   |
@@ -381,6 +407,7 @@ bash ~/src/juicyboi/scripts/recover-standalone-mac.sh
 Or manually: quit juicyboi → delete that settings file → `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DJUCE_DIR=~/src/JUCE && cmake --build build -j8 --target juicyboi_Standalone` → open the app → untick *Mute audio input*, tick Input 1, Direct Monitor off.
 
 - **Rectifier Bass now works in the guitar range** — the FMV Bass shelf centre moved from a 40 Hz clamp (the old 1/(2π·1M·22n) = 7.2 Hz estimate) to **100 Hz**, range still ±12 dB. Bass 10 now lifts 80 Hz by about +8 dB vs Bass 5 (was +1 dB); Bass 0 cuts about −8 dB. **Bass 5 (default) is bit-identical** to before (null-tested), so default and Bass-5 sessions sound the same; sessions saved with Bass ≠ 5 will sound bassier/leaner than before.
+- **Boost Level and Cab Level are amp-style 0–10 knobs too** — Boost Level 6.7 (20/3) = unity, 3.6 dB/number (0 = −24, 10 = +12 dB); Cab Level 5 = unity, 4.8 dB/number; hover for dB. State version 3; v1 and v2 sessions convert on load to the same level.
 - **Input / Master are amp-style 0–10 knobs** — Input 5 = unity (4.8 dB/number), Master 0 = mute, 6.5 = −6 dB default, 7.5 = unity, 10 = +12 dB; hover for dB. Old sessions are converted on load to the same level (see *Input & Master*).
 - **5150 Output Resonance** — `lead_resonance` (0–10, default 0 = unchanged), VR8 1M / C12 .0068 µF NFB network, Lead-only, next to Output Presence. See `docs/5150-resonance.md`.
 - **Graphic EQ** — 7-band (100 Hz … 6.4 kHz, ±15 dB) + Level ±15 dB, post-ToneStack / pre-Cab, off by default (true bypass). Vertical green/gold faders between Gate and Cab. New params only; existing sessions load unchanged (EQ off).

@@ -16,14 +16,28 @@
         and passes exactly through 6.5 = -6 dB (default), 7.5 = 0 dB (unity)
         and 10 = +12 dB.
 
-    The old dB parameters (state version 1) map onto these exactly, so legacy
+    Cab Level (cab_level): identical to Input.
+        dB = -24 + 4.8 * x            5 = 0 dB (unity, default)
+
+    Boost Level (od_level): linear in dB, 3.6 dB per number.
+        dB = -24 + 3.6 * x            0 = -24 dB, 20/3 (6.67) = 0 dB (unity, default),
+                                      10 = +12 dB
+        20/3 is not exact in float, so |dB| < 1e-4 snaps to exactly 0 dB (a tiny
+        unity detent) — the default stays bit-identical to the old 0 dB.
+
+    The old dB parameters (state versions 1 and 2) map onto these exactly, so legacy
     sessions are converted in setStateInformation. Pure functions, no JUCE. */
 namespace jb::taper
 {
-inline constexpr int stateVersion = 2; // 1 = Input/Master stored in dB
+// 1 = Input/Master/Boost Level/Cab Level stored in dB
+// 2 = Input/Master are 0–10 knobs; Boost Level/Cab Level still dB
+// 3 = all four are 0–10 knobs
+inline constexpr int stateVersion = 3;
 
 inline constexpr float inputDefaultKnob  = 5.0f; // 0 dB  (old default)
 inline constexpr float masterDefaultKnob = 6.5f; // -6 dB (old default)
+inline constexpr float cabLevelDefaultKnob   = 5.0f;             // 0 dB (old default)
+inline constexpr float boostLevelDefaultKnob = 20.0f / 3.0f;     // 0 dB (old default)
 
 //== Input ======================================================================
 inline double inputKnobToDb (double x) noexcept
@@ -39,6 +53,28 @@ inline double inputDbToKnob (double dB) noexcept
 inline float inputKnobToGain (float x) noexcept
 {
     return std::pow (10.0f, (float) inputKnobToDb (x) * 0.05f);
+}
+
+//== Cab Level (same law as Input) =============================================
+inline double cabLevelKnobToDb (double x) noexcept { return inputKnobToDb (x); }
+inline double cabLevelDbToKnob (double dB) noexcept { return inputDbToKnob (dB); }
+inline float  cabLevelKnobToGain (float x) noexcept { return inputKnobToGain (x); }
+
+//== Boost Level ================================================================
+inline double boostLevelKnobToDb (double x) noexcept
+{
+    const auto dB = -24.0 + 3.6 * std::clamp (x, 0.0, 10.0);
+    return std::abs (dB) < 1.0e-4 ? 0.0 : dB; // unity detent (20/3 is inexact in float)
+}
+
+inline double boostLevelDbToKnob (double dB) noexcept
+{
+    return std::clamp ((dB + 24.0) / 3.6, 0.0, 10.0);
+}
+
+inline float boostLevelKnobToGain (float x) noexcept
+{
+    return std::pow (10.0f, (float) boostLevelKnobToDb (x) * 0.05f);
 }
 
 //== Master =====================================================================

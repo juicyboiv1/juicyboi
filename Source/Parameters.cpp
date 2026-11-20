@@ -22,7 +22,7 @@ static std::unique_ptr<AudioParameterFloat> decibels (const char* pid, const Str
                                                       [] (float v, int) { return String (v, 1) + " dB"; }));
 }
 
-/** Amp-style 0–10 level knob (Input / Master). Continuous (no snapping) so legacy dB
+/** Amp-style 0–10 level knob (Input / Master / Boost Level / Cab Level). Continuous (no snapping) so legacy dB
     sessions migrate to the exact same gain; text = knob value with one decimal. */
 static std::unique_ptr<AudioParameterFloat> levelKnob (const char* pid, const String& name, float def)
 {
@@ -55,7 +55,8 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
                                                         StringArray { "OD-808", "SD-1" }, 0));
     layout.add (knob (id::odDrive, "Boost Drive", 2.0f));
     layout.add (knob (id::odTone,  "Boost Tone",  5.0f));
-    layout.add (decibels (id::odLevel, "Boost Level", -24.0f, 12.0f, 0.0f));
+    // Boost Level: 0–10, 3.6 dB per number, 6.67 (20/3) = unity (default). See LevelTaper.h.
+    layout.add (levelKnob (id::odLevel, "Boost Level", taper::boostLevelDefaultKnob));
 
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::channel, versionHint }, "Channel",
                                                         StringArray { "Red (Ch1)", "Orange (Ch2)" }, 0));
@@ -84,7 +85,8 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
                                                        NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f,
                                                        AudioParameterFloatAttributes().withStringFromValueFunction (
                                                            [] (float v, int) { return String (juce::roundToInt ((1.0f - v) * 100)) + "/" + String (juce::roundToInt (v * 100)); })));
-    layout.add (decibels (id::cabLevel, "Cab Level", -24.0f, 24.0f, 0.0f));
+    // Cab Level: 0–10, 5 = unity (default), 4.8 dB per number. See LevelTaper.h.
+    layout.add (levelKnob (id::cabLevel, "Cab Level", taper::cabLevelDefaultKnob));
 
     // Gate: key = dry input (post trim), VCA after cab, before master
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::gateEnable, versionHint }, "Gate On", false));

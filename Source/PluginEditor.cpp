@@ -28,7 +28,7 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     leadResonance.slider.setTooltip ("5150-only NFB Resonance (VR8 1M + C12 .0068u), after EQ/before Cab. 0 = unchanged reference tone; more = less low-frequency feedback = more bass. Resistive load, no speaker/power-amp model.");
     setupKnob (master,   params::id::master,    "Master");
 
-    // Amp-style 0–10 Input/Master: hover shows the equivalent dB.
+    // Amp-style 0–10 Input/Master/Boost Level/Cab Level: hover shows the equivalent dB.
     input.slider.onValueChange = [this]
     {
         input.slider.setTooltip ("Input " + juce::String (input.slider.getValue(), 1) + " = "
@@ -42,8 +42,17 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
                                   + (v > 0.0 ? juce::String (taper::masterKnobToDb (v), 1) + " dB" : juce::String ("mute"))
                                   + " (7.5 = unity, 10 = +12 dB, 0 = silent)");
     };
+    // Boost Level: 0–10, 3.6 dB per number, 6.7 (20/3) = unity.
+    odLevel.slider.onValueChange = [this]
+    {
+        const auto v = odLevel.slider.getValue();
+        odLevel.slider.setTooltip ("Boost Level " + juce::String (v, 1) + " = "
+                                   + juce::String (taper::boostLevelKnobToDb (v), 1)
+                                   + " dB (6.7 = unity, 3.6 dB per number, 10 = +12 dB)");
+    };
     input.slider.onValueChange();
     master.slider.onValueChange();
+    odLevel.slider.onValueChange();
 
     addAndMakeVisible (odEnable);
     odEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::odEnable, odEnable);
@@ -95,6 +104,14 @@ JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcess
     // Cab section
     setupKnob (cabBlend, params::id::cabMicBlend, "IR Blend");
     setupKnob (cabLevel, params::id::cabLevel,    "Cab Level");
+    cabLevel.slider.onValueChange = [this]
+    {
+        const auto v = cabLevel.slider.getValue();
+        cabLevel.slider.setTooltip ("Cab Level " + juce::String (v, 1) + " = "
+                                    + juce::String (taper::cabLevelKnobToDb (v), 1)
+                                    + " dB (5 = unity, 4.8 dB per number)");
+    };
+    cabLevel.slider.onValueChange();
     addAndMakeVisible (cabEnable);
     cabEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::cabEnable, cabEnable);
 

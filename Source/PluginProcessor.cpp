@@ -160,7 +160,7 @@ void JuicyboiAudioProcessor::updateParameters()
     // TODO: smooth OD level / tone-stack coefficient changes (currently per block)
     const auto odDrive01 = pOdDrive->load() / 10.0f;
     const auto odTone01  = pOdTone->load() / 10.0f;
-    const auto odLvl     = juce::Decibels::decibelsToGain (pOdLevel->load());
+    const auto odLvl     = taper::boostLevelKnobToGain (pOdLevel->load());
     od.setParameters (odDrive01, odTone01, odLvl);
     sd1.setParameters (odDrive01, odTone01, odLvl);
 
@@ -189,7 +189,7 @@ void JuicyboiAudioProcessor::updateParameters()
         leadGraphicEq.setParameters (pEqEnable->load() > 0.5f, eqDb, pEqLevel->load());
     }
 
-    cab.setParameters (pCabEnable->load() > 0.5f, pCabBlend->load(), juce::Decibels::decibelsToGain (pCabLevel->load()));
+    cab.setParameters (pCabEnable->load() > 0.5f, pCabBlend->load(), taper::cabLevelKnobToGain (pCabLevel->load()));
 
     gate.setParameters (pGateEnable->load() > 0.5f, pGateThresh->load(), pGateHold->load(), pGateRelease->load());
 }
@@ -493,18 +493,26 @@ void JuicyboiAudioProcessor::setStateInformation (const void* data, int sizeInBy
                 resonance.setProperty ("value", 0.0f, nullptr);
                 tree.addChild (resonance, -1, nullptr);
             }
-            // State version 1 (no property) stored Input/Master in dB. Convert to
-            // the 0–10 knobs so the session plays at exactly the same level.
-            if ((int) tree.getProperty (stateVersionKey, 1) < taper::stateVersion)
+            // Older states store some level knobs in dB; convert them to the 0–10
+            // knobs so the session plays at exactly the same level.
+            //   v1 (no property): Input, Master, Boost Level, Cab Level in dB
+            //   v2:               Boost Level, Cab Level in dB
+            const int loadedVersion = (int) tree.getProperty (stateVersionKey, 1);
+            auto convert = [&tree] (const char* pid, auto&& dbToKnob)
             {
-                auto convert = [&tree] (const char* pid, auto&& dbToKnob)
-                {
-                    auto child = tree.getChildWithProperty ("id", pid);
-                    if (child.isValid() && child.hasProperty ("value"))
-                        child.setProperty ("value", (float) dbToKnob ((double) child.getProperty ("value")), nullptr);
-                };
+                auto child = tree.getChildWithProperty ("id", pid);
+                if (child.isValid() && child.hasProperty ("value"))
+                    child.setProperty ("value", (float) dbToKnob ((double) child.getProperty ("value")), nullptr);
+            };
+            if (loadedVersion < 2)
+            {
                 convert (params::id::inputTrim, taper::inputDbToKnob);
                 convert (params::id::master,    taper::masterDbToKnob);
+            }
+            if (loadedVersion < 3)
+            {
+                convert (params::id::odLevel,  taper::boostLevelDbToKnob);
+                convert (params::id::cabLevel, taper::cabLevelDbToKnob);
             }
             tree.setProperty (stateVersionKey, taper::stateVersion, nullptr);
             apvts.replaceState (tree);

@@ -61,7 +61,8 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
-    /** Root state property: 2 = Input/Master are 0–10 knobs (absent = 1 = dB). */
+    /** Root state property: 3 = Input/Master/Boost Level/Cab Level are 0–10 knobs;
+        2 = only Input/Master; absent = 1 = all four in dB. */
     static constexpr const char* stateVersionKey = "jb_state_version";
 
     //== Cab IR slots (message thread) =========================================

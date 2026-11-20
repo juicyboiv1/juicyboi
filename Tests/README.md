@@ -30,9 +30,13 @@ and two Rectifier configurations at Bass 5 with other tone knobs, Boost and EQ
 non-default (must null after the FMV Bass-centre move to 100 Hz). Do not
 regenerate it from feature code to bless a failure.
 
-`LevelTaperTest.cpp` covers the amp-style Input/Master scales (`Source/LevelTaper.h`):
+`LevelTaperTest.cpp` covers the amp-style Input/Master/Boost Level/Cab Level scales (`Source/LevelTaper.h`):
 anchors (Input 5 = 0 dB, Master 6.5 = −6 dB, 7.5 = 0 dB, 10 = +12 dB, 0 = exact
 mute), monotonicity, knob↔dB round trips, every legacy 0.1 dB step migrating to
 the same gain, legacy (unversioned) state migration through
 `setStateInformation` without double conversion on re-save, Master as a pure
 post-chain gain on rendered audio, exact silence at 0, and gain smoothing.
+Boost/Cab Level: anchors, exact unity at the defaults (incl. the Boost 20/3
+detent), round trips, legacy dB grids, migration from both v1 and v2 states,
+no re-conversion on re-save, and bit-identical rendering of a v1 default
+session with Boost on.
