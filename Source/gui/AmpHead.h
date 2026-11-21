@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Rev1Style.h"
+#include <array>
 
 class JuicyboiAudioProcessor;
 
@@ -55,6 +56,11 @@ private:
     ToggleSwitch standby, model, channel, voice;
     Pilot pilot;
     LeadMark leadMark;
+
+    /** Small creme caption BELOW each head knob (nothing above the knobs). */
+    std::array<juce::Label, 9> knobLabels;
+    std::array<ParamSlider*, 9> labelledKnobs() noexcept;
+    void syncKnobLabels();
 
     float mix = 0.0f;
     int shownModel = -1;

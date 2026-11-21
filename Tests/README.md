@@ -43,7 +43,7 @@ session with Boost on.
 
 `EditorTest.cpp` paints the Rev1 editor offscreen, with no native window. It checks:
 - every parameter has a bound control with the same component ID, plus the IR A/B slots
-- the head has no text labels, and every head knob has a tooltip (Input/Master keep their dB equivalents)
+- every head knob has a creme caption below it on both faceplates, with none above, and every head knob has a tooltip (Input/Master keep their dB equivalents)
 - the Model toggle sets `preamp_model` and swaps the faceplates; Rectifier-only controls are hidden on 5150 and their values are kept
 - Red Voice is disabled on Orange
 - the drawer opens and closes with a fixed aspect ratio, and scaling works

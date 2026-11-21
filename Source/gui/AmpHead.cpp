@@ -14,6 +14,8 @@ namespace
     const Rectangle<float> grilleArea { 34.0f, 30.0f, 1032.0f, 236.0f };
     const Rectangle<float> panelArea  { 34.0f, 286.0f, 1032.0f, 120.0f };
     constexpr int panelCentreY = 346;
+    constexpr int knobCentreY = 340;            // knobs sit a little high to leave room for captions
+    constexpr int labelTop = 381, labelHeight = 13; // below the tick dots (knob bottom 374), above the pinstripe (399)
     constexpr int knobSize = 68;
     constexpr int knobLeft = 488, knobRight = 1052;
 
@@ -65,6 +67,15 @@ AmpHead::AmpHead (JuicyboiAudioProcessor& p, Component* popupParent)
         addAndMakeVisible (*t);
     addAndMakeVisible (pilot);
     addChildComponent (leadMark);
+    for (auto& l : knobLabels)
+    {
+        l.setFont (uiFont (10.5f));
+        l.setColour (Label::textColourId, colours::creme);
+        l.setJustificationType (Justification::centred);
+        l.setBorderSize ({});
+        l.setInterceptsMouseClicks (false, false);
+        addChildComponent (l);
+    }
 
     channel.onChange = [this] { updateFaceplate(); };
     mix = (float) targetModel();
@@ -139,6 +150,22 @@ void AmpHead::updateFaceplate()
     leadPresence.setAlpha (a);
     leadResonance.setAlpha (a);
     leadMark.setAlpha (a);
+    syncKnobLabels();
+}
+
+std::array<ParamSlider*, 9> AmpHead::labelledKnobs() noexcept
+{
+    return { &input, &gain, &bass, &mid, &treble, &presence, &leadPresence, &leadResonance, &master };
+}
+
+void AmpHead::syncKnobLabels()
+{
+    const auto knobs = labelledKnobs();
+    for (size_t i = 0; i < knobs.size(); ++i)
+    {
+        knobLabels[i].setVisible (knobs[i]->isVisible());
+        knobLabels[i].setAlpha (knobs[i]->getAlpha());
+    }
 }
 
 void AmpHead::layoutKnobs (int m)
@@ -150,7 +177,24 @@ void AmpHead::layoutKnobs (int m)
     for (size_t i = 0; i < row.size(); ++i)
     {
         const auto cx = (float) knobLeft + pitch * ((float) i + 0.5f);
-        row[i]->setBounds (Rectangle<int> (knobSize, knobSize).withCentre ({ roundToInt (cx), panelCentreY }));
+        row[i]->setBounds (Rectangle<int> (knobSize, knobSize).withCentre ({ roundToInt (cx), knobCentreY }));
+    }
+
+    // captions below the knobs; abbreviate only if a word would not fit its column
+    const auto knobs = labelledKnobs();
+    const char* rectNames[] = { "INPUT", "GAIN", "BASS", "MID", "TREBLE", "PRESENCE", "PRESENCE", "RESONANCE", "MASTER" };
+    const char* leadNames[] = { "INPUT", "GAIN", "LOW", "MID", "HIGH", "PRESENCE", "PRESENCE", "RESONANCE", "MASTER" };
+    const auto font = uiFont (10.5f);
+    const auto colW = roundToInt (pitch) - 4;
+    for (size_t i = 0; i < knobs.size(); ++i)
+    {
+        String text = m == 0 ? rectNames[i] : leadNames[i];
+        if (GlyphArrangement::getStringWidth (font, text) > (float) colW - 2.0f)
+            text = text == "RESONANCE" ? "RESO" : text.substring (0, 4);
+        knobLabels[i].setText (text, dontSendNotification);
+        knobLabels[i].setTooltip (knobs[i]->getName());
+        knobLabels[i].setBounds (Rectangle<int> (colW, labelHeight)
+                                     .withCentre ({ knobs[i]->getBounds().getCentreX(), labelTop + labelHeight / 2 }));
     }
 }
 

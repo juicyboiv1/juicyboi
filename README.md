@@ -140,8 +140,8 @@ The aspect ratio is fixed, so everything stays crisp at any size.
 
 **Head.** Black tolex with chrome corner caps and a blonde basketweave grille.
 The **juicyboi** badge appears on the grille and nowhere else. The black control
-panel has a small *Rev1* plate. **The knobs have no text labels**: hover any knob
-for a tooltip with its name and value. Input, Master, Boost Level and Cab Level
+panel has a small *Rev1* plate. Each knob has a small creme caption **below** it,
+and nothing above the knobs. Hover any knob for a tooltip with its name and value. Input, Master, Boost Level and Cab Level
 tooltips also show the equivalent dB. A value bubble shows while you drag.
 Double-click a knob to reset it to its default. The toggles carry small position
 marks.
@@ -440,7 +440,7 @@ Tests/
 
 ## Rev1 changelog
 
-- **Rev1 amp-head GUI replaces the v2 editor.** It's a vector amp head with a blonde basketweave grille, black tolex, chrome corner caps, and chrome-skirted knobs and toggles on a black panel. A pedalboard drawer (Boost, all-7-band EQ, Gate, and the Cab panel) opens and closes. The front-panel Model toggle (`preamp_model`) fades to an all-black 5150 faceplate. The juicyboi badge is on the grille only, and a *Rev1* / *Rev1 · 5150* plate sits on the panel. The head has no knob labels; hover tooltips give each knob's name and value, including the dB equivalents. The window resizes from 0.7× to 1.6× with a fixed aspect ratio. Nothing changes in the audio or the parameters: IDs, ranges, tapers, state version 3 and the reference renders are all identical. IRs can now also be loaded by clicking a slot.
+- **Rev1 amp-head GUI replaces the v2 editor.** It's a vector amp head with a blonde basketweave grille, black tolex, chrome corner caps, and chrome-skirted knobs and toggles on a black panel. A pedalboard drawer (Boost, all-7-band EQ, Gate, and the Cab panel) opens and closes. The front-panel Model toggle (`preamp_model`) fades to an all-black 5150 faceplate. The juicyboi badge is on the grille only, and a *Rev1* / *Rev1 · 5150* plate sits on the panel. Each head knob has a small creme caption below it (none above), and hover tooltips give its name and value, including the dB equivalents. The window resizes from 0.7× to 1.6× with a fixed aspect ratio. Nothing changes in the audio or the parameters: IDs, ranges, tapers, state version 3 and the reference renders are all identical. IRs can now also be loaded by clicking a slot.
 
 ## v2 changelog
 

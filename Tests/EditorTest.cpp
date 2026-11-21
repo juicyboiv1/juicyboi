@@ -67,18 +67,43 @@ int editorValidation()
     check ("every parameter has a control (same ID)", allBound);
     check ("IR A / IR B load targets present", findById (root, "ir_a") != nullptr && findById (root, "ir_b") != nullptr);
 
-    // 2. no text labels on the head (tooltips name the knobs instead)
-    bool noLabels = true, tipsOk = true;
-    std::function<void (juce::Component&)> scan = [&] (juce::Component& c)
+    // 2. head knobs: a creme caption BELOW each visible knob, nothing above; tooltips kept
+    auto checkCaptions = [&] (const char* what, juce::StringArray expected)
     {
-        if (dynamic_cast<juce::Label*> (&c) != nullptr) noLabels = false;
-        if (auto* s = dynamic_cast<juce::Slider*> (&c))
-            tipsOk = tipsOk && s->getTooltip().isNotEmpty();
-        for (auto* ch : c.getChildren()) scan (*ch);
+        auto& head = ed->getHead();
+        bool below = true, noneAbove = true, tipsOk = true, insidePanel = true;
+        juce::StringArray seen;
+        for (auto* c : head.getChildren())
+            if (auto* s = dynamic_cast<juce::Slider*> (c); s != nullptr && s->isVisible())
+            {
+                tipsOk = tipsOk && s->getTooltip().isNotEmpty();
+                bool found = false;
+                for (auto* lc : head.getChildren())
+                    if (auto* l = dynamic_cast<juce::Label*> (lc); l != nullptr && l->isVisible())
+                    {
+                        const bool sameColumn = std::abs (l->getBounds().getCentreX() - s->getBounds().getCentreX()) <= 1;
+                        if (! sameColumn) continue;
+                        if (l->getY() >= s->getBottom()) { found = true; seen.add (l->getText()); }
+                        if (l->getBottom() <= s->getY()) noneAbove = false;
+                        insidePanel = insidePanel && l->getBottom() <= 399
+                                      && l->findColour (juce::Label::textColourId) == jb::gui::colours::creme;
+                    }
+                below = below && found;
+            }
+        for (auto* lc : head.getChildren())
+            if (auto* l = dynamic_cast<juce::Label*> (lc); l != nullptr && l->isVisible())
+                for (auto* c : head.getChildren())
+                    if (c != l && c->isVisible() && dynamic_cast<juce::Label*> (c) == nullptr && l->getBounds().intersects (c->getBounds()))
+                        insidePanel = false; // overlaps a knob, toggle or lamp
+        check ((juce::String (what) + ": caption below every knob").toRawUTF8(), below);
+        check ((juce::String (what) + ": no labels above the knobs").toRawUTF8(), noneAbove);
+        check ((juce::String (what) + ": captions creme, clear of controls and panel edge").toRawUTF8(), insidePanel);
+        check ((juce::String (what) + ": captions read " + expected.joinIntoString (" ")).toRawUTF8(),
+               [&] { for (auto& e : expected) if (! seen.contains (e)) return false; return seen.size() == expected.size(); }());
+        check ((juce::String (what) + ": every head knob keeps its hover tooltip").toRawUTF8(), tipsOk);
     };
-    scan (ed->getHead());
-    check ("head has no Label components", noLabels);
-    check ("every head knob has a hover tooltip", tipsOk);
+    ed->getHead().syncModelNow();
+    checkCaptions ("Rectifier", { "INPUT", "GAIN", "BASS", "MID", "TREBLE", "PRESENCE", "MASTER" });
     if (auto* in = dynamic_cast<juce::Slider*> (findById (root, "input_trim")))
         check ("Input tooltip keeps the dB equivalent", in->getTooltip().contains ("= 0.0 dB"));
     if (auto* ma = dynamic_cast<juce::Slider*> (findById (root, "master")))
@@ -97,6 +122,7 @@ int editorValidation()
     check ("Model toggle sets preamp_model = 5150", getParam (p, "preamp_model") > 0.5f);
     check ("faceplate fade starts from Rectifier", ed->getHead().getFaceplateMix() < 0.5f);
     ed->getHead().syncModelNow();
+    checkCaptions ("5150", { "INPUT", "GAIN", "LOW", "MID", "HIGH", "PRESENCE", "RESONANCE", "MASTER" });
     check ("5150 faceplate: 5150 Presence/Resonance shown, Rectifier-only hidden",
            showing (findById (root, "lead_presence")) && showing (findById (root, "lead_resonance"))
                && ! showing (findById (root, "channel")) && ! showing (findById (root, "red_voice")) && ! showing (findById (root, "pre_presence")));
