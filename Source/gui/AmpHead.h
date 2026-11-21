@@ -24,6 +24,8 @@ public:
 
     /** Skip the faceplate fade (tests / screenshots). */
     void syncModelNow();
+    /** Revision plate text next to the knobs: "Rev2" / "Rev2 · 5150". */
+    static juce::String revisionPlateText (bool leadFaceplate);
     /** 0 = Rectifier faceplate, 1 = 5150 faceplate (fade in between). */
     float getFaceplateMix() const noexcept { return mix; }
 

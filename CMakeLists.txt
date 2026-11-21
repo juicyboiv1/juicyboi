@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(JUICYBOI VERSION 2.0.0 LANGUAGES C CXX)
+project(JUICYBOI VERSION 2.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,9 +27,14 @@ endif()
 juce_add_plugin(juicyboi
     COMPANY_NAME "juicyboi"
     PLUGIN_MANUFACTURER_CODE Jcyb
-    PLUGIN_CODE Jcb1
+    # Rev2 installs NEXT TO Rev1 (tag rev1): new plugin code (AU subtype, VST3
+    # UID, AAX product ID), bundle ID, AAX identifier and LV2 URI. Same
+    # manufacturer code. Rev1 used PLUGIN_CODE Jcb1 / PRODUCT_NAME "juicyboi".
+    PLUGIN_CODE Jcb2
     FORMATS ${JUICYBOI_FORMATS}
-    PRODUCT_NAME "juicyboi"
+    PRODUCT_NAME "juicyboi Rev2"
+    BUNDLE_ID com.juicyboi.juicyboi-rev2
+    AAX_IDENTIFIER com.juicyboi.juicyboi-rev2
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "juicyboi needs microphone access to take guitar input from your audio interface."
     IS_SYNTH FALSE
@@ -40,7 +45,7 @@ juce_add_plugin(juicyboi
     COPY_PLUGIN_AFTER_BUILD FALSE
     VST3_CATEGORIES Fx Distortion
     AAX_CATEGORY Effect
-    LV2URI "urn:juicyboi:juicyboi"
+    LV2URI "urn:juicyboi:juicyboi-rev2"
     NEEDS_WEB_BROWSER FALSE
     NEEDS_CURL FALSE)
 
@@ -81,7 +86,7 @@ target_link_libraries(juicyboi
 option(JUICYBOI_BUILD_TESTS "Build the headless smoke test" ON)
 if(JUICYBOI_BUILD_TESTS)
     juce_add_console_app(juicyboi_smoketest PRODUCT_NAME "juicyboi_smoketest")
-    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp)
+    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp)
     # Reuse the plugin's JUCE module objects/includes/defines rather than
     # compiling the modules a second time.
     target_include_directories(juicyboi_smoketest PRIVATE Source
@@ -90,6 +95,10 @@ if(JUICYBOI_BUILD_TESTS)
         JUICYBOI_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Tests"
         $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
     target_link_libraries(juicyboi_smoketest PRIVATE juicyboi juce::juce_recommended_config_flags)
+
+    # Tone-stack response dump (plain C++, no JUCE): tools/tonestack/plot_tonestack.py
+    add_executable(juicyboi_tonestack_dump Tests/ToneStackDump.cpp Source/dsp/ToneStack.cpp)
+    target_include_directories(juicyboi_tonestack_dump PRIVATE Source)
 
     # Offscreen editor screenshots: juicyboi_screenshots <output-dir>
     juce_add_console_app(juicyboi_screenshots PRODUCT_NAME "juicyboi_screenshots")

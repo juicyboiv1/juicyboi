@@ -1,8 +1,9 @@
 #pragma once
-// Deterministic renders shared by the 62a1239 capture and ResonanceTest.
-// Fixture lead-62a1239.f32 was captured ONCE from unmodified commit 62a1239
-// (before the FMV Bass-centre change and before lead_resonance existed).
-// Do not regenerate it from feature code to bless a failure.
+// Deterministic renders shared by the fixture captures and ResonanceTest.
+// lead-62a1239.f32 was captured ONCE from unmodified commit 62a1239 (now only a
+// level reference); lead-rev2-tonestack.f32 was captured ONCE from the Rev2
+// passive-TMB build and is the null reference. Do not regenerate either from
+// feature code to bless a failure.
 #include "PluginProcessor.h"
 #include <vector>
 #include <cmath>

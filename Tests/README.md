@@ -3,15 +3,33 @@
 `cmake --build build --target juicyboi_smoketest -j8` then run
 `build/juicyboi_smoketest_artefacts/Release/juicyboi_smoketest` (Linux).
 
-`legacy-348fc68.f32` contains 73,728 little-endian float samples captured from
-unmodified processor/DSP commit `348fc68`, GCC 14 Release, 48 kHz, mono input,
-256-sample blocks. All three Rectifier voices and Boost off/OD-808/SD-1 are
-covered, using default Gain/TMB/Master, no cab/EQ/gate. The deterministic signal
-and ordering live in `legacyRegression`. Comparison tolerance is 2e-6 to allow
-minor compiler/platform math differences; local builds should null exactly.
-Do not regenerate this fixture from the feature processor to bless a failure.
-The capture-only code was removed after saving the baseline to avoid accidental
-regeneration with feature code.
+**Rev2 fixtures.** Rev2 deliberately changes the audio (solved passive tone
+stacks), so the regression renders were re-captured ONCE from the Rev2 build:
+`rect-rev2-tonestack.f32` (73,728 floats, the same 9 Rectifier renders as the
+original 348fc68 capture: Red v1/v2/Orange × Boost off/OD-808/SD-1, defaults,
+48 kHz, mono, 256-sample blocks; `legacyRegression`) and
+`lead-rev2-tonestack.f32` (40,960 floats, the 5 `LeadFixture.h` configurations;
+`ResonanceTest` section 7). Tolerance 2e-6; local builds null exactly. The
+capture code was removed again; do not regenerate these from later feature code
+to bless a failure.
+
+The pre-tone-stack renders stay in the repo as level references:
+`legacy-348fc68.f32` (unmodified 348fc68) and `lead-62a1239.f32` (unmodified
+62a1239). `ToneStackTest` compares the Rev2 default-knob RMS against them
+(must be within 2 dB; currently −1.7…+1.7 dB).
+
+`ToneStackTest.cpp` validates the passive TMB (`Source/dsp/ToneStack.h`):
+- closed-form H(s) vs an independent nodal (MNA) solve, pot ends included
+- digital vs analog H(jw): exact at the bilinear-warped frequency, and within
+  1 / 0.25 / 0.06 dB to 8 kHz at 44.1-48 / 96 / 192 kHz, for all three part sets
+  over a 5×5×5 knob grid; sines through `process()` match
+- interaction (Mid changes the Bass knob's range, Bass moves 1 kHz, Treble moves
+  500 Hz), all-max not flat and passive, usable knob ranges
+- Jury stability at every knob extreme and rate, impulse tails decay to exact 0,
+  rapid random automation incl. part-set switches: no NaN/Inf/denormals
+- click-free knob jumps and Red/Orange switches (2nd-difference detector)
+- default-knob voicing vs the Rev1 biquads, whole-plugin default level vs the
+  old renders, whole plugin finite at tone extremes at 44.1/48/96/192 kHz
 
 `PresenceTest.cpp` independently solves the declared loaded feedback-divider
 equations, measures digital sine magnitude/phase at 54 points, checks the
@@ -23,12 +41,8 @@ real amp measurements. See `docs/5150-presence.md`.
 `ResonanceTest.cpp` checks the 5150 Resonance stage (VR8 1M || C12 .0068u in
 series with R56) against independent nodal equations at 90 points, including
 Presence interaction, bit-exact reference at 0, sweeps, silence/DC, state
-migration and model-crossfade isolation. `lead-62a1239.f32` (40,960 floats,
-5 configurations from `LeadFixture.h`) was captured once from unmodified
-commit `62a1239`: three 5150 configurations (must null at default Resonance)
-and two Rectifier configurations at Bass 5 with other tone knobs, Boost and EQ
-non-default (must null after the FMV Bass-centre move to 100 Hz). Do not
-regenerate it from feature code to bless a failure.
+migration and model-crossfade isolation. Its whole-processor null (section 7) now uses
+`lead-rev2-tonestack.f32` (see above).
 
 `LevelTaperTest.cpp` covers the amp-style Input/Master/Boost Level/Cab Level scales (`Source/LevelTaper.h`):
 anchors (Input 5 = 0 dB, Master 6.5 = −6 dB, 7.5 = 0 dB, 10 = +12 dB, 0 = exact
@@ -41,7 +55,8 @@ detent), round trips, legacy dB grids, migration from both v1 and v2 states,
 no re-conversion on re-save, and bit-identical rendering of a v1 default
 session with Boost on.
 
-`EditorTest.cpp` paints the Rev1 editor offscreen, with no native window. It checks:
+`EditorTest.cpp` paints the editor offscreen, with no native window. It checks:
+- the revision plate reads Rev2 / Rev2 · 5150 and the plugin name is `juicyboi Rev2`
 - every parameter has a bound control with the same component ID, plus the IR A/B slots
 - every head knob has a creme caption below it on both faceplates, with none above, and every head knob has a tooltip (Input/Master keep their dB equivalents)
 - the Model toggle sets `preamp_model` and swaps the faceplates; Rectifier-only controls are hidden on 5150 and their values are kept

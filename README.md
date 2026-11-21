@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (Rev1)
+# juicyboi — heavy-riff preamp (Rev2)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -7,7 +7,10 @@ interface) built with JUCE 9.
 principles: an op-amp feedback-diode overdrive (green-overdrive family) feeding a
 two-channel, cascaded-triode high-gain preamp (Rev E-era American dual-channel
 style), with a selectable 5150-inspired Lead voice. No commercial plugin code
-is used; behavioral coefficients are original tuning, not an exact circuit solve.
+is used; the gain stages use original behavioral tuning, not an exact circuit
+solve. Since Rev2 the passive Treble/Bass/Mid tone stacks are solved as real
+networks from the part values printed on the referenced schematics (see
+*DSP stage notes → ToneStack* and [docs/tonestack.md](docs/tonestack.md)).
 Descriptive product names belong to their respective owners; no affiliation is implied.
 
 ## Build
@@ -27,9 +30,9 @@ Artifacts (Linux):
 
 | Format     | Path |
 |------------|------|
-| VST3       | `build/juicyboi_artefacts/Release/VST3/juicyboi.vst3` |
-| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi` |
-| LV2        | `build/juicyboi_artefacts/Release/LV2/juicyboi.lv2` |
+| VST3       | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev2.vst3` |
+| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2` |
+| LV2        | `build/juicyboi_artefacts/Release/LV2/juicyboi Rev2.lv2` |
 
 The build also makes AU on macOS, and AAX on macOS/Windows (JUCE 9 ships a
 bundled AAX SDK; you can point at a separate Avid tree with
@@ -37,9 +40,23 @@ bundled AAX SDK; you can point at a separate Avid tree with
 
 | Format (macOS) | Path |
 |----------------|------|
-| AU | `build/juicyboi_artefacts/Release/AU/juicyboi.component` |
-| VST3 | `build/juicyboi_artefacts/Release/VST3/juicyboi.vst3` |
-| AAX | `build/juicyboi_artefacts/Release/AAX/juicyboi.aaxplugin` |
+| AU | `build/juicyboi_artefacts/Release/AU/juicyboi Rev2.component` |
+| VST3 | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev2.vst3` |
+| AAX | `build/juicyboi_artefacts/Release/AAX/juicyboi Rev2.aaxplugin` |
+| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.app` |
+
+### Rev1 and Rev2 side by side
+
+Rev2 is a separate plugin so both can sit in one session for A/B: product name
+`juicyboi Rev2`, plugin code `Jcb2` (Rev1: `Jcb1`; this also sets the AU subtype,
+VST3 class ID and AAX product ID), bundle ID / AAX identifier
+`com.juicyboi.juicyboi-rev2`, LV2 URI `urn:juicyboi:juicyboi-rev2`, same
+manufacturer code `Jcyb`. Rev1 is the git tag `rev1` (commit `2b6ad4c`); build it
+from a separate worktree (`git worktree add ../juicyboi-rev1 rev1`) and install both
+bundles side by side (AAX: `/Library/Application Support/Avid/Audio/Plug-Ins/`,
+AU: `~/Library/Audio/Plug-Ins/Components/`). Hosts treat Rev2 as a different
+plugin, so existing sessions keep their Rev1 instances (Rev1 must stay installed for
+them). Rev2 keeps the same parameter IDs, ranges and state format (version 3).
 
 Install AAX to `/Library/Application Support/Avid/Audio/Plug-Ins/` (needs sudo).
 Retail Pro Tools usually expects PACE-signed AAX; unsigned builds may not load
@@ -53,8 +70,8 @@ To install the VST3 on Linux, copy the bundle to `~/.vst3/`.
 Input trim
   └─► [ 4x oversampled ]
         Boost (OD-808 | SD-1) ── type + on/off crossfades (~15–20 ms)
-          ├─► Rectifier Red v1/v2 / Orange ─► Rectifier TMB + presence ─► Graphic EQ
-          └─► 5150-inspired Lead (6 stages) ─► Lead TMB ─► Graphic EQ ─► Lead Presence ─► Lead Resonance
+          ├─► Rectifier Red v1/v2 / Orange ─► passive TMB (RF-1F parts, Red/Orange set) + presence ─► Graphic EQ
+          └─► 5150-inspired Lead (6 stages) ─► passive TMB (5150 sheet-3 parts) ─► Graphic EQ ─► Lead Presence ─► Lead Resonance
   └─► Preamp Model crossfade (30 ms; after respective EQ / Presence paths)
   └─► Cab IR sim (optional; IR A / IR B blend)   (base rate)
   └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
@@ -140,7 +157,7 @@ The aspect ratio is fixed, so everything stays crisp at any size.
 
 **Head.** Black tolex with chrome corner caps and a blonde basketweave grille.
 The **juicyboi** badge appears on the grille and nowhere else. The black control
-panel has a small *Rev1* plate. Each knob has a small creme caption **below** it,
+panel has a small *Rev2* plate (the plate shows the build revision; the GUI design is the Rev1 amp head). Each knob has a small creme caption **below** it,
 and nothing above the knobs. Hover any knob for a tooltip with its name and value. Input, Master, Boost Level and Cab Level
 tooltips also show the equivalent dB. A value bubble shows while you drag.
 Double-click a knob to reset it to its default. The toggles carry small position
@@ -148,8 +165,8 @@ marks.
 
 | Faceplate | Toggles (left → right) | Knobs (left → right) |
 |-----------|------------------------|----------------------|
-| **Rectifier** (blonde grille, *Rev1* plate) | Standby (ON / STBY = `bypass`), Model (RECT / 5150), Channel (RED / ORNG), Voice (V1 / V2, dimmed on Orange) | Input, Gain, Bass, Mid, Treble, Presence, Master |
-| **5150** (all-black, dark grille, *Rev1 · 5150* plate) | Standby, Model, Rhythm/Lead marking (Lead lit) | Input, Gain, Low, Mid, High, 5150 Presence, 5150 Resonance, Master |
+| **Rectifier** (blonde grille, *Rev2* plate) | Standby (ON / STBY = `bypass`), Model (RECT / 5150), Channel (RED / ORNG), Voice (V1 / V2, dimmed on Orange) | Input, Gain, Bass, Mid, Treble, Presence, Master |
+| **5150** (all-black, dark grille, *Rev2 · 5150* plate) | Standby, Model, Rhythm/Lead marking (Lead lit) | Input, Gain, Low, Mid, High, 5150 Presence, 5150 Resonance, Master |
 
 The **Model** toggle is the `preamp_model` parameter, so this is still one
 plugin. Flipping it fades between the faceplates in about 200 ms, and the knobs
@@ -178,8 +195,8 @@ state or the audio, and the editor tests check this.
 ## Preamp Model
 
 **Rectifier** (default) preserves Red v1/v2 and Orange, including all old
-parameter IDs, indices, defaults and DSP coefficients (one deliberate exception:
-the Bass shelf centre is now 100 Hz; Bass 5 output is bit-identical). **5150-inspired** is
+parameter IDs, indices, defaults and cascade coefficients. Rev2 deliberately
+replaces the tone-stack stand-in with the solved passive TMB (see *ToneStack*). **5150-inspired** is
 Lead-only: six gain stages mapped to V1A → V1B → V2A → V2B → V5B → V5A,
 with a strongly asymmetric cold-stage approximation informed by V2A's 39 kΩ
 cathode resistor. Distributed attenuation, bass cuts and high-frequency
@@ -192,8 +209,8 @@ layout, and states missing it explicitly restore Rectifier.
 Scope: schematic-informed filter/shaper DSP at the existing **4×** rate, DC
 rejection, sample-rate-aware filters and gain/tone smoothing. Filter frequencies
 and normalized gains are behavioral tuning, not naive unloaded RC calculations.
-The tone stack is a model-specific biquad approximation, not an interacting
-passive network solve. Both complete model paths stay warm through independent
+The tone stacks (Rev2) are solved passive TMB networks with each model's own
+schematic part values; everything else in this paragraph remains behavioral. Both complete model paths stay warm through independent
 Graphic EQ histories and Lead-only Presence, with matching FIR latency and even
 stage-inversion counts, then crossfade over 30 ms. Frequency-
 dependent phase differences can still cause a brief timbral dip during a switch.
@@ -209,7 +226,8 @@ feedback. The separate linear Presence/Resonance surrogates below do not add
 those nonlinear power-amp behaviors.
 No schematic, IR or commercial model is bundled.
 
-Headless coverage includes a captured 348fc68 Rectifier null fixture, old/new
+Headless coverage includes Rev2 tone-stack Rectifier/5150 null fixtures, a
+default-level comparison against the pre-tone-stack 348fc68 / 62a1239 renders, old/new
 state recall, rate/block/channel/Boost matrix, silence/DC, warmed switching,
 gate/Standalone input regressions and offscreen GUI state/paint checks. See
 [Tests/README.md](Tests/README.md). Real Scarlett hardware, macOS/AU/AAX hosting
@@ -389,14 +407,20 @@ Source/
     Sd1Stage.h/.cpp        SD-1–style boost (asym 3-diode, Boutique OD RC cues)
     ChannelVoice.h         Red v1 / Red v2 / Orange voicing structs (stage corners, gains, bias)
     PreampCascade.h/.cpp   4× [coupling HP → gain → asym sat (inverting) → plate LP]
-    ToneStack.h/.cpp       placeholder biquad TMB + presence shelf
+    ToneStack.h/.cpp       passive TMB: closed-form H(s), bilinear, nodal state-space realisation
+                           (smoothed knobs/parts), + Rectifier presence shelf
     GraphicEq.h/.cpp       7-band graphic EQ (6 peaks + 6.4k shelf) + Level, true bypass
     OversampledNonlinear.h juce::dsp::Oversampling wrapper (4x, FIR, integer latency)
     CabSim.h/.cpp          dual-mic IR convolution (4 slots, blend, hard bypass)
     NoiseGate.h/.cpp       key/sidechain gate (dry-input detector, VCA after cab)
 Tests/
   SmokeTest.cpp            headless run through every channel/boost-type/gain combo
-  EditorTest.cpp           offscreen Rev1 editor checks (bindings, faceplates, drawer)
+  EditorTest.cpp           offscreen editor checks (bindings, faceplates, drawer, Rev2 plate)
+  ToneStackTest.cpp        TMB vs nodal solve / analog H(jw), interaction, stability, clicks, levels
+  ToneStackDump.cpp        juicyboi_tonestack_dump: CSV response for the plot script
+tools/tonestack/
+  tmb-red.cir / tmb-orange.cir / tmb-lead.cir   SPICE netlists (LTspice / ngspice), same parts
+  plot_tonestack.py        digital vs analog (and ngspice) plots -> ../juicyboi-shots/tonestack-*.png
   Screenshots.cpp          juicyboi_screenshots <dir> [scale]: offscreen editor PNGs
 ```
 
@@ -419,13 +443,50 @@ Tests/
 - **ChannelVoice**: Riff A has fatter low-mids, less gain, and a warmer top.
   Riff B has a tighter interstage low cut, more gain, a brighter top, and the mid
   control centred higher. These are original voicing numbers.
-- **ToneStack**: placeholder. It uses three non-interacting biquads plus a
-  presence shelf, with per-channel centre frequencies.
+- **ToneStack (Rev2)**: a real passive Treble/Bass/Mid network per model and
+  channel (slope resistor into bass/mid caps, treble cap into the treble pot,
+  bass rheostat into the mid pot, mid cap to the mid wiper). Its 3rd-order
+  closed form (Yeh/Smith TMB form) is cross-checked against an independent nodal
+  solve and ngspice. Runtime: nodal state-space model whose states are the
+  capacitor companion sources (trapezoidal = bilinear, prewarped at 3 kHz), so
+  steady state equals the bilinear transfer function exactly while knob moves act
+  on charged caps like the real circuit. Knobs, parts (Red↔Orange) and makeup
+  are smoothed over ~20 ms, the model is re-solved every 8 samples while moving
+  and ramped per sample in between: no zipper noise or clicks. Runs at the base
+  rate after the 4× section at any sample rate (prewarp clamps to fs/4).
+  The network keeps its real insertion loss; a fixed makeup gain per part set
+  sits after it. Part values and sources:
+
+  | Part | Rectifier Red | Rectifier Orange | 5150 Lead |
+  |------|---------------|------------------|-----------|
+  | Source | Mesa/Boogie Dual Rectifier preamp sheet **RF-1F** (6-93) | same sheet, Orange stack | Peavey **EVH 5150** schematic, **sheet 3** (Tone Stack/PI), [link](https://www.prowessamplifiers.com/schematics/post/peavey_evh5150.pdf) |
+  | Treble pot | TRBL 250K | TRBL 250K | VR5 HIGH 250K (B, linear) |
+  | Treble cap | C4 680 pF | C5 500 pF | C14 470 pF ∥ C60 100 pF = 570 pF |
+  | Slope resistor | R273 47K | R274 47K | R28 47K |
+  | Bass cap | C23 .02 µF | C25 .02 µF | C18 .022 µF |
+  | Mid cap | C24 .02 µF | C26 .02 µF | C21 .022 µF |
+  | Bass pot | BASS 1M | BASS 1M | VR3 LOW 1M (A, audio) |
+  | Mid pot | MID 25K | MID 25K | VR4 MID 50K (B, linear) |
+  | Makeup after the stack | +5.0 dB | +6.0 dB | +2.8 dB |
+
+  **Assumptions / not sourced:** the RF-1F sheet does not print pot tapers, so
+  the Rectifier uses the 5150 sheet's laws (Bass audio, Treble and Mid linear);
+  the audio law is modelled as 15 % resistance at mid-rotation for every Bass pot.
+  RF-1F prints the bass/mid caps as ".02" (20 nF), used as printed (earlier
+  juicyboi notes said 22n). A 0.1 % pot end resistance is modelled. Not modelled:
+  source impedance of the driving stage, the load on the treble wiper (1M master
+  on RF-1F), the RF-1F LDR8/LDR9 + R215 1M channel switching, and on the 5150 the
+  R65 47K branch at the Low/Mid junction and the R24 33K / C59–R94 network at the
+  drive node. The makeup values only restore the Rev1 level at default knobs;
+  they never alter the network. Presence stays a separate stage (Rectifier
+  preamp shelf; 5150 Output Presence/Resonance), as before.
 
 ## Next tuning steps
 
-1. Replace the placeholder tone stack with an analytic passive TMB transfer
-   function from your own component values (bilinear transform, interacting knobs).
+1. ~~Replace the placeholder tone stack with an analytic passive TMB transfer
+   function (bilinear transform, interacting knobs).~~ **Done in Rev2**: solved
+   passive TMB with the schematic part values (see *DSP stage notes*). Possible
+   follow-up: add the driving-stage source impedance and the wiper load.
 2. Add dynamic tube effects: grid-conduction bias shift / blocking, cathode
    bypass dynamics, and supply sag. These are what give a high-gain amp its feel.
 3. Tune stage gains, corners, and bias against measurements (frequency sweeps and
@@ -434,9 +495,29 @@ Tests/
    of the feedback clipper).
 5. Add a power-amp stage with presence moved into its NFB loop. (Cab IR and the
    key/sidechain noise gate are now in.)
-6. Smooth OD level and tone-coefficient changes per sample. Add an oversampling
+6. Smooth OD level changes per sample (tone stacks are smoothed since Rev2). Add an oversampling
    quality setting and presets.
 7. Rev1 GUI polish after hands-on testing (see *Rev1 GUI*).
+
+## Rev2 changelog
+
+- **Real passive tone stacks.** The three non-interacting biquads (and the 5150's
+  fixed mid contour) are replaced by solved passive Treble/Bass/Mid networks with
+  the part values printed on the Dual Rectifier RF-1F sheet (Red and Orange) and
+  the EVH 5150 sheet 3 (Lead). Bass, Mid and Treble now interact like an amp: e.g.
+  on Red the Bass knob's 80 Hz range is 12.0 dB at Mid 0 but 8.0 dB at Mid 10, and
+  everything on 10 is not flat. Insertion loss is real; a fixed makeup per part set
+  keeps the default-knob level within ±1.7 dB of Rev1 (Red −1.4…+1.3 dB, Orange
+  −1.7…+1.7 dB across Boost off/OD-808/SD-1, 5150 Lead 0.0 dB). This intentionally
+  changes the sound, so the reference renders were re-captured once
+  (`rect-rev2-tonestack.f32`, `lead-rev2-tonestack.f32`); the old renders stay for
+  the level comparison.
+- **Installs next to Rev1.** New product name `juicyboi Rev2`, plugin code `Jcb2`,
+  bundle ID / AAX identifier `com.juicyboi.juicyboi-rev2`, LV2 URI
+  `urn:juicyboi:juicyboi-rev2`; version 2.1.0. Rev1 is tagged `rev1`.
+- Panel plate reads *Rev2* / *Rev2 · 5150*. Parameter IDs, ranges, the 0–10 knob
+  laws and state version 3 are unchanged; old sessions load with every setting.
+- New `ToneStackTest`, SPICE netlists and a plot script under `tools/tonestack/`.
 
 ## Rev1 changelog
 

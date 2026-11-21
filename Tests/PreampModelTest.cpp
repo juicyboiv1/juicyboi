@@ -1,4 +1,6 @@
-// Regression fixture captured with the unmodified 348fc68 processor, Release.
+// Rectifier regression fixture rect-rev2-tonestack.f32: captured ONCE from the Rev2
+// passive-TMB build (same render as the original 348fc68 capture). The pre-tone-stack
+// legacy-348fc68.f32 is kept: ToneStackTest compares its level at default knobs.
 #include "PluginProcessor.h"
 #include <cstdio>
 #include <vector>
@@ -12,7 +14,7 @@ static void parameter (JuicyboiAudioProcessor& p, const char* id, float v)
 
 int legacyRegression()
 {
-    juce::File file (juce::String (JUICYBOI_TEST_DIR) + "/legacy-348fc68.f32");
+    juce::File file (juce::String (JUICYBOI_TEST_DIR) + "/rect-rev2-tonestack.f32");
     std::vector<float> result;
     for (int voice = 0; voice < 3; ++voice)
         for (int boost = 0; boost < 3; ++boost)
@@ -48,7 +50,7 @@ int legacyRegression()
         finite = finite && std::isfinite (f) && std::isfinite (reference);
         error = std::max (error, std::abs (f - reference));
     }
-    std::printf ("Rectifier 348fc68 null: %zu samples, max error %.9g %s\n",
+    std::printf ("Rectifier Rev2 tone-stack fixture null: %zu samples, max error %.9g %s\n",
                  result.size(), (double) error, finite && error < 2.0e-6f ? "ok" : "FAIL");
     return finite && error < 2.0e-6f ? 0 : 1;
 }

@@ -2,6 +2,7 @@
 
 #include "Filters.h"
 #include "SoftClip.h"
+#include "ToneStack.h"
 
 namespace jb::dsp
 {
@@ -65,48 +66,42 @@ private:
     float target = 0.14f, pot = 0.14f, smoothing = 0.001f;
 };
 
-/** Model-specific plate-fed TMB approximation. The fixed broad mid contour and
-    three controls are behavioral biquads, NOT an exact interacting passive stack.
-    No PI, power amp, NFB presence/resonance, loop or recovery-stage simulation. */
+/** Lead passive TMB, read off the Peavey EVH 5150 schematic, sheet 3 (Tone
+    Stack/PI), https://www.prowessamplifiers.com/schematics/post/peavey_evh5150.pdf:
+      VR5 HIGH 250K (B = linear), C14 470pF || C60 100pF (= 570 pF treble cap),
+      R28 47K (slope), C18 .022uF (bass), C21 .022uF (mid), VR3 LOW 1M
+      (A = audio, wired as rheostat), VR4 MID 50K (B = linear).
+    Not modelled: the R65 47K branch from the Low/Mid junction, the R24 33K /
+    C59-R94 loading at the V5A drive node and the load on the treble wiper
+    (ideal source, unloaded output). makeupDb only restores the Rev1 Lead level
+    at default knobs. */
+inline TmbComponents leadTmb()
+{
+    return { 250e3, 1e6, 50e3, 47e3, 570e-12, 22e-9, 22e-9, 2.80 };
+}
+
+/** Model-specific passive TMB after the Lead cascade (solved network, see
+    ToneStack.h). Ideal source/unloaded output: the plate's source impedance and
+    the following stage's load are not modelled. No PI, power amp, NFB
+    presence/resonance (those are LeadPresence / LeadResonance). */
 class Lead5150Tone
 {
 public:
+    Lead5150Tone() { stack.setComponents (leadTmb()); }
+
     void setKnobs (float bass, float mid, float treble) noexcept
     {
-        targets = { std::clamp (bass, 0.0f, 10.0f), std::clamp (mid, 0.0f, 10.0f),
-                    std::clamp (treble, 0.0f, 10.0f) };
+        stack.setKnobs (std::clamp (bass, 0.0f, 10.0f), std::clamp (mid, 0.0f, 10.0f),
+                        std::clamp (treble, 0.0f, 10.0f));
     }
-    void prepare (double sampleRate) noexcept
-    {
-        fs = sampleRate;
-        smooth = (float) (1.0 - std::exp (-1.0 / (0.025 * fs)));
-        knobs = targets; last = { -100.0f, -100.0f, -100.0f }; counter = 0;
-        contour.setCoeffs (BiquadCoeffs::peak (fs, 620.0, 0.65, -3.0));
-        contour.reset(); bassF.reset(); midF.reset(); trebleF.reset(); update();
-    }
-    void beginFrame() noexcept
-    {
-        for (size_t i = 0; i < knobs.size(); ++i) knobs[i] += smooth * (targets[i] - knobs[i]);
-        if (++counter == 16) { counter = 0; update(); }
-    }
-    float process (float x, int ch) noexcept
-    {
-        return trebleF.process (midF.process (bassF.process (contour.process (x, ch), ch), ch), ch);
-    }
+    void prepare (double sampleRate) noexcept { stack.prepare (sampleRate); }
+    void snap() noexcept { stack.snap(); }
+    void beginFrame() noexcept { stack.beginFrame(); }
+    float process (float x, int ch) noexcept { return stack.process (x, ch); }
+
+    const PassiveToneStack& passive() const noexcept { return stack; }
+
 private:
-    void update() noexcept
-    {
-        if (std::abs (knobs[0] - last[0]) + std::abs (knobs[1] - last[1])
-            + std::abs (knobs[2] - last[2]) < 0.0001f) return;
-        last = knobs;
-        bassF.setCoeffs (BiquadCoeffs::lowShelf (fs, 130.0, 0.707, (knobs[0] - 5.0) * 1.8));
-        midF.setCoeffs (BiquadCoeffs::peak (fs, 760.0, 0.72, (knobs[1] - 5.0) * 2.0));
-        trebleF.setCoeffs (BiquadCoeffs::highShelf (fs, 2300.0, 0.707, (knobs[2] - 5.0) * 1.8));
-    }
-    double fs = 48000.0;
-    float smooth = 0.001f;
-    int counter = 0;
-    std::array<float, 3> targets { 5.0f, 4.0f, 5.5f }, knobs {}, last {};
-    Biquad contour, bassF, midF, trebleF;
+    PassiveToneStack stack;
 };
 } // namespace jb::dsp

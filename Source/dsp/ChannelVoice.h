@@ -1,15 +1,18 @@
 #pragma once
 
 // Dual-channel high-gain preamp voicings derived from Dual Rectifier Rev E–era
-// preamp circuit *principles* (shared cascaded 12AX7 path + per-channel FMV
+// preamp circuit *principles* (shared cascaded 12AX7 path + per-channel passive
 // tone stacks). Original coefficients — not a product clone.
 //
 // Channel 1 = Red path. Channel 2 = Orange path.
 // Schematic cues used (RF-1F / Rev E family style):
 //   - Shared cascade: V1A → A250k gain → V2A → V2B → V3A → V3B cathode follower
-//   - Separate Red / Orange FMV stacks after the CF (LDR-switched)
-//   - Red TMB:   Ct=680p, Cmid=Cbass=22n, Rslope=47k; pots T=250k B=1M M=25k
-//   - Orange TMB: Ct=500p, same otherwise
+//   - Separate Red / Orange passive TMB stacks after the CF (LDR-switched)
+//   - TMB parts (Rev2 solves the real network; values read off the RF-1F
+//     preamp sheet, see redTmb / orangeTmb below and docs/tonestack.md):
+//       Red:    Treble 250K, C4 680pF, R273 47K, C23 .02uF bass, C24 .02uF mid,
+//               Bass 1M, Mid 25K
+//       Orange: Treble 250K, C5 500pF, R274 47K, C25 .02uF, C26 .02uF, 1M, 25K
 //   - Presence (Red path): 25k + ~22k + 3n ≈ 2.4 kHz NFB-shelf corner
 //   - Gain pot: audio taper, 250k (always)
 
@@ -19,6 +22,20 @@
 
 namespace jb::dsp
 {
+/** Passive Treble/Bass/Mid stack parts (ohms / farads) + fixed makeup gain.
+    Solved by jb::dsp::tmb (ToneStack.h). Defaults = Red set (RF-1F sheet). */
+struct TmbComponents
+{
+    double rt = 250e3;    // treble pot
+    double rb = 1e6;      // bass pot (rheostat)
+    double rm = 25e3;     // mid pot
+    double rs = 47e3;     // slope resistor
+    double ct = 680e-12;  // treble cap
+    double cb = 20e-9;    // bass cap
+    double cm = 20e-9;    // mid cap
+    double makeupDb = 5.0; // after the stack: brings default-knob level back to Rev1
+};
+
 struct TriodeStageVoicing
 {
     double couplingHpHz;  // coupling / cathode-bypass style low cut
@@ -44,49 +61,39 @@ struct ChannelVoicing
     double postLpHz = 7000.0;
     float  makeup = 0.6f;
 
-    // Passive FMV component cues (ohms / farads) — used by ToneStack
-    double fmvCt = 680e-12;   // treble cap
-    double fmvCm = 22e-9;     // mid cap
-    double fmvCb = 22e-9;     // bass cap
-    double fmvRs = 47e3;      // slope resistor
-    double fmvRt = 250e3;     // treble pot
-    double fmvRb = 1e6;       // bass pot
-    double fmvRm = 25e3;      // mid pot
+    // Passive TMB parts (sourced schematic values) + level makeup
+    TmbComponents tmb {};
 
     // Presence shelf corner (NFB-loop principle)
     double presenceHz = 2400.0;
-
-    // Cached EQ centres filled by makeRed / makeOrange
-    double bassHz = 100.0, midHz = 650.0, midQ = 0.75, trebleHz = 2800.0;
 };
 
 namespace voicings
 {
-/** Bass shelf centre shared by Red v1/v2 and Orange (see fillFmvCentres). */
-inline constexpr double fmvBassShelfHz = 100.0;
-
-inline void fillFmvCentres (ChannelVoicing& v)
+/** Rectifier passive TMB component sets, read off the Mesa/Boogie Dual
+    Rectifier preamp sheet "RF-1F" (6-93), Red and Orange stacks:
+      Red:    TRBL 250K, C4 680pF (treble), R273 47K (slope), C23 .02uF (bass),
+              C24 .02uF (mid), BASS 1M, MID 25K
+      Orange: TRBL 250K, C5 500pF, R274 47K, C25 .02uF, C26 .02uF, BASS 1M, MID 25K
+    The sheet prints the bass/mid caps as ".02" (20 nF); earlier juicyboi notes
+    said 22n. Pot tapers are NOT printed on that sheet: Bass = audio and
+    Treble/Mid = linear are assumptions (matching the tapers printed on the
+    5150 sheet). The LDR8/LDR9 channel switching, R215 1M bridge and the 1M
+    master load on the wiper are not modelled (ideal source, unloaded output).
+    makeupDb only restores the Rev1 level at default knobs (Bass 5, Mid 4,
+    Treble 5.5); it does not change the network. */
+inline TmbComponents redTmb()
 {
-    // Rough RC centres from the FMV network (starting points for the
-    // placeholder biquad stack; replace later with a full bilinear FMV TF).
-    const auto midCorner = 1.0 / (2.0 * 3.141592653589793 * v.fmvRm * v.fmvCm);
-    const auto trebleCorner = 1.0 / (2.0 * 3.141592653589793 * v.fmvRs * v.fmvCt);
+    return { 250e3, 1e6, 25e3, 47e3, 680e-12, 20e-9, 20e-9, 5.00 };
+}
 
-    // Bass shelf centre. The old 1/(2*pi*Rb*Cb) = 1/(2*pi*1M*22n) = 7.2 Hz was
-    // clamped to 40 Hz, which left Bass almost inert at 80-150 Hz (+0.7 dB at
-    // 100 Hz with Bass 10). The analytic FMV transfer for these parts (Yeh/Smith
-    // TMB form, Ct/Cb/Cm, Rt/Rb/Rm/Rs above) moves 40-250 Hz when Bass turns,
-    // so the stand-in shelf is centred at 100 Hz. Behavioral, not an exact FMV.
-    // A 0 dB RBJ shelf is an exact identity at any centre, so Bass 5 is unchanged.
-    v.bassHz   = fmvBassShelfHz;
-    v.midHz    = std::clamp (midCorner,  400.0, 1200.0);
-    v.midQ     = 0.75;
-    // Treble shelf sits above the slope/Ct interaction band
-    v.trebleHz = std::clamp (trebleCorner * 2.5, 1800.0, 4500.0);
+inline TmbComponents orangeTmb()
+{
+    return { 250e3, 1e6, 25e3, 47e3, 500e-12, 20e-9, 20e-9, 6.00 };
 }
 
 /** Channel 1 — Red, voicing v1 (original juicyboi v1.x Red).
-    Brighter FMV (680p treble cap), tight cascade (input tight 95 Hz,
+    Red TMB (680pF treble cap), tight cascade (input tight 95 Hz,
     steep interstage high-passes), moderate stage gain. Kept verbatim so the
     Red v1/v2 switch is a true A/B against the pre-ef9fd35 sound. */
 inline ChannelVoicing redV1()
@@ -108,20 +115,13 @@ inline ChannelVoicing redV1()
     v.postLpHz = 7800.0;
     v.makeup = 0.58f;
 
-    v.fmvCt = 680e-12;
-    v.fmvCm = 22e-9;
-    v.fmvCb = 22e-9;
-    v.fmvRs = 47e3;
-    v.fmvRt = 250e3;
-    v.fmvRb = 1e6;
-    v.fmvRm = 25e3;
+    v.tmb = redTmb();
     v.presenceHz = 2400.0;
-    fillFmvCentres (v);
     return v;
 }
 
 /** Channel 1 — Red, voicing v2 (default): max-gain / fat-bottom Red.
-    Same FMV as v1. Builds on ef9fd35 (eased high-passes, more drive) and
+    Same TMB set as v1. Builds on ef9fd35 (eased high-passes, more drive) and
     pushes the cascade further: ~12-17% more stage drive, a hotter Gain pot
     ceiling, harder grid-conduction knees and a touch more cold-cathode bias
     on V2A/V2B for denser saturation. To stay musical rather than fuzzy, the
@@ -145,15 +145,8 @@ inline ChannelVoicing redV2()
     v.postLpHz = 7400.0;
     v.makeup = 0.49f; // ~-1.5 dB vs v1: rough level-match so the A/B is about tone, not loudness
 
-    v.fmvCt = 680e-12;
-    v.fmvCm = 22e-9;
-    v.fmvCb = 22e-9;
-    v.fmvRs = 47e3;
-    v.fmvRt = 250e3;
-    v.fmvRb = 1e6;
-    v.fmvRm = 25e3;
+    v.tmb = redTmb();
     v.presenceHz = 2400.0;
-    fillFmvCentres (v);
     return v;
 }
 
@@ -161,7 +154,7 @@ inline ChannelVoicing redV2()
 inline ChannelVoicing red() { return redV2(); }
 
 /** Channel 2 — Orange: vintage / looser Dual Rec–style path.
-    Softer FMV (500p treble cap), fatter low-mids, slightly less gain. */
+    Softer TMB (500pF treble cap), fatter low-mids, slightly less gain. */
 inline ChannelVoicing orange()
 {
     ChannelVoicing v;
@@ -179,15 +172,8 @@ inline ChannelVoicing orange()
     v.postLpHz = 6400.0;
     v.makeup = 0.68f;
 
-    v.fmvCt = 500e-12;
-    v.fmvCm = 22e-9;
-    v.fmvCb = 22e-9;
-    v.fmvRs = 47e3;
-    v.fmvRt = 250e3;
-    v.fmvRb = 1e6;
-    v.fmvRm = 25e3;
+    v.tmb = orangeTmb();
     v.presenceHz = 2200.0;
-    fillFmvCentres (v);
     return v;
 }
 

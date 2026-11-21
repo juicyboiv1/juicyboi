@@ -20,7 +20,8 @@
     Signal chain:
       Input trim -> [oversampled: Boost (OD-808 | SD-1, blend on/off) ->
       Rectifier (Red Ch1 v1|v2 / Orange Ch2) or 5150-inspired Lead] ->
-      respective tone (Rectifier-only preamp presence) -> graphic EQ ->
+      respective passive TMB tone stack (solved Bass/Mid/Treble network, per-model
+      component set; Rectifier-only preamp presence) -> graphic EQ ->
       Lead-only feedback Presence -> model crossfade -> cab IR sim (optional, hard bypass) -> gate VCA (optional, true bypass;
       keyed from the dry post-trim input) -> master -> (bypass crossfade vs delayed dry). */
 class JuicyboiAudioProcessor final : public juce::AudioProcessor
@@ -42,7 +43,7 @@ public:
     juce::AudioProcessorEditor* createEditor() override;
     bool hasEditor() const override { return true; }
 
-    const juce::String getName() const override { return "juicyboi"; }
+    const juce::String getName() const override { return JucePlugin_Name; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
     bool isMidiEffect() const override { return false; }

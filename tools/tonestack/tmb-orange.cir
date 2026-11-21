@@ -1,0 +1,20 @@
+* juicyboi Rev2 passive TMB - Rectifier Orange (RF-1F: TRBL 250K, C5 500pF, R274 47K, C25/C26 .02uF, BASS 1M, MID 25K)
+* Same network and values as Source/dsp/ToneStack.h (tmb::analog). Ideal 1 V AC source, unloaded output.
+* Pot fractions: t = treble (linear), m = mid (linear), l = bass after the audio taper
+* (knob 5 -> l = 0.150; l = (32.111^(knob/10) - 1) / 31.111). Defaults: Bass 5, Mid 4, Treble 5.5.
+* Opens in LTspice (File > Open, .cir) and runs in ngspice (plot_tonestack.py drives it): tmb-orange.cir
+.param t=0.55 m=0.4 l=0.150
+V1 in 0 AC 1
+C1 in A 500p
+Rtt A out {max(250k*(1-t),1m)}
+Rtb out B {max(250k*t,1m)}
+R4  in X 47k
+C2  X B 20n
+C3  X W 20n
+Rb  B M {max(1Meg*l,1m)}
+Rmt M W {max(25k*(1-m),1m)}
+Rmb W 0 {max(25k*m,1m)}
+.ac dec 50 10 20k
+* LTspice: uncomment to sweep the Mid knob and see it move the bass response
+* .step param m list 0 0.4 1
+.end

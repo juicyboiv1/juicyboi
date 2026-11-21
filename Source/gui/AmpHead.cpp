@@ -434,9 +434,9 @@ void AmpHead::paintStatic (Graphics& g, int m)
                 drawChromeScrew (g, { x, y }, 3.0f);
     }
 
-    // --- Rev1 plate (next to the controls)
+    // --- Revision plate (next to the controls)
     {
-        const auto text = lead ? String (CharPointer_UTF8 ("Rev1 \xc2\xb7 5150")) : String ("Rev1");
+        const auto text = revisionPlateText (lead);
         const auto w = lead ? 150.0f : 104.0f;
         const auto plate = Rectangle<float> (60.0f, (float) panelCentreY - 17.0f, w, 34.0f);
         g.setColour (Colours::black.withAlpha (0.6f));
@@ -466,5 +466,9 @@ void AmpHead::paintStatic (Graphics& g, int m)
     paintCornerCap (g, all.getRight(), 0.0f, true, false);
     paintCornerCap (g, 0.0f, all.getBottom(), false, true);
     paintCornerCap (g, all.getRight(), all.getBottom(), true, true);
+}
+String AmpHead::revisionPlateText (bool leadFaceplate)
+{
+    return leadFaceplate ? String (CharPointer_UTF8 ("Rev2 \xc2\xb7 5150")) : String ("Rev2");
 }
 } // namespace jb::gui

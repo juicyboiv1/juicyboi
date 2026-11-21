@@ -227,11 +227,11 @@ int resonanceValidation()
         check ("Lead Resonance has zero effect on Rectifier", leak < 1e-9f);
     }
 
-    // 7) Whole-processor null vs output captured from unmodified 62a1239:
-    //    5150 configs at default Resonance, and Rectifier Red/Orange at Bass 5
-    //    with other tone knobs/boost/EQ non-default (FMV Bass-centre change).
+    // 7) Whole-processor null vs lead-rev2-tonestack.f32, captured ONCE from the Rev2
+    //    passive-TMB build with the same 5 configurations as the original 62a1239
+    //    capture (lead-62a1239.f32 is kept for ToneStackTest's default-level check).
     {
-        juce::File file (juce::String (JUICYBOI_TEST_DIR) + "/lead-62a1239.f32");
+        juce::File file (juce::String (JUICYBOI_TEST_DIR) + "/lead-rev2-tonestack.f32");
         auto in = file.createInputStream();
         const auto perConfig = (size_t) (leadfixture::blocks * leadfixture::blockSize);
         bool ok = in != nullptr && in->getTotalLength() == (juce::int64) (perConfig * leadfixture::numConfigs * sizeof (float));
@@ -244,43 +244,13 @@ int resonanceValidation()
                 fin = fin && std::isfinite (f) && std::isfinite (r);
                 error = std::max (error, std::abs (f - r));
             }
-            std::printf ("62a1239 null config %d (%s): max error %.9g\n", c, c < 3 ? "5150" : "Rectifier Bass 5", (double) error);
+            std::printf ("Rev2 fixture null config %d (%s): max error %.9g\n", c, c < 3 ? "5150" : "Rectifier", (double) error);
             ok = ok && fin && error < 2.0e-6f;
         }
-        check ("5150 default Resonance + Rect Bass 5 null vs 62a1239", ok);
+        check ("5150 + Rectifier configurations null vs the Rev2 tone-stack fixture", ok);
     }
 
-    // 8) Rectifier FMV Bass shelf now acts around 100 Hz; Bass 5 is identity.
-    {
-        jb::dsp::ToneStack tone; tone.prepare (48000.0); tone.setVoicing (jb::dsp::voicings::red());
-        auto gainAt = [&] (float bass, double hz)
-        {
-            tone.setKnobs (bass, 5.0f, 5.0f, 0.0f); tone.reset();
-            jb::dsp::ToneStack flat; flat.prepare (48000.0); flat.setVoicing (jb::dsp::voicings::red());
-            flat.setKnobs (5.0f, 5.0f, 5.0f, 0.0f);
-            double a = 0.0, b = 0.0;
-            for (int i = 0; i < 96000; ++i)
-            {
-                const auto x = (float) std::sin (2.0 * jb::dsp::kPi * hz * i / 48000.0);
-                const auto y = tone.process (x, 0), z = flat.process (x, 0);
-                if (i >= 48000) { a += (double) y * y; b += (double) z * z; }
-            }
-            return 10.0 * std::log10 (a / b);
-        };
-        const auto b10 = gainAt (10.0f, 100.0), b0 = gainAt (0.0f, 100.0), b10k = gainAt (10.0f, 1000.0);
-        std::printf ("Rect Bass shelf: Bass10 @100Hz %+.2f dB, Bass0 @100Hz %+.2f dB, Bass10 @1k %+.2f dB\n", b10, b0, b10k);
-        bool exact = true;
-        tone.setKnobs (5.0f, 3.0f, 8.0f, 6.0f); tone.reset();
-        jb::dsp::ToneStack legacy; legacy.prepare (48000.0);
-        auto v = jb::dsp::voicings::red(); v.bassHz = 40.0; legacy.setVoicing (v); legacy.setKnobs (5.0f, 3.0f, 8.0f, 6.0f);
-        juce::Random rng (7);
-        for (int i = 0; i < 48000; ++i)
-        {
-            const auto x = rng.nextFloat() * 2.0f - 1.0f;
-            const auto y = tone.process (x, 0), z = legacy.process (x, 0);
-            exact = exact && std::memcmp (&y, &z, sizeof (float)) == 0;
-        }
-        check ("Rect Bass centre ~100 Hz: Bass 10 ~+6 dB @100, Bass 5 exact", b10 > 5.5 && b0 < -5.5 && std::abs (b10k) < 0.5 && exact);
-    }
+    // 8) (Rev2) The old Rectifier Bass-shelf-centre check is superseded by the solved
+    //    passive TMB: knob behaviour is validated in ToneStackTest.cpp.
     return failures;
 }

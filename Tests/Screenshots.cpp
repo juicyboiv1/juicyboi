@@ -42,19 +42,19 @@ int main (int argc, char** argv)
 
     ed.setDrawerOpen (false);
     ed.getHead().syncModelNow();
-    shoot (ed, "rev1-rectifier");
+    shoot (ed, "rev2-rectifier");
 
     set (p, "preamp_model", 1.0f);
     set (p, "lead_presence", 5.0f);
     set (p, "lead_resonance", 4.0f);
     ed.getHead().syncModelNow();
-    shoot (ed, "rev1-5150");
+    shoot (ed, "rev2-5150");
 
     ed.setDrawerOpen (true);
-    shoot (ed, "rev1-5150-drawer-open");
+    shoot (ed, "rev2-5150-drawer-open");
 
     set (p, "preamp_model", 0.0f);
     ed.getHead().syncModelNow();
-    shoot (ed, "rev1-rectifier-drawer-open");
+    shoot (ed, "rev2-rectifier-drawer-open");
     return 0;
 }

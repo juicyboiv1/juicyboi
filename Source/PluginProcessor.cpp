@@ -111,6 +111,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
 
     lastChannel = -1;
     updateParameters();
+    tone.snap();     // passive TMBs: start on the session's knobs/channel, no fade-in
+    leadTone.snap();
     leadGraphicEq.prepare (sampleRate, maxChunk);
     graphicEq.prepare (sampleRate, maxChunk); // after params: snaps EQ to current settings (no fade-in on load)
 }
@@ -157,7 +159,7 @@ void JuicyboiAudioProcessor::updateParameters()
     channelMix.setTargetValue ((float) ch);
     redVoiceMix.setTargetValue (pRedVoice->load() > 0.5f ? 1.0f : 0.0f); // 1 = v2
 
-    // TODO: smooth OD level / tone-stack coefficient changes (currently per block)
+    // TODO: smooth OD level changes (currently per block). Tone stacks smooth internally.
     const auto odDrive01 = pOdDrive->load() / 10.0f;
     const auto odTone01  = pOdTone->load() / 10.0f;
     const auto odLvl     = taper::boostLevelKnobToGain (pOdLevel->load());
@@ -324,6 +326,7 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
     // model-specific Presence: filtering the mixed signal would color Rectifier.
     for (int i = 0; i < len; ++i)
     {
+        tone.beginFrame();
         leadTone.beginFrame();
         for (int ch = 0; ch < numProc; ++ch)
         {

@@ -5,6 +5,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "gui/AmpHead.h"
 #include <cstdio>
 
 namespace
@@ -49,8 +50,12 @@ int editorValidation()
     setParam (p, "red_voice", 0.0f);
     std::unique_ptr<juce::AudioProcessorEditor> base (p.createEditor());
     auto* ed = dynamic_cast<JuicyboiAudioProcessorEditor*> (base.get());
-    check ("editor is the Rev1 editor", ed != nullptr);
+    check ("editor is the amp-head editor", ed != nullptr);
     if (ed == nullptr) return failures;
+    check ("revision plate reads Rev2 / Rev2 \xc2\xb7 5150 and the plugin is named juicyboi Rev2",
+           jb::gui::AmpHead::revisionPlateText (false) == "Rev2"
+           && jb::gui::AmpHead::revisionPlateText (true) == juce::String (juce::CharPointer_UTF8 ("Rev2 \xc2\xb7 5150"))
+           && p.getName() == "juicyboi Rev2");
     auto& root = ed->getRoot();
     check ("opens at 1100 x open design height (scale 1.0)",
            ed->getWidth() == 1100 && ed->getHeight() == JuicyboiAudioProcessorEditor::openHeight);
