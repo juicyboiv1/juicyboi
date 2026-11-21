@@ -296,7 +296,7 @@ void ToggleSwitch::paint (Graphics& g)
 {
     auto b = getLocalBounds().toFloat();
     const auto markH = 12.0f;
-    const auto f = uiFont (9.5f);
+    const auto f = uiFont (10.5f);
     g.setFont (f);
 
     Rectangle<float> body;
@@ -307,9 +307,9 @@ void ToggleSwitch::paint (Graphics& g)
         auto botMark = b.removeFromBottom (markH);
         const bool oneTop = oneAtTop;
         const auto on = isOne();
-        g.setColour (markColour.withAlpha (on == oneTop ? 1.0f : 0.55f));
+        g.setColour (markColour.withAlpha (on == oneTop ? 1.0f : 0.8f));
         g.drawText (oneTop ? markOne : markZero, topMark, Justification::centred, false);
-        g.setColour (markColour.withAlpha (on != oneTop ? 1.0f : 0.55f));
+        g.setColour (markColour.withAlpha (on != oneTop ? 1.0f : 0.8f));
         g.drawText (oneTop ? markZero : markOne, botMark, Justification::centred, false);
         body = b;
         towardFirst = (on == oneTop);
@@ -321,9 +321,9 @@ void ToggleSwitch::paint (Graphics& g)
         auto rightMark = b.removeFromRight (mw);
         const bool oneRight = oneAtTop;
         const auto on = isOne();
-        g.setColour (markColour.withAlpha (on != oneRight ? 1.0f : 0.55f));
+        g.setColour (markColour.withAlpha (on != oneRight ? 1.0f : 0.8f));
         g.drawText (oneRight ? markZero : markOne, leftMark, Justification::centred, false);
-        g.setColour (markColour.withAlpha (on == oneRight ? 1.0f : 0.55f));
+        g.setColour (markColour.withAlpha (on == oneRight ? 1.0f : 0.8f));
         g.drawText (oneRight ? markOne : markZero, rightMark, Justification::centred, false);
         body = b;
         towardFirst = (on != oneRight);

@@ -179,16 +179,16 @@ void AmpHead::Pilot::paint (Graphics& g)
 void AmpHead::LeadMark::paint (Graphics& g)
 {
     auto b = getLocalBounds().toFloat();
-    g.setFont (uiFont (9.5f));
+    g.setFont (uiFont (10.5f));
     const auto lamps = b.withSizeKeepingCentre (b.getWidth(), 50.0f);
     const Point<float> rhy (lamps.getX() + 30.0f, lamps.getCentreY() - 4.0f), lead (lamps.getRight() - 30.0f, lamps.getCentreY() - 4.0f);
     drawLed (g, rhy, 6.0f, colours::ledRed, 0.0f);
     drawLed (g, lead, 6.0f, colours::ledRed, 1.0f);
-    g.setColour (colours::cremeDim.withAlpha (0.6f));
+    g.setColour (colours::creme.withAlpha (0.8f));
     g.drawText ("RHYTHM", Rectangle<float> (60.0f, 12.0f).withCentre ({ rhy.x, rhy.y + 20.0f }), Justification::centred, false);
     g.setColour (colours::creme);
     g.drawText ("LEAD", Rectangle<float> (60.0f, 12.0f).withCentre ({ lead.x, lead.y + 20.0f }), Justification::centred, false);
-    g.setColour (colours::cremeDim.withAlpha (0.5f));
+    g.setColour (colours::creme.withAlpha (0.6f));
     g.drawLine (rhy.x + 12.0f, rhy.y, lead.x - 12.0f, lead.y, 1.0f);
 }
 

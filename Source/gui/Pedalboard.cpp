@@ -198,14 +198,14 @@ void IRDropZone::paint (Graphics& g)
         Path dashed;
         const float dashes[] = { 4.0f, 3.0f };
         PathStrokeType (1.0f).createDashedStroke (dashed, border, dashes, 2);
-        g.setColour (colours::cremeDim.withAlpha (0.6f));
+        g.setColour (colours::creme.withAlpha (0.7f));
         g.fillPath (dashed);
     }
     auto t = getLocalBounds().reduced (6, 2).withTrimmedRight (loaded ? 18 : 0);
     g.setColour (colours::creme);
     g.setFont (uiFont (10.0f));
     g.drawText (dsp::CabSim::slotName (slot), t.removeFromTop (t.getHeight() / 2), Justification::bottomLeft, false);
-    g.setColour (loaded ? colours::creme : colours::cremeDim.withAlpha (0.7f));
+    g.setColour (loaded ? colours::creme : colours::creme.withAlpha (0.85f));
     g.setFont (uiFont (9.5f, false));
     g.drawText (loaded ? proc.getCabIRFile (slot).getFileName() : String ("drop / click IR"), t, Justification::topLeft, true);
 }
@@ -251,7 +251,7 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
             popup (*ks[i]);
             boost.addAndMakeVisible (*ks[i]);
             ks[i]->setBounds (Rectangle<int> (60, 60).withCentre ({ (int) xs[i], 48 }));
-            boost.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 10.0f });
+            boost.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 11.0f });
         }
         odType.extraTip = "OD-808 = symmetric mid hump; SD-1 = asymmetric, open-top voicing.";
         boost.addAndMakeVisible (odType);
@@ -300,7 +300,7 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
             popup (*ks[i]);
             gate.addAndMakeVisible (*ks[i]);
             ks[i]->setBounds (Rectangle<int> (60, 60).withCentre ({ (int) xs[i], 48 }));
-            gate.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 10.0f });
+            gate.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 11.0f });
         }
         gate.titleArea = { 0.0f, 140.0f, 220.0f, 40.0f };
         gate.titleSize = 32.0f;
@@ -333,11 +333,11 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
         ParamSlider* ks[] = { &cabBlend, &cabLevel };
         for (int i = 0; i < 2; ++i)
         {
-            ks[i]->getProperties().set ("jbTick", colours::cremeDim.toString());
+            ks[i]->getProperties().set ("jbTick", colours::creme.toString());
             popup (*ks[i]);
             cab.addAndMakeVisible (*ks[i]);
             ks[i]->setBounds (Rectangle<int> (56, 56).withCentre ({ (int) xs[i], 96 }));
-            cab.captions.push_back ({ Rectangle<float> (64.0f, 12.0f).withCentre ({ xs[i], 130.0f }), caps[i], 9.5f });
+            cab.captions.push_back ({ Rectangle<float> (64.0f, 12.0f).withCentre ({ xs[i], 130.0f }), caps[i], 10.5f });
         }
         for (int s = 0; s < 2; ++s)
         {
