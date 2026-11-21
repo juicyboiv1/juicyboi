@@ -49,6 +49,9 @@ target_sources(juicyboi
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/Parameters.cpp
+        Source/gui/Rev1Style.cpp
+        Source/gui/AmpHead.cpp
+        Source/gui/Pedalboard.cpp
         Source/dsp/Od808Stage.cpp
         Source/dsp/Sd1Stage.cpp
         Source/dsp/PreampCascade.cpp
@@ -78,7 +81,7 @@ target_link_libraries(juicyboi
 option(JUICYBOI_BUILD_TESTS "Build the headless smoke test" ON)
 if(JUICYBOI_BUILD_TESTS)
     juce_add_console_app(juicyboi_smoketest PRODUCT_NAME "juicyboi_smoketest")
-    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp)
+    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp)
     # Reuse the plugin's JUCE module objects/includes/defines rather than
     # compiling the modules a second time.
     target_include_directories(juicyboi_smoketest PRIVATE Source
@@ -87,4 +90,13 @@ if(JUICYBOI_BUILD_TESTS)
         JUICYBOI_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Tests"
         $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
     target_link_libraries(juicyboi_smoketest PRIVATE juicyboi juce::juce_recommended_config_flags)
+
+    # Offscreen editor screenshots: juicyboi_screenshots <output-dir>
+    juce_add_console_app(juicyboi_screenshots PRODUCT_NAME "juicyboi_screenshots")
+    target_sources(juicyboi_screenshots PRIVATE Tests/Screenshots.cpp)
+    target_include_directories(juicyboi_screenshots PRIVATE Source
+        $<TARGET_PROPERTY:juicyboi,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(juicyboi_screenshots PRIVATE
+        $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
+    target_link_libraries(juicyboi_screenshots PRIVATE juicyboi juce::juce_recommended_config_flags)
 endif()

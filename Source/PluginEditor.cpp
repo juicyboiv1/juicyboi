@@ -1,157 +1,26 @@
 #include "PluginEditor.h"
-#include "LevelTaper.h"
 
-using namespace jb;
+using namespace juce;
 
 JuicyboiAudioProcessorEditor::JuicyboiAudioProcessorEditor (JuicyboiAudioProcessor& p)
-    : AudioProcessorEditor (&p), processor (p)
+    : AudioProcessorEditor (&p), processor (p), head (p, &root), drawer (p, &root)
 {
     setLookAndFeel (&lookAndFeel);
+    addAndMakeVisible (root);
+    root.addAndMakeVisible (head);
+    root.addAndMakeVisible (drawer);
+    head.setBounds (0, 0, jb::gui::AmpHead::designWidth, jb::gui::AmpHead::designHeight);
+    drawer.onToggle = [this] { setDrawerOpen (! drawerOpen); };
 
-    for (auto* g : { &inGroup, &odGroup, &preGroup, &outGroup, &cabGroup, &gateGroup, &eqGroup })
-        addAndMakeVisible (*g);
+    drawerOpen = processor.editorDrawerOpen;
+    drawer.setOpen (drawerOpen);
+    drawer.setBounds (0, drawerTop, designWidth, drawerOpen ? jb::gui::Pedalboard::openHeight : jb::gui::Pedalboard::frontHeight);
 
-    setupKnob (input,    params::id::inputTrim, "Input");
-    setupKnob (odDrive,  params::id::odDrive,   "Drive");
-    setupKnob (odTone,   params::id::odTone,    "Tone");
-    setupKnob (odLevel,  params::id::odLevel,   "Level");
-    setupKnob (gain,     params::id::gain,      "Gain");
-    setupKnob (bass,     params::id::bass,      "Bass");
-    setupKnob (mid,      params::id::mid,       "Mid");
-    setupKnob (treble,   params::id::treble,    "Treble");
-    setupKnob (presence, params::id::presence,  "Presence");
-    setupKnob (leadPresence, params::id::leadPresence, "Presence");
-    leadPresence.slider.setComponentID ("lead_presence");
-    leadPresence.slider.setTooltip ("5150-only feedback-response approximation, after EQ/before Cab. 0 = unchanged reference tone; no nonlinear power amp.");
-    setupKnob (leadResonance, params::id::leadResonance, "Resonance");
-    leadResonance.slider.setComponentID ("lead_resonance");
-    leadResonance.slider.setTooltip ("5150-only NFB Resonance (VR8 1M + C12 .0068u), after EQ/before Cab. 0 = unchanged reference tone; more = less low-frequency feedback = more bass. Resistive load, no speaker/power-amp model.");
-    setupKnob (master,   params::id::master,    "Master");
-
-    // Amp-style 0–10 Input/Master/Boost Level/Cab Level: hover shows the equivalent dB.
-    input.slider.onValueChange = [this]
-    {
-        input.slider.setTooltip ("Input " + juce::String (input.slider.getValue(), 1) + " = "
-                                 + juce::String (taper::inputKnobToDb (input.slider.getValue()), 1)
-                                 + " dB (5 = unity, 4.8 dB per number)");
-    };
-    master.slider.onValueChange = [this]
-    {
-        const auto v = master.slider.getValue();
-        master.slider.setTooltip ("Master " + juce::String (v, 1) + " = "
-                                  + (v > 0.0 ? juce::String (taper::masterKnobToDb (v), 1) + " dB" : juce::String ("mute"))
-                                  + " (7.5 = unity, 10 = +12 dB, 0 = silent)");
-    };
-    // Boost Level: 0–10, 3.6 dB per number, 6.7 (20/3) = unity.
-    odLevel.slider.onValueChange = [this]
-    {
-        const auto v = odLevel.slider.getValue();
-        odLevel.slider.setTooltip ("Boost Level " + juce::String (v, 1) + " = "
-                                   + juce::String (taper::boostLevelKnobToDb (v), 1)
-                                   + " dB (6.7 = unity, 3.6 dB per number, 10 = +12 dB)");
-    };
-    input.slider.onValueChange();
-    master.slider.onValueChange();
-    odLevel.slider.onValueChange();
-
-    addAndMakeVisible (odEnable);
-    odEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::odEnable, odEnable);
-
-    boostType.addItemList ({ "OD-808", "SD-1" }, 1);
-    boostType.setTooltip ("Boost circuit: OD-808 (symmetric mid hump) or SD-1 (asymmetric, open-top Boutique voicing)");
-    addAndMakeVisible (boostType);
-    boostTypeAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::odType, boostType);
-
-    boostTypeLabel.setText ("Type", juce::dontSendNotification);
-    boostTypeLabel.setJustificationType (juce::Justification::centredRight);
-    boostTypeLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd4af37));
-    addAndMakeVisible (boostTypeLabel);
-
-    addAndMakeVisible (bypass);
-    bypassAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::bypass, bypass);
-
-    preampModel.addItemList ({ "Rectifier", "5150-inspired" }, 1);
-    preampModel.setTooltip ("5150-inspired Lead: six-stage behavioral preamp; no PI/power-amp simulation");
-    addAndMakeVisible (preampModel);
-    preampModelLabel.setText ("Preamp Model", juce::dontSendNotification);
-    preampModelLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd4af37));
-    addAndMakeVisible (preampModelLabel);
-    preampModelAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::preampModel, preampModel);
-    preampModel.onChange = [this] { updateRedVoiceEnablement(); };
-
-    channel.addItemList ({ "Red (Ch1)", "Orange (Ch2)" }, 1);
-    addAndMakeVisible (channel);
-    channelAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::channel, channel);
-
-    channelLabel.setText ("Channel", juce::dontSendNotification);
-    channelLabel.setJustificationType (juce::Justification::centredLeft);
-    addAndMakeVisible (channelLabel);
-
-    // Red v1 / v2 voicing switch (only meaningful on Red; dimmed on Orange)
-    redVoice.addItemList ({ "Red v1", "Red v2" }, 1);
-    redVoice.setTooltip ("A/B the Red channel: v1 = original tight Red, v2 = max-gain / fat-bottom Red");
-    addAndMakeVisible (redVoice);
-    redVoiceAttachment = std::make_unique<APVTS::ComboBoxAttachment> (processor.apvts, params::id::redVoice, redVoice);
-
-    redVoiceLabel.setText ("Voice", juce::dontSendNotification);
-    redVoiceLabel.setJustificationType (juce::Justification::centredRight);
-    redVoiceLabel.setColour (juce::Label::textColourId, juce::Colour (0xffd4af37));
-    addAndMakeVisible (redVoiceLabel);
-
-    channel.onChange = [this] { updateRedVoiceEnablement(); };
-    updateRedVoiceEnablement();
-
-    // Cab section
-    setupKnob (cabBlend, params::id::cabMicBlend, "IR Blend");
-    setupKnob (cabLevel, params::id::cabLevel,    "Cab Level");
-    cabLevel.slider.onValueChange = [this]
-    {
-        const auto v = cabLevel.slider.getValue();
-        cabLevel.slider.setTooltip ("Cab Level " + juce::String (v, 1) + " = "
-                                    + juce::String (taper::cabLevelKnobToDb (v), 1)
-                                    + " dB (5 = unity, 4.8 dB per number)");
-    };
-    cabLevel.slider.onValueChange();
-    addAndMakeVisible (cabEnable);
-    cabEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::cabEnable, cabEnable);
-
-    cabHint.setText ("Cab off = hard bypass (for analog power amp). Blend: left = IR A, right = IR B. No IRs = passthrough.",
-                     juce::dontSendNotification);
-    cabHint.setFont (juce::FontOptions (11.0f));
-    cabHint.setColour (juce::Label::textColourId, juce::Colour (0xff7a9a5c));
-    addAndMakeVisible (cabHint);
-
-    for (int sl = 0; sl < dsp::CabSim::numSlots; ++sl)
-    {
-        irZones[(size_t) sl] = std::make_unique<IRDropZone> (processor, sl);
-        addAndMakeVisible (*irZones[(size_t) sl]);
-    }
-
-    // Gate section (key = dry input, VCA after cab)
-    setupKnob (gateThreshold, params::id::gateThreshold, "Threshold");
-    setupKnob (gateHold,      params::id::gateHold,      "Hold");
-    setupKnob (gateRelease,   params::id::gateRelease,   "Release");
-    addAndMakeVisible (gateEnable);
-    gateEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::gateEnable, gateEnable);
-    addAndMakeVisible (gateLed);
-
-    // Graphic EQ section (post-tone, pre-cab)
-    {
-        static const char* bandLabels[] = { "100", "200", "400", "800", "1.6k", "3.2k", "6.4k" };
-        for (size_t b = 0; b < eqBands.size(); ++b)
-            setupFader (eqBands[b], params::id::eqBands[b], bandLabels[b]);
-        setupFader (eqLevel, params::id::eqLevel, "Level");
-        eqLevel.label.setColour (juce::Label::textColourId, juce::Colour (0xffd4af37));
-        addAndMakeVisible (eqEnable);
-        eqEnable.setTooltip ("Graphic EQ on/off (off = true bypass)");
-        eqEnable.onStateChange = [this] { updateEqEnablement(); };
-        eqEnableAttachment = std::make_unique<APVTS::ButtonAttachment> (processor.apvts, params::id::eqEnable, eqEnable);
-        updateEqEnablement();
-    }
-
+    // read the remembered width first: applying the limits resizes (and re-saves the width)
+    const auto w = jlimit (roundToInt (designWidth * minScale), roundToInt (designWidth * maxScale), processor.editorWidth);
     setResizable (true, true);
-    setResizeLimits (1200, 560, 1900, 1000);
-    setSize (1340, 600);
+    applyConstraints();
+    setSize (w, roundToInt ((double) w * getDesignHeight() / designWidth));
 }
 
 JuicyboiAudioProcessorEditor::~JuicyboiAudioProcessorEditor()
@@ -159,341 +28,53 @@ JuicyboiAudioProcessorEditor::~JuicyboiAudioProcessorEditor()
     setLookAndFeel (nullptr);
 }
 
-void JuicyboiAudioProcessorEditor::setupKnob (Knob& k, const char* paramId, const juce::String& text)
+void JuicyboiAudioProcessorEditor::applyConstraints()
 {
-    k.slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-    k.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 74, 20);
-    k.slider.setColour (juce::Slider::rotarySliderFillColourId,    juce::Colour (0xffd4af37));
-    k.slider.setColour (juce::Slider::rotarySliderOutlineColourId, juce::Colour (0xff2a3d20));
-    k.slider.setColour (juce::Slider::thumbColourId,               juce::Colour (0xfff5e6a3));
-    addAndMakeVisible (k.slider);
-
-    k.label.setText (text, juce::dontSendNotification);
-    k.label.setJustificationType (juce::Justification::centred);
-    k.label.setFont (juce::FontOptions (13.0f, juce::Font::bold));
-    k.label.setColour (juce::Label::textColourId, juce::Colour (0xffe8e0c8));
-    addAndMakeVisible (k.label);
-
-    k.attachment = std::make_unique<APVTS::SliderAttachment> (processor.apvts, paramId, k.slider);
+    const auto h = (double) getDesignHeight();
+    setResizeLimits (roundToInt (designWidth * minScale), roundToInt (h * minScale),
+                     roundToInt (designWidth * maxScale), roundToInt (h * maxScale));
+    if (auto* c = getConstrainer())
+        c->setFixedAspectRatio ((double) designWidth / h);
 }
 
-void JuicyboiAudioProcessorEditor::setupFader (Knob& k, const char* paramId, const juce::String& text)
+void JuicyboiAudioProcessorEditor::setDrawerOpen (bool shouldBeOpen)
 {
-    k.slider.setSliderStyle (juce::Slider::LinearVertical);
-    k.slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 52, 18);
-    k.slider.setTooltip ("Double-click to reset to 0 dB");
-    addAndMakeVisible (k.slider);
-
-    k.label.setText (text, juce::dontSendNotification);
-    k.label.setJustificationType (juce::Justification::centred);
-    k.label.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-    k.label.setColour (juce::Label::textColourId, juce::Colour (0xffe8e0c8));
-    addAndMakeVisible (k.label);
-
-    k.attachment = std::make_unique<APVTS::SliderAttachment> (processor.apvts, paramId, k.slider);
-    k.slider.setDoubleClickReturnValue (true, 0.0);
+    if (drawerOpen == shouldBeOpen)
+        return;
+    drawerOpen = shouldBeOpen;
+    processor.editorDrawerOpen = shouldBeOpen;
+    drawer.setOpen (shouldBeOpen);
+    drawer.setBounds (0, drawerTop, designWidth, shouldBeOpen ? jb::gui::Pedalboard::openHeight : jb::gui::Pedalboard::frontHeight);
+    const auto w = getWidth();
+    applyConstraints();
+    setSize (w, roundToInt ((double) w * getDesignHeight() / designWidth));
 }
 
-void JuicyboiAudioProcessorEditor::updateEqEnablement()
+void JuicyboiAudioProcessorEditor::paint (Graphics& g)
 {
-    const auto on = eqEnable.getToggleState();
-    for (auto* k : { &eqBands[0], &eqBands[1], &eqBands[2], &eqBands[3], &eqBands[4], &eqBands[5], &eqBands[6], &eqLevel })
-        k->slider.setAlpha (on ? 1.0f : 0.5f); // still editable while off (dial in, then engage)
-}
-
-void JuicyboiAudioProcessorEditor::layoutEq (juce::Rectangle<int> bounds)
-{
-    eqGroup.setBounds (bounds);
-    auto r = bounds.reduced (8, 18);
-
-    auto top = r.removeFromTop (24);
-    eqEnable.setBounds (top.removeFromLeft (60));
-    r.removeFromTop (2);
-
-    const auto cols = (int) eqBands.size() + 1;
-    const auto w = r.getWidth() / cols;
-    auto place = [] (Knob& k, juce::Rectangle<int> kr)
-    {
-        k.label.setBounds (kr.removeFromTop (16));
-        k.slider.setBounds (kr.reduced (1, 0));
-    };
-    for (auto& k : eqBands)
-        place (k, r.removeFromLeft (w));
-    r.removeFromLeft (juce::jmax (0, r.getWidth() - w));
-    place (eqLevel, r);
-}
-
-void JuicyboiAudioProcessorEditor::paint (juce::Graphics& g)
-{
-    g.fillAll (juce::Colour (0xff12160f));
-
-    auto header = getLocalBounds().removeFromTop (44);
-    juce::ColourGradient headerWash (juce::Colour (0xff1e2a16), 0.0f, 0.0f,
-                                     juce::Colour (0xff12160f), 0.0f, (float) header.getHeight(), false);
-    g.setGradientFill (headerWash);
-    g.fillRect (header);
-
-    g.setColour (juce::Colour (0xffd4af37));
-    g.setFont (juce::FontOptions (26.0f, juce::Font::bold));
-    g.drawText ("juicyboi v2", header.reduced (16, 0), juce::Justification::centredLeft);
-
-    g.setColour (juce::Colour (0xff7a9a5c));
-    g.setFont (juce::FontOptions (12.0f));
-    g.drawText ("heavy riff preamp  |  v0.1 scaffold", header.reduced (16, 0), juce::Justification::centredRight);
-
-    g.setColour (juce::Colour (0xffd4af37).withAlpha (0.35f));
-    g.fillRect (0, header.getBottom() - 1, getWidth(), 1);
-}
-
-juce::Rectangle<int> JuicyboiAudioProcessorEditor::layoutCab (juce::Rectangle<int> bounds)
-{
-    cabGroup.setBounds (bounds);
-    auto r = bounds.reduced (10, 20);
-    cabHint.setBounds (r.removeFromBottom (16));
-
-    auto controls = r.removeFromLeft (100);
-    cabEnable.setBounds (controls.removeFromTop (28).withWidth (90));
-
-    auto knobs = r.removeFromLeft (200);
-    auto place = [] (Knob& k, juce::Rectangle<int> kr)
-    {
-        k.label.setBounds (kr.removeFromTop (20));
-        k.slider.setBounds (kr.reduced (4));
-    };
-    place (cabBlend, knobs.removeFromLeft (100));
-    place (cabLevel, knobs);
-
-    r.removeFromLeft (8);
-    const auto w = r.getWidth() / 2;
-    irZones[0]->setBounds (r.removeFromLeft (w).reduced (3));
-    irZones[1]->setBounds (r.reduced (3));
-    return bounds;
-}
-
-void JuicyboiAudioProcessorEditor::layoutGate (juce::Rectangle<int> bounds)
-{
-    gateGroup.setBounds (bounds);
-    auto r = bounds.reduced (10, 20);
-
-    auto top = r.removeFromTop (28);
-    gateEnable.setBounds (top.removeFromLeft (80));
-    gateLed.setBounds (top.removeFromLeft (22).withSizeKeepingCentre (16, 16));
-    r.removeFromTop (4);
-
-    auto place = [] (Knob& k, juce::Rectangle<int> kr)
-    {
-        k.label.setBounds (kr.removeFromTop (20));
-        k.slider.setBounds (kr.reduced (4));
-    };
-    const auto w = r.getWidth() / 3;
-    place (gateThreshold, r.removeFromLeft (w));
-    place (gateHold,      r.removeFromLeft (w));
-    place (gateRelease,   r);
-}
-
-void JuicyboiAudioProcessorEditor::GateLed::timerCallback()
-{
-    const auto nowOn = proc.isGateActive()
-                       && proc.apvts.getRawParameterValue (jb::params::id::gateEnable)->load() > 0.5f;
-    const auto amt = nowOn ? proc.getGateOpenAmount() : 0.0f;
-    if (nowOn != on || std::abs (amt - shown) > 0.02f)
-    {
-        on = nowOn;
-        shown = amt;
-        repaint();
-    }
-}
-
-void JuicyboiAudioProcessorEditor::GateLed::paint (juce::Graphics& g)
-{
-    auto b = getLocalBounds().toFloat().reduced (1.5f);
-    const auto closed = juce::Colour (0xffe0542a); // orange-red
-    const auto open   = juce::Colour (0xff4cd964); // green
-    const auto c = on ? closed.interpolatedWith (open, juce::jlimit (0.0f, 1.0f, shown))
-                      : juce::Colour (0xff2a3d20);
-
-    if (on)
-    {
-        g.setColour (c.withAlpha (0.35f));
-        g.fillEllipse (b.expanded (1.5f));
-    }
-    g.setColour (c);
-    g.fillEllipse (b);
-    g.setColour (juce::Colour (0xffd4af37).withAlpha (0.7f));
-    g.drawEllipse (b, 1.0f);
-}
-
-//==============================================================================
-JuicyboiAudioProcessorEditor::IRDropZone::IRDropZone (JuicyboiAudioProcessor& p, int s) : proc (p), slot (s)
-{
-    clearButton.setTooltip ("Clear IR");
-    clearButton.onClick = [this] { proc.clearCabIR (slot); refresh(); };
-    addAndMakeVisible (clearButton);
-    refresh();
-}
-
-void JuicyboiAudioProcessorEditor::IRDropZone::refresh()
-{
-    clearButton.setVisible (proc.hasCabIR (slot));
-    repaint();
-}
-
-void JuicyboiAudioProcessorEditor::IRDropZone::resized()
-{
-    clearButton.setBounds (getLocalBounds().removeFromRight (24).withSizeKeepingCentre (20, 20));
-}
-
-bool JuicyboiAudioProcessorEditor::IRDropZone::isInterestedInFileDrag (const juce::StringArray& files)
-{
-    for (auto& f : files)
-        if (juce::File (f).hasFileExtension ("wav;aif;aiff;flac"))
-            return true;
-    return false;
-}
-
-void JuicyboiAudioProcessorEditor::IRDropZone::filesDropped (const juce::StringArray& files, int, int)
-{
-    hovering = false;
-    for (auto& f : files)
-        if (juce::File (f).hasFileExtension ("wav;aif;aiff;flac"))
-        {
-            proc.loadCabIR (slot, juce::File (f));
-            break;
-        }
-    refresh();
-}
-
-void JuicyboiAudioProcessorEditor::IRDropZone::paint (juce::Graphics& g)
-{
-    auto b = getLocalBounds().toFloat().reduced (1.0f);
-    const auto loaded = proc.hasCabIR (slot);
-    g.setColour (hovering ? juce::Colour (0xff2f4a22) : juce::Colour (0xff1a2214));
-    g.fillRoundedRectangle (b, 5.0f);
-
-    juce::Path border;
-    border.addRoundedRectangle (b, 5.0f);
-    if (loaded)
-    {
-        g.setColour (juce::Colour (0xffd4af37));
-        g.strokePath (border, juce::PathStrokeType (1.5f));
-    }
-    else
-    {
-        juce::Path dashed;
-        const float dashes[] = { 5.0f, 4.0f };
-        juce::PathStrokeType (1.2f).createDashedStroke (dashed, border, dashes, 2);
-        g.setColour (juce::Colour (0xff5a7a44));
-        g.fillPath (dashed);
-    }
-
-    auto t = getLocalBounds().reduced (8, 2).withTrimmedRight (22);
-    g.setColour (juce::Colour (0xffd4af37));
-    g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-    g.drawText (jb::dsp::CabSim::slotName (slot), t.removeFromTop (t.getHeight() / 2), juce::Justification::bottomLeft);
-
-    g.setColour (loaded ? juce::Colour (0xffe8e0c8) : juce::Colour (0xff7a9a5c));
-    g.setFont (juce::FontOptions (11.0f));
-    g.drawText (loaded ? proc.getCabIRFile (slot).getFileName() : juce::String ("Drop IR..."),
-                t, juce::Justification::topLeft, true);
+    g.fillAll (Colour (0xff0b0b0b));
 }
 
 void JuicyboiAudioProcessorEditor::resized()
 {
-    auto area = getLocalBounds().reduced (10);
-    area.removeFromTop (40);
-
-    // Cab row along the bottom
-    {
-        auto bottom = area.removeFromBottom (juce::jmax (230, area.getHeight() / 2));
-        layoutGate (bottom.removeFromLeft (juce::jmax (250, bottom.getWidth() / 5)));
-        bottom.removeFromLeft (6);
-        layoutEq (bottom.removeFromLeft (juce::jmax (440, bottom.getWidth() * 9 / 20)));
-        bottom.removeFromLeft (6);
-        auto r = layoutCab (bottom);
-        juce::ignoreUnused (r);
-    }
-
-    const auto unit = area.getWidth() / 12; // 12 columns: 1 in, 3 boost, 5 pre, 3 out
-
-    auto placeKnob = [] (Knob& k, juce::Rectangle<int> r)
-    {
-        k.label.setBounds (r.removeFromTop (20));
-        k.slider.setBounds (r.reduced (4));
-    };
-
-    auto layoutGroup = [] (juce::GroupComponent& g, juce::Rectangle<int> r)
-    {
-        g.setBounds (r);
-        return r.reduced (10, 20);
-    };
-
-    // Input
-    {
-        auto r = layoutGroup (inGroup, area.removeFromLeft (unit));
-        placeKnob (input, r);
-    }
-
-    // Boost (OD-808 | SD-1)
-    {
-        auto r = layoutGroup (odGroup, area.removeFromLeft (unit * 3));
-        odEnable.setBounds (r.removeFromBottom (26).withSizeKeepingCentre (100, 26));
-        auto typeRow = r.removeFromTop (28);
-        boostTypeLabel.setBounds (typeRow.removeFromLeft (44));
-        boostType.setBounds (typeRow.removeFromLeft (110).reduced (2));
-        const auto w = r.getWidth() / 3;
-        placeKnob (odDrive, r.removeFromLeft (w));
-        placeKnob (odTone,  r.removeFromLeft (w));
-        placeKnob (odLevel, r);
-    }
-
-    // Output (laid out from the right so preamp gets the rest)
-    auto outArea = area.removeFromRight (unit * 3);
-
-    // Preamp
-    {
-        auto r = layoutGroup (preGroup, area);
-        auto chRow = r.removeFromBottom (28);
-        auto modelRow = r.removeFromTop (28);
-        preampModelLabel.setBounds (modelRow.removeFromLeft (106));
-        preampModel.setBounds (modelRow.removeFromLeft (180).reduced (2));
-        channelLabel.setBounds (chRow.removeFromLeft (72));
-        channel.setBounds (chRow.removeFromLeft (130).reduced (2));
-        redVoiceLabel.setBounds (chRow.removeFromLeft (56));
-        redVoice.setBounds (chRow.removeFromLeft (96).reduced (2));
-
-        const auto w = r.getWidth() / 5;
-        placeKnob (gain,     r.removeFromLeft (w));
-        placeKnob (bass,     r.removeFromLeft (w));
-        placeKnob (mid,      r.removeFromLeft (w));
-        placeKnob (treble,   r.removeFromLeft (w));
-        placeKnob (presence, r);
-    }
-
-    {
-        auto r = layoutGroup (outGroup, outArea);
-        bypass.setBounds (r.removeFromBottom (26).withSizeKeepingCentre (100, 26));
-        const auto w = r.getWidth() / 3;
-        placeKnob (leadPresence, r.removeFromLeft (w));
-        placeKnob (leadResonance, r.removeFromLeft (w));
-        placeKnob (master, r);
-    }
+    const auto scale = (float) getWidth() / (float) designWidth;
+    root.setBounds (0, 0, designWidth, getDesignHeight());
+    root.setTransform (AffineTransform::scale (scale));
+    if (getWidth() > 0)
+        processor.editorWidth = getWidth();
 }
 
-void JuicyboiAudioProcessorEditor::updateRedVoiceEnablement()
+void JuicyboiAudioProcessorEditor::Root::paint (Graphics& g)
 {
-    const auto rectifier = preampModel.getSelectedItemIndex() <= 0;
-    channel.setEnabled (rectifier);
-    channel.setAlpha (rectifier ? 1.0f : 0.45f);
-    channelLabel.setAlpha (rectifier ? 1.0f : 0.45f);
-    presence.slider.setEnabled (rectifier);
-    presence.label.setAlpha (rectifier ? 1.0f : 0.45f);
-    presence.slider.setTooltip (rectifier ? "Rectifier presence (legacy voicing)" : "Use Output Presence for 5150; saved Rectifier value retained");
-    leadPresence.slider.setEnabled (! rectifier);
-    leadPresence.label.setAlpha (rectifier ? 0.45f : 1.0f);
-    leadResonance.slider.setEnabled (! rectifier);
-    leadResonance.label.setAlpha (rectifier ? 0.45f : 1.0f);
-    const auto isRed = rectifier && channel.getSelectedItemIndex() <= 0;
-    redVoice.setEnabled (isRed);
-    redVoice.setAlpha (isRed ? 1.0f : 0.45f);
-    redVoiceLabel.setAlpha (isRed ? 1.0f : 0.45f);
+    ColourGradient bg (Colour (0xff1b1b1b), 0, 0, Colour (0xff070707), 0, (float) getHeight(), false);
+    g.setGradientFill (bg);
+    g.fillAll();
+    // rubber feet between head and drawer
+    for (auto x : { 64.0f, 976.0f })
+    {
+        const auto r = Rectangle<float> (x, (float) jb::gui::AmpHead::designHeight - 6.0f, 60.0f, 12.0f);
+        ColourGradient fg (Colour (0xff2a2a2a), r.getX(), r.getY(), Colour (0xff050505), r.getX(), r.getBottom(), false);
+        g.setGradientFill (fg);
+        g.fillRoundedRectangle (r, 4.0f);
+    }
 }

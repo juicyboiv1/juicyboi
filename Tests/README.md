@@ -40,3 +40,14 @@ Boost/Cab Level: anchors, exact unity at the defaults (incl. the Boost 20/3
 detent), round trips, legacy dB grids, migration from both v1 and v2 states,
 no re-conversion on re-save, and bit-identical rendering of a v1 default
 session with Boost on.
+
+`EditorTest.cpp` paints the Rev1 editor offscreen, with no native window. It checks:
+- every parameter has a bound control with the same component ID, plus the IR A/B slots
+- the head has no text labels, and every head knob has a tooltip (Input/Master keep their dB equivalents)
+- the Model toggle sets `preamp_model` and swaps the faceplates; Rectifier-only controls are hidden on 5150 and their values are kept
+- Red Voice is disabled on Orange
+- the drawer opens and closes with a fixed aspect ratio, and scaling works
+- all 7 EQ bands plus Level are shown
+- opening and closing the editor leaves the session state byte-identical
+
+`Screenshots.cpp` builds `juicyboi_screenshots <dir> [scale]`, which writes PNGs of the Rectifier and 5150 faceplates with the drawer closed and open.

@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (v2)
+# juicyboi — heavy-riff preamp (Rev1)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -130,6 +130,51 @@ the old dB ranges: Input, Boost Level and Cab Level lanes play back identically
 (the dB laws are linear across the same old ranges, so normalised positions are
 unchanged); Master lanes will not match the old levels and should be re-recorded.
 
+## Rev1 GUI (amp head + pedalboard drawer)
+
+The editor is a vector-drawn amp head with a pedalboard drawer underneath. It's
+all drawn in code with JUCE `Graphics`: procedural basketweave and tolex, and no
+bitmap assets or commercial logos. The whole layout lives at a fixed design size
+(1100 wide) and scales as one piece. Drag the corner to resize from 0.7× to 1.6×.
+The aspect ratio is fixed, so everything stays crisp at any size.
+
+**Head.** Black tolex with chrome corner caps and a blonde basketweave grille.
+The **juicyboi** badge appears on the grille and nowhere else. The black control
+panel has a small *Rev1* plate. **The knobs have no text labels**: hover any knob
+for a tooltip with its name and value. Input, Master, Boost Level and Cab Level
+tooltips also show the equivalent dB. A value bubble shows while you drag.
+Double-click a knob to reset it to its default. The toggles carry small position
+marks.
+
+| Faceplate | Toggles (left → right) | Knobs (left → right) |
+|-----------|------------------------|----------------------|
+| **Rectifier** (blonde grille, *Rev1* plate) | Standby (ON / STBY = `bypass`), Model (RECT / 5150), Channel (RED / ORNG), Voice (V1 / V2, dimmed on Orange) | Input, Gain, Bass, Mid, Treble, Presence, Master |
+| **5150** (all-black, dark grille, *Rev1 · 5150* plate) | Standby, Model, Rhythm/Lead marking (Lead lit) | Input, Gain, Low, Mid, High, 5150 Presence, 5150 Resonance, Master |
+
+The **Model** toggle is the `preamp_model` parameter, so this is still one
+plugin. Flipping it fades between the faceplates in about 200 ms, and the knobs
+move to their new positions during the fade. Controls that belong only to the
+other model are hidden, but their saved values are kept. The 5150-inspired model
+is Lead-only, so the Rhythm/Lead marking is an indicator, not a switch.
+
+**Pedalboard drawer.** Click the wooden drawer front (or its handle) to open or
+close it. The window grows or shrinks to match, and the open/closed state and
+window width are remembered while the plugin stays loaded.
+- **Boost**: green stompbox with Drive, Tone and Level, an OD/SD mini toggle
+  (`od_type`), a footswitch for `od_enable`, and an LED.
+- **7-band EQ**: creme pedal with all 7 faders (100, 200, 400, 800, 1.6k, 3.2k
+  and 6.4k) plus Level, in ±15 dB. Double-click a fader for 0 dB. Footswitch for
+  `eq_enable`, plus an LED.
+- **Gate**: Threshold, Hold and Release, with a footswitch for `gate_enable`.
+  The LED is green when the gate is open and orange-red when it's closed.
+- **Cab** side panel: OFF/ON toggle (`cab_enable`), Blend and Level knobs, and
+  IR A / IR B slots. Drag an IR file onto a slot or click it to browse; **x**
+  clears the slot.
+
+Every parameter keeps its ID, range, 0–10 taper and state migration, and every
+control uses an APVTS attachment. Opening the editor never changes the session
+state or the audio, and the editor tests check this.
+
 ## Preamp Model
 
 **Rectifier** (default) preserves Red v1/v2 and Orange, including all old
@@ -140,8 +185,8 @@ with a strongly asymmetric cold-stage approximation informed by V2A's 39 kΩ
 cathode resistor. Distributed attenuation, bass cuts and high-frequency
 rolloffs create a different compressed high-gain voice, not just output boost.
 Use Gain/Bass/Mid/Treble as usual, then match perceived loudness with Master.
-Channel, Red Voice and **Preamp Presence** are dimmed in Lead mode; their saved
-Rectifier values remain untouched. **Output Presence** is enabled only for Lead. The new `preamp_model` parameter is appended to the
+Channel, Red Voice and **Preamp Presence** are hidden on the 5150 faceplate. Their saved
+Rectifier values stay untouched. **5150 Presence/Resonance** appear only on the 5150 faceplate. The new `preamp_model` parameter is appended to the
 layout, and states missing it explicitly restore Rectifier.
 
 Scope: schematic-informed filter/shaper DSP at the existing **4×** rate, DC
@@ -331,7 +376,11 @@ All parameter IDs use version hint 1.
 ```
 Source/
   PluginProcessor.h/.cpp   APVTS, bus layouts, processBlock wiring, state
-  PluginEditor.h/.cpp      minimal rotary-knob editor attached to the APVTS
+  PluginEditor.h/.cpp      Rev1 editor: fixed-aspect scaled root (head + drawer)
+  gui/Rev1Style.h/.cpp     palette, LookAndFeel (chrome/pedal knobs, faders, tooltips),
+                           ParamSlider / ToggleSwitch / Footswitch parameter controls
+  gui/AmpHead.h/.cpp       amp head, Rectifier/5150 faceplates + fade, cached static art
+  gui/Pedalboard.h/.cpp    drawer: Boost, 7-band EQ, Gate pedals, Cab panel, IR slots
   Parameters.h/.cpp        parameter IDs + layout
   dsp/
     Filters.h              OnePole (RC-style 6 dB/oct) + RBJ Biquad, per-channel state
@@ -347,6 +396,8 @@ Source/
     NoiseGate.h/.cpp       key/sidechain gate (dry-input detector, VCA after cab)
 Tests/
   SmokeTest.cpp            headless run through every channel/boost-type/gain combo
+  EditorTest.cpp           offscreen Rev1 editor checks (bindings, faceplates, drawer)
+  Screenshots.cpp          juicyboi_screenshots <dir> [scale]: offscreen editor PNGs
 ```
 
 ## DSP stage notes
@@ -385,7 +436,11 @@ Tests/
    key/sidechain noise gate are now in.)
 6. Smooth OD level and tone-coefficient changes per sample. Add an oversampling
    quality setting and presets.
-7. Custom UI / LookAndFeel.
+7. Rev1 GUI polish after hands-on testing (see *Rev1 GUI*).
+
+## Rev1 changelog
+
+- **Rev1 amp-head GUI replaces the v2 editor.** It's a vector amp head with a blonde basketweave grille, black tolex, chrome corner caps, and chrome-skirted knobs and toggles on a black panel. A pedalboard drawer (Boost, all-7-band EQ, Gate, and the Cab panel) opens and closes. The front-panel Model toggle (`preamp_model`) fades to an all-black 5150 faceplate. The juicyboi badge is on the grille only, and a *Rev1* / *Rev1 · 5150* plate sits on the panel. The head has no knob labels; hover tooltips give each knob's name and value, including the dB equivalents. The window resizes from 0.7× to 1.6× with a fixed aspect ratio. Nothing changes in the audio or the parameters: IDs, ranges, tapers, state version 3 and the reference renders are all identical. IRs can now also be loaded by clicking a slot.
 
 ## v2 changelog
 
@@ -419,6 +474,6 @@ Or manually: quit juicyboi → delete that settings file → `cmake -S . -B buil
 - **Cab IR scaffold** (IR loading path in place; bundled IRs still minimal).
 - **Standalone: Scarlett mono inputs** — patched JUCE Standalone so multichannel interfaces (e.g. Scarlett 4i4) show inputs 1/2/3/4 individually.
 - **macOS microphone permission** — Standalone now ships `NSMicrophoneUsageDescription` so macOS prompts for input access.
-- **Green/gold GUI** refresh.
+- **Green/gold GUI** refresh (superseded by the Rev1 GUI).
 
 Plugin identity (PLUGIN_CODE `Jcb1`) is unchanged, so hosts keep existing sessions.

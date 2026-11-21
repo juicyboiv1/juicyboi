@@ -79,6 +79,10 @@ public:
     /** Graphic EQ is processing (on, or fading out). */
     bool  isEqActive() const noexcept        { return graphicEq.isActive(); }
 
+    //== Editor-only view state (not saved in the session; no effect on audio) ==
+    bool editorDrawerOpen = true;
+    int  editorWidth = 1100;
+
 private:
     void updateParameters();
     void processChunk (juce::AudioBuffer<float>& buffer, int start, int len, int numProcChannels);
