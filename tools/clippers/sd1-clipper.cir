@@ -1,0 +1,33 @@
+* juicyboi Rev2.2 — SD-1-topology clipping stage, Boutique-mod values (validation netlist)
+* Stock SD-1 topology (schematicheaven drawing) + "Boutique Overdrive" mod values (Wampler DIY).
+* Single-pole op-amp (JRC/NJM4558 datasheet: GBW 3 MHz, A0 100 dB; no rails/slew), Vr = AC ground, 1N914-family Shockley model (Rs omitted).
+* plot_clippers.py rewrites the .param line and the wrdata file name.
+.param drive=0.5 amp=1 freq=1k tstop=30m tmax=0.65u
+.param rdrive={500k*(pwr(10,2*drive)-1)/99 + 1m}
+Vin in 0 SIN(0 {amp} {freq})
+* input coupling C2 (.055u, mod) / bias R4 (100k, stock)
+C2  in  inp 0.055u
+R4  inp 0   100k
+* single-pole op-amp: dV/dt = wt (v+ - v-) - (wt/A0) V, Cop = 1/(2 pi 3 MHz)
+Gop 0  vi  inp inn 1
+Cop vi 0   5.3051648e-8
+Rop vi 0   1e5
+Eob out 0  vi  0   1
+* gain leg R6 / C3 (mod: 1k / 0.22u)
+R6  inn n1  1k
+C3  n1  0   0.22u
+* feedback: R5 (mod 10k) + Gain 500kA (mod) as rheostat, no feedback cap
+R5  out nf  10k
+RVR nf  inn {rdrive}
+* asymmetric clipping: two diodes for out > inn, one for out < inn
+DA  out m   D1N914
+DB  m   inn D1N914
+DC  inn out D1N914
+.model D1N914 D(IS=2.52n N=1.752)
+.options method=trap reltol=1e-6 abstol=1e-15 vntol=1e-9
+.tran {tmax} {tstop} 0 {tmax} uic
+.control
+run
+wrdata sd1-out.txt v(in) v(out)
+.endc
+.end

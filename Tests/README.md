@@ -3,7 +3,23 @@
 `cmake --build build --target juicyboi_smoketest -j8` then run
 `build/juicyboi_smoketest_artefacts/Release/juicyboi_smoketest` (Linux).
 
-**Rev2 fixtures.** Rev2 deliberately changes the audio (solved passive tone
+**Rev2.2 fixtures.** Rev2.2 changes the audio again (solved Boost clippers,
+post-TMB recovery on Red/5150, tone stacks inside the 4× section), so the same
+renders were re-captured ONCE from the Rev2.2 build: `rect-rev2.2-clippers.f32`
+(`legacyRegression`, which also prints each voice/boost's RMS vs the Rev2.1
+render and requires |Δ| < 1.5 dB) and `lead-rev2.2-clippers.f32`
+(`ResonanceTest` section 7). The Rev2.1 renders below are kept as level
+references only. Capture code was removed again.
+
+`ClipperTest.cpp` validates the Rev2.2 clippers: small-signal gain vs the
+analytic linear network (< 0.1 dB), four stored ngspice transients
+(`clipper-ngspice-ref.txt`, written by `tools/clippers/plot_clippers.py --export`),
+diode clip levels / 2:1 asymmetry, stability at the 4× rate of 44.1/48/96/192 kHz
+with hot/impulse/quiet/silent input (no NaN/denormals, Newton ≤ 12 iterations),
+smoothed Drive/Level jumps, the recovery stage's unity small-signal gain, and a
+CPU bound.
+
+**Rev2 (2.1) fixtures.** Rev2 deliberately changes the audio (solved passive tone
 stacks), so the regression renders were re-captured ONCE from the Rev2 build:
 `rect-rev2-tonestack.f32` (73,728 floats, the same 9 Rectifier renders as the
 original 348fc68 capture: Red v1/v2/Orange × Boost off/OD-808/SD-1, defaults,
@@ -42,7 +58,7 @@ real amp measurements. See `docs/5150-presence.md`.
 series with R56) against independent nodal equations at 90 points, including
 Presence interaction, bit-exact reference at 0, sweeps, silence/DC, state
 migration and model-crossfade isolation. Its whole-processor null (section 7) now uses
-`lead-rev2-tonestack.f32` (see above).
+`lead-rev2.2-clippers.f32` (see above).
 
 `LevelTaperTest.cpp` covers the amp-style Input/Master/Boost Level/Cab Level scales (`Source/LevelTaper.h`):
 anchors (Input 5 = 0 dB, Master 6.5 = −6 dB, 7.5 = 0 dB, 10 = +12 dB, 0 = exact

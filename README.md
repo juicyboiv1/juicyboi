@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (Rev2)
+# juicyboi — heavy-riff preamp (Rev2.2)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -10,7 +10,9 @@ style), with a selectable 5150-inspired Lead voice. No commercial plugin code
 is used; the gain stages use original behavioral tuning, not an exact circuit
 solve. Since Rev2 the passive Treble/Bass/Mid tone stacks are solved as real
 networks from the part values printed on the referenced schematics (see
-*DSP stage notes → ToneStack* and [docs/tonestack.md](docs/tonestack.md)).
+*DSP stage notes → ToneStack* and [docs/tonestack.md](docs/tonestack.md)), and
+since Rev2.2 the Boost clipping stages are solved op-amp/diode circuits with the
+schematic part values ([docs/diode-clippers.md](docs/diode-clippers.md)).
 Descriptive product names belong to their respective owners; no affiliation is implied.
 
 ## Build
@@ -69,9 +71,10 @@ To install the VST3 on Linux, copy the bundle to `~/.vst3/`.
 ```
 Input trim
   └─► [ 4x oversampled ]
-        Boost (OD-808 | SD-1) ── type + on/off crossfades (~15–20 ms)
-          ├─► Rectifier Red v1/v2 / Orange ─► passive TMB (RF-1F parts, Red/Orange set) + presence ─► Graphic EQ
-          └─► 5150-inspired Lead (6 stages) ─► passive TMB (5150 sheet-3 parts) ─► Graphic EQ ─► Lead Presence ─► Lead Resonance
+        Boost (OD-808 | SD-1, solved op-amp diode clippers) ── type + on/off crossfades (~15–20 ms)
+          ├─► Rectifier Red v1/v2 / Orange ─► passive TMB (RF-1F parts, Red/Orange set) + presence ─► recovery stage (Red)
+          └─► 5150-inspired Lead (6 stages) ─► passive TMB (5150 sheet-3 parts) ─► recovery stage
+  └─► Graphic EQ (per model) ─► 5150: Lead Presence ─► Lead Resonance   (base rate)
   └─► Preamp Model crossfade (30 ms; after respective EQ / Presence paths)
   └─► Cab IR sim (optional; IR A / IR B blend)   (base rate)
   └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
@@ -281,12 +284,14 @@ Selectable front-end overdrive into the Dual Rec–style preamp. Shared **Drive 
 Tone / Level / On**; **Type** picks the circuit. Original DSP of publicly
 documented topology principles — not a product clone (no commercial branding).
 
-- **OD-808** (default): symmetric feedback-diode mid hump (classic TS-family
-  boost into high gain).
-- **SD-1**: asymmetric 3-diode clip with Boutique Overdrive Mod RC cues (fatter
-  coupling, 500 kΩ audio drive range, retuned mid, C6 omitted for an open top).
-  Voiced slightly hot for surplus thickness into Dual Rec–style gain.
-- Switching Type crossfades both circuits (state stays warm — no clicks).
+- **OD-808** (default): TS-808 clipping stage solved per sample (4.7k/0.047µF
+  gain leg, 51k + 500kA Drive, 51 pF, 1N914 pair, 4558-class op-amp) — symmetric
+  mid-hump boost into high gain.
+- **SD-1**: SD-1 clipping stage solved per sample with the Boutique Overdrive
+  mod values (1k/0.22µF leg, 10k + 500kA Drive, no feedback cap) and the stock
+  asymmetric diodes (2 one way, 1 the other); 1 kHz post LP, C6 removed.
+- Values, sources, assumptions and ngspice validation: [docs/diode-clippers.md](docs/diode-clippers.md).
+- Switching Type crossfades both circuits (no clicks); Drive/Tone/Level are smoothed per sample.
 - Tip: when A/B'ing Type, match perceived loudness with **Boost Level** (SD-1
   can hit a bit hotter at the same Drive).
 
@@ -403,8 +408,10 @@ Source/
   dsp/
     Filters.h              OnePole (RC-style 6 dB/oct) + RBJ Biquad, per-channel state
     SoftClip.h             tanh, diode-pair, diodeAsym3, asymmetric triode curve
-    Od808Stage.h/.cpp      OD-808–style boost (symmetric feedback-diode)
-    Sd1Stage.h/.cpp        SD-1–style boost (asym 3-diode, Boutique OD RC cues)
+    DiodeClipper.h         solved op-amp + diode feedback clipper (Newton–Raphson, Rev2.2)
+    Od808Stage.h/.cpp      OD-808 boost (TS-808 values, solved clipper)
+    Sd1Stage.h/.cpp        SD-1 boost (Boutique-mod values, solved asym clipper)
+    RecoveryStage.h        post-TMB recovery gain (Rectifier Red, 5150 Lead; Rev2.2)
     ChannelVoice.h         Red v1 / Red v2 / Orange voicing structs (stage corners, gains, bias)
     PreampCascade.h/.cpp   4× [coupling HP → gain → asym sat (inverting) → plate LP]
     ToneStack.h/.cpp       passive TMB: closed-form H(s), bilinear, nodal state-space realisation
@@ -417,6 +424,9 @@ Tests/
   SmokeTest.cpp            headless run through every channel/boost-type/gain combo
   EditorTest.cpp           offscreen editor checks (bindings, faceplates, drawer, Rev2 plate)
   ToneStackTest.cpp        TMB vs nodal solve / analog H(jw), interaction, stability, clicks, levels
+  ClipperTest.cpp          clippers vs analytic network + stored ngspice runs, stability, smoothing, CPU
+  ClipperDump.cpp          juicyboi_clipper_dump (tools/clippers/plot_clippers.py)
+  HarmonicsCompare.cpp     juicyboi_harmonics: THD / harmonic probe for Rev A/B at matched knobs
   ToneStackDump.cpp        juicyboi_tonestack_dump: CSV response for the plot script
 tools/tonestack/
   tmb-red.cir / tmb-orange.cir / tmb-lead.cir   SPICE netlists (LTspice / ngspice), same parts
@@ -426,15 +436,21 @@ tools/tonestack/
 
 ## DSP stage notes
 
-- **Od808Stage**: OD-808 rev.1 BOM cues (4.7k/50n gain leg ≈677 Hz, R11=51k +
-  500kA drive, C1=50p feedback LP, 1N914 pair, 220n/1k tone ≈723 Hz + 20kA
-  treble restore, 100k Balance level). Feedback-clipper form
-  `out = in + clip(gain·hp(in))` — original DSP, not a product clone.
-- **Sd1Stage**: Boutique Overdrive Mod RC cues on an SD-1–topology path
-  (R6=1k/C3=0.22u ≈723 Hz mid, R5=10k + 500kA drive, asym 3-diode clip,
-  R7/C4 ≈1 kHz post LP, C6 omitted for open top, fatter ~8 Hz coupling).
-  Same `out = in + asym_clip(gain·hp(in))` form; slight makeup for Dual Rec
-  thickness. Original DSP, not a product clone.
+- **DiodeClipper / Od808Stage / Sd1Stage (Rev2.2)**: the op-amp clipping
+  stage is solved every sample at 4×: single-pole 3 MHz op-amp, trapezoidal
+  gain-leg and feedback caps, BDF2 op-amp integrator, Shockley diode strings
+  (1N914 model IS 2.52 nA, n 1.752) solved by bracketed Newton–Raphson (mean
+  2 iterations). TS-808 values: C2 1µ/R5 10k, R4 4.7k/C3 0.047µ, R6 51k + 500kA,
+  C4 51p, 1N914 pair, R7 1k/C5 0.22µ. SD-1: stock topology + Boutique-mod values
+  (C2 .055µ/R4 100k, R6 1k/C3 0.22µ, R5 10k + 500kA, no feedback cap, 2+1
+  diodes, R7 1k/C4 0.15µ). ngspice: worst rms error 0.33 % (OD) / 1.1 % (SD-1)
+  at 192 kHz. The Tone/Level stages after it are still the Rev2.1 behavioural
+  ones. Full tables: [docs/diode-clippers.md](docs/diode-clippers.md).
+- **RecoveryStage (Rev2.2)**: post-TMB recovery gain on Rectifier Red and the
+  5150 Lead (stand-in for the FX-loop recovery / phase-inverter triodes): unity
+  small-signal asymmetric triode curve, so the stack's insertion loss is made up
+  with harmonics instead of clean gain. Brings Red v2 / Lead THD and harmonic
+  count to at least Rev1 at matched knobs (see the doc, §6).
 - **PreampCascade**: tight HP → 4 triode-like stages, each with a coupling HP,
   a gain, an asymmetric soft-sat (positive half flattens harder, bias offset gives
   even harmonics, polarity inverts per stage), and a plate/Miller LP. The Gain pot
@@ -452,8 +468,8 @@ tools/tonestack/
   steady state equals the bilinear transfer function exactly while knob moves act
   on charged caps like the real circuit. Knobs, parts (Red↔Orange) and makeup
   are smoothed over ~20 ms, the model is re-solved every 8 samples while moving
-  and ramped per sample in between: no zipper noise or clicks. Runs at the base
-  rate after the 4× section at any sample rate (prewarp clamps to fs/4).
+  and ramped per sample in between: no zipper noise or clicks. Since Rev2.2 it
+  runs inside the 4× section (ahead of the recovery stage); prewarp clamps to fs/4.
   The network keeps its real insertion loss; a fixed makeup gain per part set
   sits after it. Part values and sources:
 
@@ -491,13 +507,34 @@ tools/tonestack/
    bypass dynamics, and supply sag. These are what give a high-gain amp its feel.
 3. Tune stage gains, corners, and bias against measurements (frequency sweeps and
    level-dependent THD of reference circuits or SPICE sims you build).
-4. Fit the OD clipper knee to a SPICE diode model (or use a WDF / Newton solve
-   of the feedback clipper).
+4. ~~Fit the OD clipper knee to a SPICE diode model (or use a WDF / Newton solve
+   of the feedback clipper).~~ **Done in Rev2.2**: Newton-solved op-amp/diode
+   clippers validated against ngspice. Follow-ups: solve the active Tone stage
+   after the clipper; op-amp rails.
 5. Add a power-amp stage with presence moved into its NFB loop. (Cab IR and the
    key/sidechain noise gate are now in.)
-6. Smooth OD level changes per sample (tone stacks are smoothed since Rev2). Add an oversampling
+6. ~~Smooth OD level changes per sample~~ (done in Rev2.2). Add an oversampling
    quality setting and presets.
 7. Rev1 GUI polish after hands-on testing (see *Rev1 GUI*).
+
+## Rev2.2 changelog
+
+- **Solved diode clippers.** OD-808 and SD-1 Boosts now solve the op-amp
+  clipping stage (diode law, gain leg, feedback cap, op-amp GBW) per sample with
+  the TS-808 values and the SD-1 Boutique-mod values; validated against ngspice
+  (`tools/clippers/`). Boost Drive/Tone/Level are smoothed per sample; the
+  clippers only run while the Boost is audible.
+- **More gain where Rev1 had it.** New post-tone-stack recovery stage on
+  Rectifier Red and the 5150 Lead; the tone stacks moved inside the 4× section.
+  Red v2 / Lead THD is now +1.8 dB or more above Rev1 at every probed Gain/input
+  level (Rev2.1 was 1.4–2.6 dB below), with the output level within −0.8…+0.6 dB
+  of Rev2.1. Orange is unchanged.
+- Default-knob level vs Rev2.1: Boost off −0.1…+0.7 dB, OD-808/SD-1 −0.2…0.0 dB,
+  5150 −0.1 dB (boosted 5150 −1.4/−1.5 dB from recovery compression).
+- Reference renders re-captured once (`rect-rev2.2-clippers.f32`,
+  `lead-rev2.2-clippers.f32`); the Rev2.1 renders stay as level references.
+- New `ClipperTest`, `juicyboi_clipper_dump`, `juicyboi_harmonics`. Version 2.2.0;
+  still the *Rev2* plugin (`Jcb2`), plate unchanged.
 
 ## Rev2 changelog
 

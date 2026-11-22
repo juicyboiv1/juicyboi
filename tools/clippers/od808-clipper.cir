@@ -1,0 +1,32 @@
+* juicyboi Rev2.2 — OD-808 / TS-808 clipping stage (validation netlist)
+* Values: TS-808 schematic (S. Cerutti drawing) + ElectroSmash TS808 BOM.
+* Single-pole op-amp (JRC/NJM4558 datasheet: GBW 3 MHz, A0 100 dB; no rails/slew), Vr = AC ground, 1N914 Shockley model (Rs omitted).
+* plot_clippers.py rewrites the .param line and the wrdata file name.
+.param drive=0.5 amp=1 freq=1k tstop=30m tmax=0.65u
+.param rdrive={500k*(pwr(10,2*drive)-1)/99 + 1m}
+Vin in 0 SIN(0 {amp} {freq})
+* input coupling C2 / bias R5
+C2  in  inp 1u
+R5  inp 0   10k
+* single-pole op-amp: dV/dt = wt (v+ - v-) - (wt/A0) V, Cop = 1/(2 pi 3 MHz)
+Gop 0  vi  inp inn 1
+Cop vi 0   5.3051648e-8
+Rop vi 0   1e5
+Eob out 0  vi  0   1
+* gain leg R4 / C3
+R4  inn n1  4.7k
+C3  n1  0   0.047u
+* feedback: R6 + Drive (500kA as rheostat), C4, D1/D2 antiparallel
+R6  out nf  51k
+RVR nf  inn {rdrive}
+C4  out inn 51p
+D1  inn out D1N914
+D2  out inn D1N914
+.model D1N914 D(IS=2.52n N=1.752)
+.options method=trap reltol=1e-6 abstol=1e-15 vntol=1e-9
+.tran {tmax} {tstop} 0 {tmax} uic
+.control
+run
+wrdata od808-out.txt v(in) v(out)
+.endc
+.end

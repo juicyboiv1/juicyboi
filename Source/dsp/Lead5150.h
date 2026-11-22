@@ -3,6 +3,7 @@
 #include "Filters.h"
 #include "SoftClip.h"
 #include "ToneStack.h"
+#include "RecoveryStage.h"
 
 namespace jb::dsp
 {
@@ -78,6 +79,17 @@ private:
 inline TmbComponents leadTmb()
 {
     return { 250e3, 1e6, 50e3, 47e3, 570e-12, 22e-9, 22e-9, 2.80 };
+}
+
+/** Post-TMB recovery gain for the Lead path (RecoveryStage, Rev2.2): stands in
+    for the 5150's effects-loop / phase-inverter triodes after the tone stack. */
+inline RecoveryStage::Settings leadRecovery()
+{
+    RecoveryStage::Settings s;
+    s.drive = 2.0f; s.bias = 0.50f; s.positive = 1.30f; s.negative = 1.00f; s.hpHz = 12.0;
+    s.mirror = true;    // adds to (instead of cancelling) the Lead cascade's dominant H2
+    s.outGain = 0.93f;  // -0.6 dB: keeps the default-knob Lead level at Rev2.1
+    return s;
 }
 
 /** Model-specific passive TMB after the Lead cascade (solved network, see

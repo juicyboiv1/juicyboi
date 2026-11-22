@@ -2,6 +2,7 @@
 #include "LeadFixture.h"
 #include <complex>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 namespace
@@ -227,11 +228,12 @@ int resonanceValidation()
         check ("Lead Resonance has zero effect on Rectifier", leak < 1e-9f);
     }
 
-    // 7) Whole-processor null vs lead-rev2-tonestack.f32, captured ONCE from the Rev2
-    //    passive-TMB build with the same 5 configurations as the original 62a1239
-    //    capture (lead-62a1239.f32 is kept for ToneStackTest's default-level check).
+    // 7) Whole-processor null vs lead-rev2.2-clippers.f32, captured ONCE from the
+    //    Rev2.2 build (solved clippers + post-TMB recovery) with the same 5
+    //    configurations as the original 62a1239 capture. lead-rev2-tonestack.f32
+    //    (Rev2.1) and lead-62a1239.f32 are kept as level references.
     {
-        juce::File file (juce::String (JUICYBOI_TEST_DIR) + "/lead-rev2-tonestack.f32");
+        juce::File file (juce::String (JUICYBOI_TEST_DIR) + "/lead-rev2.2-clippers.f32");
         auto in = file.createInputStream();
         const auto perConfig = (size_t) (leadfixture::blocks * leadfixture::blockSize);
         bool ok = in != nullptr && in->getTotalLength() == (juce::int64) (perConfig * leadfixture::numConfigs * sizeof (float));
@@ -244,10 +246,10 @@ int resonanceValidation()
                 fin = fin && std::isfinite (f) && std::isfinite (r);
                 error = std::max (error, std::abs (f - r));
             }
-            std::printf ("Rev2 fixture null config %d (%s): max error %.9g\n", c, c < 3 ? "5150" : "Rectifier", (double) error);
+            std::printf ("Rev2.2 fixture null config %d (%s): max error %.9g\n", c, c < 3 ? "5150" : "Rectifier", (double) error);
             ok = ok && fin && error < 2.0e-6f;
         }
-        check ("5150 + Rectifier configurations null vs the Rev2 tone-stack fixture", ok);
+        check ("5150 + Rectifier configurations null vs the Rev2.2 fixture", ok);
     }
 
     // 8) (Rev2) The old Rectifier Bass-shelf-centre check is superseded by the solved

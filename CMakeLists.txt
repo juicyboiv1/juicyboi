@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(JUICYBOI VERSION 2.1.0 LANGUAGES C CXX)
+project(JUICYBOI VERSION 2.2.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -86,7 +86,7 @@ target_link_libraries(juicyboi
 option(JUICYBOI_BUILD_TESTS "Build the headless smoke test" ON)
 if(JUICYBOI_BUILD_TESTS)
     juce_add_console_app(juicyboi_smoketest PRODUCT_NAME "juicyboi_smoketest")
-    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp)
+    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp)
     # Reuse the plugin's JUCE module objects/includes/defines rather than
     # compiling the modules a second time.
     target_include_directories(juicyboi_smoketest PRIVATE Source
@@ -99,6 +99,19 @@ if(JUICYBOI_BUILD_TESTS)
     # Tone-stack response dump (plain C++, no JUCE): tools/tonestack/plot_tonestack.py
     add_executable(juicyboi_tonestack_dump Tests/ToneStackDump.cpp Source/dsp/ToneStack.cpp)
     target_include_directories(juicyboi_tonestack_dump PRIVATE Source)
+
+    # Harmonic spectrum / THD probe (Rev A/B at matched knobs): juicyboi_harmonics [spectrum-dir]
+    juce_add_console_app(juicyboi_harmonics PRODUCT_NAME "juicyboi_harmonics")
+    target_sources(juicyboi_harmonics PRIVATE Tests/HarmonicsCompare.cpp)
+    target_include_directories(juicyboi_harmonics PRIVATE Source
+        $<TARGET_PROPERTY:juicyboi,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(juicyboi_harmonics PRIVATE
+        $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
+    target_link_libraries(juicyboi_harmonics PRIVATE juicyboi juce::juce_recommended_config_flags)
+
+    # Rev2.2 clipper dump (plain C++, no JUCE): tools/clippers/plot_clippers.py
+    add_executable(juicyboi_clipper_dump Tests/ClipperDump.cpp Source/dsp/Od808Stage.cpp Source/dsp/Sd1Stage.cpp)
+    target_include_directories(juicyboi_clipper_dump PRIVATE Source)
 
     # Offscreen editor screenshots: juicyboi_screenshots <output-dir>
     juce_add_console_app(juicyboi_screenshots PRODUCT_NAME "juicyboi_screenshots")

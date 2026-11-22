@@ -6,6 +6,7 @@
 #include "Parameters.h"
 #include "dsp/Od808Stage.h"
 #include "dsp/Sd1Stage.h"
+#include "dsp/RecoveryStage.h"
 #include "dsp/PreampCascade.h"
 #include "dsp/Lead5150.h"
 #include "dsp/LeadPresence.h"
@@ -130,6 +131,9 @@ private:
     jb::dsp::Sd1Stage   sd1;
     jb::dsp::PreampCascade riffA, riffAv1, riffB; // Red v2, Red v1, Orange
     jb::dsp::ToneStack tone;
+    jb::dsp::RecoveryStage rectRecovery, leadRecovery; // post-TMB recovery gain (Rev2.2)
+    float recoveryRed = 0.0f, recoveryOrange = 0.0f;
+    bool odRunning = false, sd1Running = false; // Boost stages processed last frame
     jb::dsp::GraphicEq graphicEq, leadGraphicEq;
     jb::dsp::LeadPresence leadPresence;
     jb::dsp::LeadResonance leadResonance;

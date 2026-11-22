@@ -92,4 +92,6 @@ region a little more and keep more low end at the defaults.
   linearly per sample. A 0→10 jump on all three knobs stays at the click-free
   bound of the 2nd-difference detector (unsmoothed would be 400× larger).
 - Tails are flushed to exact zero below 1e-30 (no denormals).
-- The stacks run at the base rate after the 4× section (same place as before).
+- Rev2.1 ran the stacks at the base rate after the 4× section. Since Rev2.2 they run
+  inside it (4× fs, so the bilinear error above shrinks to the 192 kHz-class row),
+  ahead of the post-TMB recovery stage (docs/diode-clippers.md §6).

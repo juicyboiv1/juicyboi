@@ -66,6 +66,14 @@ struct ChannelVoicing
 
     // Presence shelf corner (NFB-loop principle)
     double presenceHz = 2400.0;
+
+    // Post-TMB recovery stage (RecoveryStage, Rev2.2): drive (0 = clean) and
+    // operating-point bias of the asymmetric curve. Tuned with
+    // juicyboi_harmonics so Red reaches at least Rev1's THD / harmonic count
+    // at matched knobs (docs/diode-clippers.md, "Rev2.2 gain recovery").
+    float recoveryDrive = 0.0f;
+    float recoveryBias  = 0.40f;
+    float recoveryOutGain = 1.07f; // +0.6 dB: undoes the stage's compression at default knobs
 };
 
 namespace voicings
@@ -114,6 +122,7 @@ inline ChannelVoicing redV1()
     v.inputTightHpHz = 95.0;
     v.postLpHz = 7800.0;
     v.makeup = 0.58f;
+    v.recoveryDrive = 2.0f; // Red: Rectifier FX-loop recovery / PI stand-in (Rev2.2)
 
     v.tmb = redTmb();
     v.presenceHz = 2400.0;
@@ -144,6 +153,7 @@ inline ChannelVoicing redV2()
     v.inputTightHpHz = 65.0;
     v.postLpHz = 7400.0;
     v.makeup = 0.49f; // ~-1.5 dB vs v1: rough level-match so the A/B is about tone, not loudness
+    v.recoveryDrive = 2.0f; // Red: Rectifier FX-loop recovery / PI stand-in (Rev2.2)
 
     v.tmb = redTmb();
     v.presenceHz = 2400.0;

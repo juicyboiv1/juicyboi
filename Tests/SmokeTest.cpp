@@ -21,6 +21,7 @@ int resonanceValidation();
 int levelTaperValidation();
 int editorValidation();
 int toneStackValidation();
+int clipperValidation();
 
 int main()
 {
@@ -33,7 +34,7 @@ int main()
     p->prepareToPlay (sr, bs);
     std::printf ("latency: %d samples\n", p->getLatencySamples());
 
-    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation() + levelTaperValidation() + editorValidation() + toneStackValidation();
+    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation() + levelTaperValidation() + editorValidation() + toneStackValidation() + clipperValidation();
     juce::MidiBuffer midi;
 
     {

@@ -62,7 +62,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     lead.setGain (pGain->load() / 10.0f);
     lead.prepare (osRate);
     leadTone.setKnobs (pBass->load(), pMid->load(), pTreble->load());
-    leadTone.prepare (sampleRate);
+    leadTone.prepare (osRate); // Rev2.2: TMB + recovery run inside the 4x region
     leadPresence.setPosition (pLeadPresence->load());
     leadPresence.prepare (sampleRate);
     leadResonance.setPosition (pLeadResonance->load());
@@ -74,7 +74,17 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     riffA.prepare (osRate, voicingA);
     riffAv1.prepare (osRate, voicingAv1);
     riffB.prepare (osRate, voicingB);
-    tone.prepare (sampleRate);
+    tone.prepare (osRate);     // Rev2.2: TMB + recovery run inside the 4x region
+    {
+        dsp::RecoveryStage::Settings rs;
+        rs.drive = voicingA.recoveryDrive;
+        rs.bias  = voicingA.recoveryBias;
+        rs.outGain = voicingA.recoveryOutGain;
+        rectRecovery.prepare (osRate, rs);
+        recoveryRed = voicingA.recoveryDrive;
+        recoveryOrange = voicingB.recoveryDrive;
+        leadRecovery.prepare (osRate, dsp::leadRecovery());
+    }
     cab.prepare (sampleRate, maxChunk, numCh);
     gate.prepare (sampleRate);
     keyBuffer.setSize (1, maxChunk, false, true, false);
@@ -113,6 +123,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     updateParameters();
     tone.snap();     // passive TMBs: start on the session's knobs/channel, no fade-in
     leadTone.snap();
+    od.snap();       // Boost clippers: start on the session's Drive/Tone/Level
+    sd1.snap();
     leadGraphicEq.prepare (sampleRate, maxChunk);
     graphicEq.prepare (sampleRate, maxChunk); // after params: snaps EQ to current settings (no fade-in on load)
 }
@@ -159,7 +171,7 @@ void JuicyboiAudioProcessor::updateParameters()
     channelMix.setTargetValue ((float) ch);
     redVoiceMix.setTargetValue (pRedVoice->load() > 0.5f ? 1.0f : 0.0f); // 1 = v2
 
-    // TODO: smooth OD level changes (currently per block). Tone stacks smooth internally.
+    // Boost Drive/Tone/Level are targets; the stages smooth them per sample.
     const auto odDrive01 = pOdDrive->load() / 10.0f;
     const auto odTone01  = pOdTone->load() / 10.0f;
     const auto odLvl     = taper::boostLevelKnobToGain (pOdLevel->load());
@@ -293,20 +305,35 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         for (int i = 0; i < n; ++i)
         {
             lead.beginFrame();
+            od.beginFrame();
+            sd1.beginFrame();
             const auto odAmt   = odMix.getNextValue();
             const auto typeAmt = odTypeMix.getNextValue(); // 0 = OD-808, 1 = SD-1
             const auto chAmt   = channelMix.getNextValue();
             const auto rvAmt   = redVoiceMix.getNextValue(); // 0 = Red v1, 1 = Red v2
+            const auto recDrive = recoveryRed + chAmt * (recoveryOrange - recoveryRed);
+
+            // Boost stages needed this frame (both while a crossfade is running)
+            const bool boostAudible = odAmt > 0.0f || odMix.isSmoothing();
+            const bool runOd  = boostAudible && (typeAmt < 1.0f || odTypeMix.isSmoothing());
+            const bool runSd1 = boostAudible && (typeAmt > 0.0f || odTypeMix.isSmoothing());
+            if (runOd && ! odRunning)   od.reset();
+            if (runSd1 && ! sd1Running) sd1.reset();
+            odRunning = runOd;
+            sd1Running = runSd1;
+            tone.beginFrame();
+            leadTone.beginFrame();
 
             for (int ch = 0; ch < numProc; ++ch)
             {
                 auto* d = up.getChannelPointer ((size_t) ch);
                 const auto x = d[i];
 
-                // Both Boost circuits always run (state stays warm); type and
-                // on/off are short equal-gain crossfades so switching never clicks.
-                const auto odOut  = od.process (x, ch);
-                const auto sd1Out = sd1.process (x, ch);
+                // Type and on/off are short equal-gain crossfades so switching
+                // never clicks. Rev2.2: the solved clippers only run while they
+                // are audible (a stage restarts from rest when it is needed).
+                const auto odOut  = runOd  ? od.process (x, ch)  : x;
+                const auto sd1Out = runSd1 ? sd1.process (x, ch) : x;
                 const auto wet    = odOut + typeAmt * (sd1Out - odOut);
                 const auto boosted = x + odAmt * (wet - x);
 
@@ -316,26 +343,17 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                 const auto a1 = riffAv1.process (boosted, ch);
                 const auto a  = a1 + rvAmt * (a2 - a1);
                 const auto b  = riffB.process (boosted, ch);
-                d[i] = a + chAmt * (b - a);
-                leadUp.getChannelPointer ((size_t) ch)[i] = lead.process (boosted, ch);
+
+                // Passive TMB, then the post-stack recovery gain (both at 4x)
+                const auto rect = tone.process (a + chAmt * (b - a), ch);
+                d[i] = rectRecovery.process (rect, recDrive, ch);
+                leadUp.getChannelPointer ((size_t) ch)[i] =
+                    leadRecovery.process (leadTone.process (lead.process (boosted, ch), ch), ch);
             }
         }
     });
 
-    // 3) Keep BOTH complete paths warm. The crossfade must follow the
-    // model-specific Presence: filtering the mixed signal would color Rectifier.
-    for (int i = 0; i < len; ++i)
-    {
-        tone.beginFrame();
-        leadTone.beginFrame();
-        for (int ch = 0; ch < numProc; ++ch)
-        {
-            auto& rect = buffer.getWritePointer (ch, start)[i];
-            auto& alt = leadBuffer.getWritePointer (ch)[i];
-            rect = tone.process (rect, ch);
-            alt = leadTone.process (alt, ch);
-        }
-    }
+    // 3) Tone stacks + recovery now run inside the oversampled region (step 2).
 
     // 3b) Independent EQ filter histories, identical shared settings. The legacy
     // instance still receives exactly the old Rectifier samples/arithmetic.
