@@ -33,9 +33,18 @@ Result measure (int model, int channel, int redVoice, float gain, double amp, co
     const double sr = 48000.0; const int bs = 512;
     p->setPlayConfigDetails (1, 2, sr, bs);
     setParam (*p, jb::params::id::preampModel, (float) model);
-    setParam (*p, jb::params::id::channel, (float) channel);
-    setParam (*p, jb::params::id::redVoice, (float) redVoice);
-    setParam (*p, jb::params::id::gain, gain);
+    if (model == 1) // Rev2.4 5150 set: channel = Rhythm 0 / Lead 1, redVoice field = Crunch
+    {
+        setParam (*p, jb::params::id::m5150Channel, (float) channel);
+        setParam (*p, jb::params::id::m5150Crunch, (float) redVoice);
+        setParam (*p, channel == 1 ? jb::params::id::m5150LeadPre : jb::params::id::m5150RhythmPre, gain);
+    }
+    else
+    {
+        setParam (*p, jb::params::id::channel, (float) channel);
+        setParam (*p, jb::params::id::redVoice, (float) redVoice);
+        setParam (*p, jb::params::id::gain, gain);
+    }
     setParam (*p, jb::params::id::cabEnable, 0.0f);
     setParam (*p, jb::params::id::eqEnable, 0.0f);
     setParam (*p, jb::params::id::gateEnable, 0.0f);
@@ -93,7 +102,8 @@ int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
     struct Cfg { const char* name; int model, channel, redVoice; };
-    const Cfg cfgs[] = { { "RedV2", 0, 0, 1 }, { "RedV1", 0, 0, 0 }, { "Orange", 0, 1, 0 }, { "Lead", 1, 0, 1 } };
+    const Cfg cfgs[] = { { "RedV2", 0, 0, 1 }, { "RedV1", 0, 0, 0 }, { "Orange", 0, 1, 0 }, { "Lead", 1, 1, 0 },
+                         { "Rhythm", 1, 0, 0 }, { "Crunch", 1, 0, 1 } };
     const float gains[] = { 3.0f, 5.0f, 7.0f, 10.0f };
     const double amps[] = { 0.05, 0.25 };
     const double scale = argc > 2 ? std::atof (argv[2]) : 1.0; // probe: input scale (pre-gain experiments)

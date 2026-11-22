@@ -32,7 +32,8 @@ namespace jb::taper
 // 1 = Input/Master/Boost Level/Cab Level stored in dB
 // 2 = Input/Master are 0–10 knobs; Boost Level/Cab Level still dB
 // 3 = all four are 0–10 knobs
-inline constexpr int stateVersion = 3;
+// 4 = Rev2.4 per-amp settings (the 5150 set is copied from the legacy IDs on load)
+inline constexpr int stateVersion = 4; // Rev2.4: per-amp settings (5150 set migrated from the legacy IDs)
 
 inline constexpr float inputDefaultKnob  = 5.0f; // 0 dB  (old default)
 inline constexpr float masterDefaultKnob = 6.5f; // -6 dB (old default)

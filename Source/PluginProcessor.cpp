@@ -4,6 +4,7 @@
 
 using namespace jb;
 
+
 JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     : AudioProcessor (BusesProperties()
                           .withInput  ("Input",  juce::AudioChannelSet::mono(),   true)
@@ -44,6 +45,19 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pGateRelease = apvts.getRawParameterValue (params::id::gateRelease);
     bypassParam = dynamic_cast<juce::AudioParameterBool*> (apvts.getParameter (params::id::bypass));
 
+    for (int s = 0; s < params::numAmpSlots; ++s)
+        p5150[(size_t) s] = apvts.getRawParameterValue (params::ampId (1, (params::AmpSlot) s));
+    p5Channel    = apvts.getRawParameterValue (params::id::m5150Channel);
+    p5Bright     = apvts.getRawParameterValue (params::id::m5150Bright);
+    p5Crunch     = apvts.getRawParameterValue (params::id::m5150Crunch);
+    p5RhythmPre  = apvts.getRawParameterValue (params::id::m5150RhythmPre);
+    p5LeadPre    = apvts.getRawParameterValue (params::id::m5150LeadPre);
+    p5Low        = apvts.getRawParameterValue (params::id::m5150Low);
+    p5Mid        = apvts.getRawParameterValue (params::id::m5150Mid);
+    p5High       = apvts.getRawParameterValue (params::id::m5150High);
+    p5RhythmPost = apvts.getRawParameterValue (params::id::m5150RhythmPost);
+    p5LeadPost   = apvts.getRawParameterValue (params::id::m5150LeadPost);
+
     voicingA   = dsp::voicings::riffA();   // Red v2
     voicingAv1 = dsp::voicings::riffAv1(); // Red v1
     voicingB = dsp::voicings::riffB();
@@ -59,10 +73,17 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     leadOversampler.prepare (numCh, maxChunk);
     const auto osRate = sampleRate * oversampler.getFactor();
 
-    lead.setGain (pGain->load() / 10.0f);
-    lead.prepare (osRate);
-    leadTone.setKnobs (pBass->load(), pMid->load(), pTreble->load());
+    lead5.configure (voicing5150, false);
+    rhythm5.configure (voicing5150, true);
+    lead5.setPreGain (p5LeadPre->load());
+    rhythm5.setPreGain (p5RhythmPre->load());
+    rhythm5.setSwitches (p5Bright->load() > 0.5f, p5Crunch->load() > 0.5f);
+    lead5.prepare (osRate);
+    rhythm5.prepare (osRate);
+    leadTone.setKnobs (p5Low->load(), p5Mid->load(), p5High->load());
     leadTone.prepare (osRate); // Rev2.2: TMB + recovery run inside the 4x region
+    power5.prepare (osRate, voicing5150);
+    speaker5.prepare (sampleRate, voicing5150);
     leadPresence.setPosition (pLeadPresence->load());
     leadPresence.prepare (sampleRate);
     leadResonance.setPosition (pLeadResonance->load());
@@ -71,6 +92,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
 
     od.prepare (osRate);
     sd1.prepare (osRate);
+    od5.prepare (osRate);
+    sd15.prepare (osRate);
     riffA.prepare (osRate, voicingA);
     riffAv1.prepare (osRate, voicingAv1);
     riffB.prepare (osRate, voicingB);
@@ -84,15 +107,18 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
         rectSpeaker.prepare (osRate, voicingA.speakerLoad); // Rev2.3, Red v2 only
         recoveryRed = voicingA.recoveryDrive;
         recoveryOrange = voicingB.recoveryDrive;
-        leadRecovery.prepare (osRate, dsp::leadRecovery());
     }
     cab.prepare (sampleRate, maxChunk, numCh);
+    cab5.prepare (sampleRate, maxChunk, numCh);
     gate.prepare (sampleRate);
+    gate5.prepare (sampleRate);
+    cabIdle[0] = cabIdle[1] = false;
     keyBuffer.setSize (1, maxChunk, false, true, false);
+    keyBuffer5.setSize (1, maxChunk, false, true, false);
 
     // Cab uses zero-latency convolution; its latency (if any) is added anyway.
     baseLatency = oversampler.getLatencySamples();
-    const auto latency = baseLatency + cab.getLatencySamples();
+    const auto latency = baseLatency + juce::jmax (cab.getLatencySamples(), cab5.getLatencySamples());
     setLatencySamples (latency);
 
     dryDelay.prepare ({ sampleRate, (juce::uint32) maxChunk, (juce::uint32) numCh });
@@ -110,6 +136,12 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     odTypeMix .reset (osRate, 0.02);
     channelMix.reset (osRate, 0.02);
     redVoiceMix.reset (osRate, 0.03);
+    inputGain5.reset (sampleRate, 0.02);
+    odMix5    .reset (osRate, 0.015);
+    odTypeMix5.reset (osRate, 0.02);
+    chMix5    .reset (osRate, 0.02);
+    postLead5 .reset (osRate, 0.02);
+    postRhythm5.reset (osRate, 0.02);
 
     // Snap smoothers to current values so there is no fade-in on load
     inputGain .setCurrentAndTargetValue (taper::inputKnobToGain (pInputTrim->load()));
@@ -119,6 +151,15 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     odTypeMix .setCurrentAndTargetValue (pOdType->load() > 0.5f ? 1.0f : 0.0f); // 1 = SD-1
     channelMix.setCurrentAndTargetValue (pChannel->load() > 0.5f ? 1.0f : 0.0f);
     redVoiceMix.setCurrentAndTargetValue (pRedVoice->load() > 0.5f ? 1.0f : 0.0f);
+    {
+        using S = params::AmpSlot;
+        inputGain5.setCurrentAndTargetValue (taper::inputKnobToGain (p5 (S::inputTrim)));
+        odMix5    .setCurrentAndTargetValue (p5 (S::odEnable) > 0.5f ? 1.0f : 0.0f);
+        odTypeMix5.setCurrentAndTargetValue (p5 (S::odType) > 0.5f ? 1.0f : 0.0f);
+        chMix5    .setCurrentAndTargetValue (p5Channel->load() > 0.5f ? 1.0f : 0.0f);
+        postLead5 .setCurrentAndTargetValue (dsp::Power5150::postGain (p5LeadPost->load()));
+        postRhythm5.setCurrentAndTargetValue (dsp::Power5150::postGain (p5RhythmPost->load()));
+    }
 
     lastChannel = -1;
     updateParameters();
@@ -126,6 +167,10 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     leadTone.snap();
     od.snap();       // Boost clippers: start on the session's Drive/Tone/Level
     sd1.snap();
+    od5.snap();
+    sd15.snap();
+    lead5.snap();    // 5150 Pre Gain networks / Rhythm switches: no fade-in on load
+    rhythm5.snap();
     leadGraphicEq.prepare (sampleRate, maxChunk);
     graphicEq.prepare (sampleRate, maxChunk); // after params: snaps EQ to current settings (no fade-in on load)
 }
@@ -180,10 +225,6 @@ void JuicyboiAudioProcessor::updateParameters()
     sd1.setParameters (odDrive01, odTone01, odLvl);
 
     const auto gain01 = pGain->load() / 10.0f;
-    lead.setGain (gain01);
-    leadPresence.setPosition (pLeadPresence->load());
-    leadResonance.setPosition (pLeadResonance->load());
-    leadTone.setKnobs (pBass->load(), pMid->load(), pTreble->load());
     riffA.setGain (gain01);
     riffAv1.setGain (gain01);
     riffB.setGain (gain01);
@@ -201,12 +242,40 @@ void JuicyboiAudioProcessor::updateParameters()
         for (size_t b = 0; b < eqDb.size(); ++b)
             eqDb[b] = pEqBands[b]->load();
         graphicEq.setParameters (pEqEnable->load() > 0.5f, eqDb, pEqLevel->load());
-        leadGraphicEq.setParameters (pEqEnable->load() > 0.5f, eqDb, pEqLevel->load());
     }
 
     cab.setParameters (pCabEnable->load() > 0.5f, pCabBlend->load(), taper::cabLevelKnobToGain (pCabLevel->load()));
 
     gate.setParameters (pGateEnable->load() > 0.5f, pGateThresh->load(), pGateHold->load(), pGateRelease->load());
+
+    // Rev2.4: the 5150's own set (docs/per-amp-state.md)
+    {
+        using S = params::AmpSlot;
+        inputGain5.setTargetValue (taper::inputKnobToGain (p5 (S::inputTrim)));
+        odMix5    .setTargetValue (p5 (S::odEnable) > 0.5f ? 1.0f : 0.0f);
+        odTypeMix5.setTargetValue (p5 (S::odType) > 0.5f ? 1.0f : 0.0f);
+        const auto d5 = p5 (S::odDrive) / 10.0f, t5 = p5 (S::odTone) / 10.0f;
+        const auto l5 = taper::boostLevelKnobToGain (p5 (S::odLevel));
+        od5.setParameters (d5, t5, l5);
+        sd15.setParameters (d5, t5, l5);
+
+        lead5.setPreGain (p5LeadPre->load());
+        rhythm5.setPreGain (p5RhythmPre->load());
+        rhythm5.setSwitches (p5Bright->load() > 0.5f, p5Crunch->load() > 0.5f);
+        chMix5.setTargetValue (p5Channel->load() > 0.5f ? 1.0f : 0.0f);
+        postLead5.setTargetValue (dsp::Power5150::postGain (p5LeadPost->load()));
+        postRhythm5.setTargetValue (dsp::Power5150::postGain (p5RhythmPost->load()));
+        leadTone.setKnobs (p5Low->load(), p5Mid->load(), p5High->load());
+        leadPresence.setPosition (pLeadPresence->load());
+        leadResonance.setPosition (pLeadResonance->load());
+
+        std::array<float, dsp::GraphicEq::numBands> eqDb {};
+        for (size_t b = 0; b < eqDb.size(); ++b)
+            eqDb[b] = p5 ((S) ((int) S::eq100 + (int) b));
+        leadGraphicEq.setParameters (p5 (S::eqEnable) > 0.5f, eqDb, p5 (S::eqLevel));
+        cab5.setParameters (p5 (S::cabEnable) > 0.5f, p5 (S::cabMicBlend), taper::cabLevelKnobToGain (p5 (S::cabLevel)));
+        gate5.setParameters (p5 (S::gateEnable) > 0.5f, p5 (S::gateThreshold), p5 (S::gateHold), p5 (S::gateRelease));
+    }
 }
 
 void JuicyboiAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -269,34 +338,48 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         }
     }
 
-    // 1) Input trim
+    // 1) Input trim. Rev2.4: the 5150 gets its own copy of the raw input and
+    //    its own Input knob; the Rectifier path below is byte-for-byte Rev2.3.
+    for (int ch = 0; ch < numProc; ++ch)
+        leadBuffer.copyFrom (ch, 0, buffer, ch, start, len);
+
     for (int i = 0; i < len; ++i)
     {
         const auto g = inputGain.getNextValue();
         for (int ch = 0; ch < numProc; ++ch)
             buffer.getWritePointer (ch, start)[i] *= g;
     }
+    for (int i = 0; i < len; ++i)
+    {
+        const auto g = inputGain5.getNextValue();
+        for (int ch = 0; ch < numProc; ++ch)
+            leadBuffer.getWritePointer (ch)[i] *= g;
+    }
 
-    // 1b) Gate key: clean post-trim guitar (mono sum), captured before any
+    // 1b) Gate keys: clean post-trim guitar (mono sum), captured before any
     //     gain stage so the detector follows picking, not preamp hiss.
     {
         auto* k = keyBuffer.getWritePointer (0);
+        auto* k5 = keyBuffer5.getWritePointer (0);
         const auto norm = 1.0f / (float) numProc;
         for (int i = 0; i < len; ++i)
         {
-            float sum = 0.0f;
+            float sum = 0.0f, sum5 = 0.0f;
             for (int ch = 0; ch < numProc; ++ch)
+            {
                 sum += buffer.getReadPointer (ch, start)[i];
+                sum5 += leadBuffer.getReadPointer (ch)[i];
+            }
             k[i] = sum * norm;
+            k5[i] = sum5 * norm;
         }
     }
 
-    // 2) Nonlinear section at 4x: OD-style boost -> dual-channel preamp
+    // 2) Nonlinear section at 4x: per-amp boost -> preamp -> TMB -> recovery
     auto block = juce::dsp::AudioBlock<float> (buffer)
                      .getSubsetChannelBlock (0, (size_t) numProc)
                      .getSubBlock ((size_t) start, (size_t) len);
 
-    leadBuffer.clear();
     auto leadBlock = juce::dsp::AudioBlock<float> (leadBuffer)
                          .getSubsetChannelBlock (0, (size_t) numProc).getSubBlock (0, (size_t) len);
     oversampler.processParallel (block, leadBlock, leadOversampler,
@@ -305,7 +388,6 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         const auto n = (int) up.getNumSamples();
         for (int i = 0; i < n; ++i)
         {
-            lead.beginFrame();
             od.beginFrame();
             sd1.beginFrame();
             const auto odAmt   = odMix.getNextValue();
@@ -324,7 +406,25 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
             odRunning = runOd;
             sd1Running = runSd1;
             tone.beginFrame();
+
+            // 5150 set: its own boost (same logic), channel relay and Post pots
+            od5.beginFrame();
+            sd15.beginFrame();
+            lead5.beginFrame();
+            rhythm5.beginFrame();
             leadTone.beginFrame();
+            const auto odAmt5  = odMix5.getNextValue();
+            const auto typeAmt5 = odTypeMix5.getNextValue();
+            const auto leadAmt = chMix5.getNextValue();       // 0 = Rhythm, 1 = Lead
+            const auto gLead   = postLead5.getNextValue();
+            const auto gRhythm = postRhythm5.getNextValue();
+            const bool boostAudible5 = odAmt5 > 0.0f || odMix5.isSmoothing();
+            const bool runOd5  = boostAudible5 && (typeAmt5 < 1.0f || odTypeMix5.isSmoothing());
+            const bool runSd15 = boostAudible5 && (typeAmt5 > 0.0f || odTypeMix5.isSmoothing());
+            if (runOd5 && ! od5Running)   od5.reset();
+            if (runSd15 && ! sd15Running) sd15.reset();
+            od5Running = runOd5;
+            sd15Running = runSd15;
 
             for (int ch = 0; ch < numProc; ++ch)
             {
@@ -354,16 +454,25 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                 // `rec` through untouched, so those voices stay bit-identical.
                 const auto spk  = rectSpeaker.process (rec, ch);
                 d[i] = spkAmt > 0.0f ? rec + spkAmt * (spk - rec) : rec;
-                leadUp.getChannelPointer ((size_t) ch)[i] =
-                    leadRecovery.process (leadTone.process (lead.process (boosted, ch), ch), ch);
+
+                // 5150: both channels run (warm); the relay is a short crossfade
+                // after each channel's Post pot (the TMB between is linear and
+                // shared, so Post-before-TMB is the same signal as on the amp).
+                auto* l = leadUp.getChannelPointer ((size_t) ch);
+                const auto x5 = l[i];
+                const auto od5Out  = runOd5  ? od5.process (x5, ch)  : x5;
+                const auto sd15Out = runSd15 ? sd15.process (x5, ch) : x5;
+                const auto boosted5 = x5 + odAmt5 * ((od5Out + typeAmt5 * (sd15Out - od5Out)) - x5);
+                const auto rhy = rhythm5.process (boosted5, ch) * gRhythm;
+                const auto ld  = lead5.process (boosted5, ch) * gLead;
+                l[i] = power5.process (leadTone.process (rhy + leadAmt * (ld - rhy), ch), ch);
             }
         }
     });
 
-    // 3) Tone stacks + recovery now run inside the oversampled region (step 2).
+    // 3) Tone stacks + recovery run inside the oversampled region (step 2).
 
-    // 3b) Independent EQ filter histories, identical shared settings. The legacy
-    // instance still receives exactly the old Rectifier samples/arithmetic.
+    // 3b) Post EQ, one per amp with its own settings (Rev2.4).
     {
         float* rect[dsp::kMaxChannels] {}, *alt[dsp::kMaxChannels] {};
         for (int ch = 0; ch < numProc; ++ch)
@@ -375,47 +484,70 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         leadGraphicEq.process (alt, numProc, len);
     }
 
-    // 3c) 5150 Presence + Resonance (one shared NFB loop) AFTER its EQ / BEFORE
-    // the shared Cab. Equal FIR latency, even inversion counts; explicit
-    // endpoints preserve legacy Rectifier null. Resonance 0 is bit-identical.
+    // 3c) 5150 Presence + Resonance (one NFB loop) and the 4x12 load, whose
+    //     output impedance follows the same loop (Resonance acts at the cab peak).
+    speaker5.setLoop (leadResonance.resistance(), leadPresence.resistance());
     for (int i = 0; i < len; ++i)
     {
         leadPresence.beginFrame();
         leadResonance.beginFrame (leadPresence.resistance());
-        const auto mix = modelMix.getNextValue();
+        if ((i & 31) == 0) speaker5.setLoop (leadResonance.resistance(), leadPresence.resistance());
+        speaker5.beginFrame();
         for (int ch = 0; ch < numProc; ++ch)
         {
-            auto& rect = buffer.getWritePointer (ch, start)[i];
-            const auto alt = leadResonance.process (leadPresence.process (leadBuffer.getReadPointer (ch)[i], ch), ch);
-            rect = mix <= 0.0f ? rect : (mix >= 1.0f ? alt : rect + mix * (alt - rect));
+            auto& v = leadBuffer.getWritePointer (ch)[i];
+            v = speaker5.process (leadResonance.process (leadPresence.process (v, ch), ch), ch);
         }
     }
 
-    // 4) Cab IR sim (no-op when Cab is off)
-    cab.process (juce::dsp::AudioBlock<float> (buffer)
-                     .getSubsetChannelBlock (0, (size_t) numProc)
-                     .getSubBlock ((size_t) start, (size_t) len));
-
-    // 4b) Gate VCA after cab, before master (true bypass when Gate is off).
-    //     The key runs ~oversampler-latency ahead of the wet path, which acts
-    //     as a tiny look-ahead so pick attacks are never clipped by the gate.
+    // 4) Cab IR sims, one per amp (no-op when that Cab is off). An amp that is
+    //    fully faded out skips its convolution; it restarts clean when needed.
     {
-        float* chans[dsp::kMaxChannels] {};
-        for (int ch = 0; ch < numProc; ++ch)
-            chans[ch] = buffer.getWritePointer (ch, start);
-        gate.process (keyBuffer.getReadPointer (0), chans, numProc, len);
+        const auto m = modelMix.getCurrentValue();
+        const bool audible[2] { m < 1.0f || modelMix.isSmoothing(), m > 0.0f || modelMix.isSmoothing() };
+        for (int a = 0; a < 2; ++a)
+        {
+            if (! audible[a]) { cabIdle[a] = true; continue; }
+            auto& c = cabFor (a);
+            if (cabIdle[a]) { c.reset(); cabIdle[a] = false; }
+            auto& src = a == 0 ? buffer : leadBuffer;
+            c.process (juce::dsp::AudioBlock<float> (src)
+                           .getSubsetChannelBlock (0, (size_t) numProc)
+                           .getSubBlock ((size_t) (a == 0 ? start : 0), (size_t) len));
+        }
     }
 
-    // 5) master, 6) bypass crossfade
+    // 4b) Gate VCAs after the cabs (true bypass when off), each keyed from its
+    //     own post-trim input. The key runs ~oversampler-latency ahead of the
+    //     wet path: a tiny look-ahead so pick attacks are never clipped.
+    {
+        float* chans[dsp::kMaxChannels] {}, *chans5[dsp::kMaxChannels] {};
+        for (int ch = 0; ch < numProc; ++ch)
+        {
+            chans[ch] = buffer.getWritePointer (ch, start);
+            chans5[ch] = leadBuffer.getWritePointer (ch);
+        }
+        gate.process (keyBuffer.getReadPointer (0), chans, numProc, len);
+        gate5.process (keyBuffer5.getReadPointer (0), chans5, numProc, len);
+    }
+
+    // 5) Rectifier master, model crossfade (the 5150 has no Master: its Post
+    //    pots set its level), 6) bypass crossfade
     for (int i = 0; i < len; ++i)
     {
         const auto m  = masterGain.getNextValue();
         const auto bp = bypassMix.getNextValue();
+        const auto mix = modelMix.getNextValue();
 
         for (int ch = 0; ch < numProc; ++ch)
         {
             auto* d = buffer.getWritePointer (ch, start);
-            const auto wet = d[i] * m;
+            auto wet = d[i] * m;
+            if (mix > 0.0f)
+            {
+                const auto alt = leadBuffer.getReadPointer (ch)[i];
+                wet = mix >= 1.0f ? alt : wet + mix * (alt - wet);
+            }
             const auto dry = dryBuffer.getReadPointer (ch)[i];
             d[i] = wet + bp * (dry - wet);
         }
@@ -456,37 +588,94 @@ void JuicyboiAudioProcessor::processBlockBypassed (juce::AudioBuffer<float>& buf
 }
 
 //==============================================================================
-static const char* irKeys[] = { "ir_a", "ir_b" };
-
-bool JuicyboiAudioProcessor::loadCabIR (int slot, const juce::File& file)
+bool JuicyboiAudioProcessor::loadCabIR (int amp, int slot, const juce::File& file)
 {
-    if (slot < 0 || slot >= dsp::CabSim::numSlots || ! cab.loadImpulseResponse (slot, file))
+    if (amp < 0 || amp > 1 || slot < 0 || slot >= dsp::CabSim::numSlots || ! cabFor (amp).loadImpulseResponse (slot, file))
         return false;
-    cabFiles[(size_t) slot] = file;
+    cabFiles[(size_t) amp][(size_t) slot] = file;
     return true;
 }
 
-void JuicyboiAudioProcessor::clearCabIR (int slot)
+void JuicyboiAudioProcessor::clearCabIR (int amp, int slot)
 {
-    if (slot < 0 || slot >= dsp::CabSim::numSlots) return;
-    cab.clearSlot (slot);
-    cabFiles[(size_t) slot] = juce::File();
+    if (amp < 0 || amp > 1 || slot < 0 || slot >= dsp::CabSim::numSlots) return;
+    cabFor (amp).clearSlot (slot);
+    cabFiles[(size_t) amp][(size_t) slot] = juce::File();
 }
 
-juce::File JuicyboiAudioProcessor::getCabIRFile (int slot) const
+juce::File JuicyboiAudioProcessor::getCabIRFile (int amp, int slot) const
 {
-    return (slot >= 0 && slot < dsp::CabSim::numSlots) ? cabFiles[(size_t) slot] : juce::File();
+    return (amp >= 0 && amp <= 1 && slot >= 0 && slot < dsp::CabSim::numSlots) ? cabFiles[(size_t) amp][(size_t) slot] : juce::File();
 }
 
 void JuicyboiAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     state.setProperty (stateVersionKey, taper::stateVersion, nullptr);
-    for (int s = 0; s < dsp::CabSim::numSlots; ++s)
-        state.setProperty (irKeys[s], cabFiles[(size_t) s].getFullPathName(), nullptr);
+    for (int a = 0; a < 2; ++a)
+        for (int s = 0; s < dsp::CabSim::numSlots; ++s)
+            state.setProperty (params::ampIrKey (a, s), cabFiles[(size_t) a][(size_t) s].getFullPathName(), nullptr);
 
     if (auto xml = state.createXml())
         copyXmlToBinary (*xml, destData);
+}
+
+float JuicyboiAudioProcessor::leadPostForMaster (float masterKnob)
+{
+    // Same small-signal level change as the old Master move from its default
+    // (Master 6.5 <-> Post 5): Post gain = audio taper, Master = LevelTaper.
+    const auto ratio = taper::masterKnobToGain (masterKnob) / taper::masterKnobToGain (taper::masterDefaultKnob);
+    if (ratio <= 0.0f) return 0.0f;
+    const auto g = (double) ratio * dsp::audioTaper (5.0);
+    return (float) juce::jlimit (0.0, 10.0, 10.0 * std::log10 (99.0 * g + 1.0) / 2.0);
+}
+
+void JuicyboiAudioProcessor::migrateToPerAmp (juce::ValueTree& tree)
+{
+    auto valueOf = [this, &tree] (const char* pid) -> float
+    {
+        const auto child = tree.getChildWithProperty ("id", pid);
+        if (child.isValid() && child.hasProperty ("value"))
+            return (float) child.getProperty ("value");
+        auto* p = apvts.getParameter (pid);
+        return p != nullptr ? p->convertFrom0to1 (p->getDefaultValue()) : 0.0f;
+    };
+    auto setValue = [&tree] (const char* pid, float v)
+    {
+        auto child = tree.getChildWithProperty ("id", pid);
+        if (! child.isValid())
+        {
+            child = juce::ValueTree ("PARAM");
+            child.setProperty ("id", pid, nullptr);
+            tree.addChild (child, -1, nullptr);
+        }
+        child.setProperty ("value", v, nullptr);
+    };
+
+    // Every per-amp slot (Input, Boost, post EQ, Cab, Gate): the old value goes
+    // into the 5150's set too; the legacy IDs remain the Rectifier's set.
+    for (int s = 0; s < params::numAmpSlots; ++s)
+        setValue (params::ampId (1, (params::AmpSlot) s), valueOf (params::ampId (0, (params::AmpSlot) s)));
+
+    // The old 5150 was the Lead channel on the shared Gain/Bass/Mid/Treble.
+    setValue (params::id::m5150Channel, 1.0f);
+    setValue (params::id::m5150LeadPre, valueOf (params::id::gain));
+    setValue (params::id::m5150Low,     valueOf (params::id::bass));
+    setValue (params::id::m5150Mid,     valueOf (params::id::mid));
+    setValue (params::id::m5150High,    valueOf (params::id::treble));
+    // No Master on the 5150: its level moves to the Post pots.
+    const auto post = leadPostForMaster (valueOf (params::id::master));
+    setValue (params::id::m5150LeadPost, post);
+    setValue (params::id::m5150RhythmPost, post);
+    // New Rhythm controls start at their defaults (not selected by old sessions).
+    for (auto* pid : { params::id::m5150RhythmPre, params::id::m5150Bright, params::id::m5150Crunch })
+    {
+        auto* p = apvts.getParameter (pid);
+        setValue (pid, p->convertFrom0to1 (p->getDefaultValue()));
+    }
+
+    for (int s = 0; s < dsp::CabSim::numSlots; ++s)
+        tree.setProperty (params::ampIrKey (1, s), tree.getProperty (params::ampIrKey (0, s), juce::String()), nullptr);
 }
 
 void JuicyboiAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
@@ -495,32 +684,6 @@ void JuicyboiAudioProcessor::setStateInformation (const void* data, int sizeInBy
         if (xml->hasTagName (apvts.state.getType()))
         {
             auto tree = juce::ValueTree::fromXml (*xml);
-            // Loading a pre-model session must select Rectifier even if the
-            // current processor was already set to Lead (not just fresh instances).
-            if (! tree.getChildWithProperty ("id", params::id::preampModel).isValid())
-            {
-                juce::ValueTree model ("PARAM");
-                model.setProperty ("id", params::id::preampModel, nullptr);
-                model.setProperty ("value", 0.0f, nullptr);
-                tree.addChild (model, -1, nullptr);
-            }
-            // Existing 5150-branch sessions predate lead_presence. Reference=0
-            // is unity, even when loading over a processor currently set brighter.
-            if (! tree.getChildWithProperty ("id", params::id::leadPresence).isValid())
-            {
-                juce::ValueTree presence ("PARAM");
-                presence.setProperty ("id", params::id::leadPresence, nullptr);
-                presence.setProperty ("value", 0.0f, nullptr);
-                tree.addChild (presence, -1, nullptr);
-            }
-            // Sessions saved before lead_resonance: 0 = VR8 shorted = their sound.
-            if (! tree.getChildWithProperty ("id", params::id::leadResonance).isValid())
-            {
-                juce::ValueTree resonance ("PARAM");
-                resonance.setProperty ("id", params::id::leadResonance, nullptr);
-                resonance.setProperty ("value", 0.0f, nullptr);
-                tree.addChild (resonance, -1, nullptr);
-            }
             // Older states store some level knobs in dB; convert them to the 0–10
             // knobs so the session plays at exactly the same level.
             //   v1 (no property): Input, Master, Boost Level, Cab Level in dB
@@ -542,17 +705,35 @@ void JuicyboiAudioProcessor::setStateInformation (const void* data, int sizeInBy
                 convert (params::id::odLevel,  taper::boostLevelDbToKnob);
                 convert (params::id::cabLevel, taper::cabLevelDbToKnob);
             }
+            // v4 (Rev2.4): per-amp settings. Old values go into every amp's set.
+            if (loadedVersion < 4)
+                migrateToPerAmp (tree);
+
+            // Any parameter the state does not mention gets its default, even
+            // when loading over a processor that was changed (pre-model sessions
+            // -> Rectifier; pre-Presence/Resonance sessions -> 0 = their sound).
+            for (auto* p : getParameters())
+                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p))
+                    if (! tree.getChildWithProperty ("id", rp->getParameterID()).isValid())
+                    {
+                        juce::ValueTree child ("PARAM");
+                        child.setProperty ("id", rp->getParameterID(), nullptr);
+                        child.setProperty ("value", rp->convertFrom0to1 (rp->getDefaultValue()), nullptr);
+                        tree.addChild (child, -1, nullptr);
+                    }
+
             tree.setProperty (stateVersionKey, taper::stateVersion, nullptr);
             apvts.replaceState (tree);
 
-            for (int s = 0; s < dsp::CabSim::numSlots; ++s)
-            {
-                const auto path = tree.getProperty (irKeys[s]).toString();
-                if (path.isNotEmpty() && juce::File::isAbsolutePath (path) && juce::File (path).existsAsFile())
-                    loadCabIR (s, juce::File (path));
-                else
-                    clearCabIR (s);
-            }
+            for (int a = 0; a < 2; ++a)
+                for (int s = 0; s < dsp::CabSim::numSlots; ++s)
+                {
+                    const auto path = tree.getProperty (params::ampIrKey (a, s)).toString();
+                    if (path.isNotEmpty() && juce::File::isAbsolutePath (path) && juce::File (path).existsAsFile())
+                        loadCabIR (a, s, juce::File (path));
+                    else
+                        clearCabIR (a, s);
+                }
         }
 }
 

@@ -11,7 +11,7 @@
 //   * SMPTE-style IMD: 82.5 Hz (0.16) + 2 kHz (0.04): sidebands 2k±n*82.5 re 2k
 //   * palm-mute chugs (synthetic damped low-E, 8ths at 140 bpm): band
 //     energies and "flub" = <=200 Hz energy left in the muted gap re the hit
-// Same file builds against Rev2.2 and Rev2.3 (parameter IDs stable).
+// Rev2.4: also the 5150 Lead / Rhythm-Crunch channels (their own parameter set).
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "Parameters.h"
@@ -38,17 +38,28 @@ void setParam (juce::AudioProcessor& p, const char* id, float plain)
         param->setValueNotifyingHost (param->convertTo0to1 (plain));
 }
 
-struct Cfg { const char* name; int channel, redVoice; float bass; };
+struct Cfg { const char* name; int channel, redVoice; float bass; int model = 0; float gain = 6.0f; }; // model 1: channel = 5150 channel, redVoice = Crunch
 
 std::vector<double> render (const Cfg& c, const std::function<double (long)>& in, long n)
 {
     std::unique_ptr<juce::AudioProcessor> p (createPluginFilter());
     const int bs = 512;
     p->setPlayConfigDetails (1, 2, sr, bs);
-    setParam (*p, jb::params::id::preampModel, 0.0f);
-    setParam (*p, jb::params::id::channel, (float) c.channel);
-    setParam (*p, jb::params::id::redVoice, (float) c.redVoice);
-    setParam (*p, jb::params::id::bass, c.bass);
+    setParam (*p, jb::params::id::preampModel, (float) c.model);
+    if (c.model == 1)
+    {
+        setParam (*p, jb::params::id::m5150Channel, (float) c.channel);
+        setParam (*p, jb::params::id::m5150Crunch, (float) c.redVoice);
+        setParam (*p, c.channel == 1 ? jb::params::id::m5150LeadPre : jb::params::id::m5150RhythmPre, c.gain);
+        setParam (*p, jb::params::id::m5150Low, c.bass);
+    }
+    else
+    {
+        setParam (*p, jb::params::id::channel, (float) c.channel);
+        setParam (*p, jb::params::id::redVoice, (float) c.redVoice);
+        setParam (*p, jb::params::id::bass, c.bass);
+        setParam (*p, jb::params::id::gain, c.gain);
+    }
     setParam (*p, jb::params::id::cabEnable, 0.0f);
     setParam (*p, jb::params::id::eqEnable, 0.0f);
     setParam (*p, jb::params::id::gateEnable, 0.0f);
@@ -127,10 +138,12 @@ int main (int argc, char** argv)
 {
     juce::ScopedJuceInitialiser_GUI init;
     const Cfg cfgs[] = { { "RedV2-B5", 0, 1, 5.0f }, { "RedV2-B10", 0, 1, 10.0f },
-                         { "RedV1-B5", 0, 0, 5.0f }, { "Orange-B5", 1, 0, 5.0f } };
+                         { "RedV1-B5", 0, 0, 5.0f }, { "Orange-B5", 1, 0, 5.0f }, { "RedV2-G8", 0, 1, 5.0f, 0, 8.0f },
+                         { "Lead-B5", 1, 0, 5.0f, 1 }, { "Lead-B10", 1, 0, 10.0f, 1 }, { "Lead-G8", 1, 0, 5.0f, 1, 8.0f },
+                         { "Crunch-B5", 0, 1, 5.0f, 1, 6.0f } };
     const char* dir = (argc > 1 && argv[1][0] != '-') ? argv[1] : nullptr;
     const char* only = argc > 2 ? argv[2] : nullptr;
-    const double freqs[] = { 40, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200, 300, 500, 1000 };
+    const double freqs[] = { 40, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200, 300, 500, 1000, 2000, 3000, 4000, 6000 };
 
     for (const auto& c : cfgs)
     {

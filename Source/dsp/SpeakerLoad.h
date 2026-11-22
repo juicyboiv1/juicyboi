@@ -33,6 +33,13 @@ class SpeakerLoad
 public:
     void prepare (double sampleRate, const SpeakerLoadParams& p) noexcept
     {
+        setParams (sampleRate, p);
+        reset();
+    }
+
+    /** New coefficients, filter state kept (slow parameter moves, Rev2.4 5150). */
+    void setParams (double sampleRate, const SpeakerLoadParams& p) noexcept
+    {
         enabled = p.res > 0.0;
         if (enabled)
         {
@@ -46,7 +53,6 @@ public:
             a1 = 2.0 * (1.0 - u * u) / a0;
             a2 = (u * u - u / qd + 1.0) / a0;
         }
-        reset();
     }
 
     void reset() noexcept { z1.fill (0.0); z2.fill (0.0); }
