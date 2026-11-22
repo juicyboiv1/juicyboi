@@ -64,8 +64,8 @@ inline PreNetworkParts leadPreParts() noexcept { return {}; }
                   as a shunt at the pot top (heavy, bass-cutting attenuation)
       Crunch on:  R19 470K || C51 270p in series, shunt branch lifted
       always:     R21 1M at the pot top, VA1 1M audio, C27 180p top->wiper
-      Bright:     adds C10 470p top->wiper (calibrated: about +6 dB at 2 kHz at
-                  mid pot, the manual's figure)
+      Bright:     adds C10 470p top->wiper (sheet value, not calibrated): +7.9 dB at
+                  2 kHz at Pre 5, +6 dB (the manual's figure) near Pre 6.5, none at 10
     `bright` and `crunch` are 0..1 so switching morphs the parts (click-free). */
 inline PreNetworkParts rhythmPreParts (double bright, double crunch) noexcept
 {
@@ -165,7 +165,7 @@ public:
         add (2, 4, 1.0 / p.rSh2);
         add (4, -1, s * p.cSh2);
         add (2, 3, 1.0 / std::max (10.0, (1.0 - alpha) * p.pot) + (p.rTop > 0.0 ? 1.0 / p.rTop : 0.0) + s * p.cTop);
-        add (3, -1, 1.0 / std::max (1.0, alpha * p.pot));
+        add (3, -1, 1.0 / std::max (potEndR, alpha * p.pot));
         for (int i = 0; i < N; ++i) y[i][i] += leak;
         C rhs[N] {}; rhs[0] = 1.0 / p.rs;
         // Gaussian elimination (complex, tiny system)
@@ -189,6 +189,7 @@ public:
 private:
     static constexpr int N = 5, NC = 4;
     static constexpr double leak = 1.0e-12;
+    static constexpr double potEndR = 1000.0; // carbon-track end resistance: Pre 0 is very quiet, not dead
     // capacitor k between capA[k] and capB[k] (-1 = ground): C6, cSer, cSh2, cTop
     static constexpr int capA[NC] { 0, 1, 4, 2 };
     static constexpr int capB[NC] { 1, 2, -1, 3 };
@@ -212,7 +213,7 @@ private:
         add (2, -1, 1.0 / parts.rSh);
         add (2, 4, 1.0 / parts.rSh2);
         add (2, 3, 1.0 / std::max (10.0, (1.0 - alpha) * parts.pot) + (parts.rTop > 0.0 ? 1.0 / parts.rTop : 0.0));
-        add (3, -1, 1.0 / std::max (1.0, alpha * parts.pot));
+        add (3, -1, 1.0 / std::max (potEndR, alpha * parts.pot));
         for (int k = 0; k < NC; ++k) add (capA[k], capB[k], gc[k]);
         for (int i = 0; i < N; ++i) y[i][i] += leak;
         // Gauss-Jordan inverse

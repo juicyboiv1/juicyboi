@@ -38,7 +38,7 @@ private:
 class IRDropZone final : public juce::Component, public juce::FileDragAndDropTarget, public juce::TooltipClient
 {
 public:
-    IRDropZone (JuicyboiAudioProcessor&, int slot);
+    IRDropZone (JuicyboiAudioProcessor&, int amp, int slot);
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseUp (const juce::MouseEvent&) override;
@@ -51,14 +51,16 @@ public:
 
 private:
     JuicyboiAudioProcessor& proc;
-    const int slot;
+    const int amp, slot;
     bool hovering = false;
     juce::TextButton clearButton { "x" };
     std::unique_ptr<juce::FileChooser> chooser;
 };
 
 /** The pedalboard drawer under the head: Boost, 7-band EQ and Gate stompboxes plus the
-    Cab side panel. Closed = only the wooden drawer front shows; click it to open/close. */
+    Cab side panel. Closed = only the wooden drawer front shows; click it to open/close.
+    Rev2.4: there is one control set per amp (docs/per-amp-state.md); the set of the amp
+    selected by `preamp_model` is shown, the other is hidden but stays bound. */
 class Pedalboard final : public juce::Component, private juce::Timer
 {
 public:
@@ -78,6 +80,13 @@ public:
 private:
     void timerCallback() override;
 
+public:
+    /** Which amp's controls are showing (tests). */
+    int getShownAmp() const noexcept { return shownAmp; }
+    /** Follow preamp_model now instead of on the next timer tick (tests / screenshots). */
+    void syncAmpNow() { showAmp (activeAmp()); }
+private:
+
     struct Front final : juce::Component, juce::TooltipClient
     {
         void paint (juce::Graphics&) override;
@@ -91,20 +100,27 @@ private:
     bool open = true;
 
     Pedal boost, eq, gate, cab;
-    ParamSlider odDrive, odTone, odLevel;
-    ToggleSwitch odType;
-    Footswitch odSwitch;
 
-    std::array<std::unique_ptr<ParamSlider>, 7> eqBands;
-    ParamSlider eqLevel;
-    Footswitch eqSwitch;
-
-    ParamSlider gateThreshold, gateHold, gateRelease;
-    Footswitch gateSwitch;
-
-    ToggleSwitch cabOn;
-    ParamSlider cabBlend, cabLevel;
-    std::array<std::unique_ptr<IRDropZone>, 2> irZones;
+    struct AmpControls
+    {
+        AmpControls (JuicyboiAudioProcessor&, int amp);
+        ParamSlider odDrive, odTone, odLevel;
+        ToggleSwitch odType;
+        Footswitch odSwitch;
+        std::array<std::unique_ptr<ParamSlider>, 7> eqBands;
+        ParamSlider eqLevel;
+        Footswitch eqSwitch;
+        ParamSlider gateThreshold, gateHold, gateRelease;
+        Footswitch gateSwitch;
+        ToggleSwitch cabOn;
+        ParamSlider cabBlend, cabLevel;
+        std::array<std::unique_ptr<IRDropZone>, 2> irZones;
+        std::vector<juce::Component*> all();
+    };
+    std::array<std::unique_ptr<AmpControls>, 2> sets;
+    int shownAmp = -1;
+    int activeAmp() const;
+    void showAmp (int amp);
 
     Front front;
 

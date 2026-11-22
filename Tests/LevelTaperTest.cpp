@@ -249,7 +249,7 @@ int levelTaperValidation()
                boostLevelKnobToGain (raw (p, "od_level")) == 1.0f && raw (p, "cab_level") == 5.0f
                && p.apvts.getParameter ("od_level")->getCurrentValueAsText() == "6.7"
                && p.apvts.getParameter ("cab_level")->getCurrentValueAsText() == "5.0");
-        check ("fresh state is version 3", (int) p.apvts.state.getProperty (JuicyboiAudioProcessor::stateVersionKey) == 3);
+        check ("fresh state is version 4", (int) p.apvts.state.getProperty (JuicyboiAudioProcessor::stateVersionKey) == 4);
 
         struct Case { float in, ma, od, cab; } cases[] = {
             { 0.0f, -6.0f, 0.0f, 0.0f }, { 7.3f, -17.4f, -9.7f, 6.1f }, { -24.0f, 12.0f, 12.0f, -24.0f },
@@ -294,8 +294,8 @@ int levelTaperValidation()
                     && inputKnobToGain (raw (q, "input_trim")) == 1.0f && raw (q, "master") == 6.5f;
             };
             check ("v1/v2 default sessions -> exact unity Boost/Cab Level", exact (q1) && exact (q2));
-            check ("re-saved v2 session is v3, no double conversion",
-                   exact (q3) && (int) q3.apvts.state.getProperty (JuicyboiAudioProcessor::stateVersionKey) == 3);
+            check ("re-saved v2 session is v4, no double conversion",
+                   exact (q3) && (int) q3.apvts.state.getProperty (JuicyboiAudioProcessor::stateVersionKey) == 4);
         }
 
         {   // Rendered (Boost on, so Boost Level hits the nonlinear chain): a v1 default

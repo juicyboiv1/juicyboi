@@ -70,7 +70,8 @@ int editorValidation()
                 allBound = false;
             }
     check ("every parameter has a control (same ID)", allBound);
-    check ("IR A / IR B load targets present", findById (root, "ir_a") != nullptr && findById (root, "ir_b") != nullptr);
+    check ("IR A / IR B load targets present for both amps", findById (root, "ir_a") != nullptr && findById (root, "ir_b") != nullptr
+           && findById (root, "m5150_ir_a") != nullptr && findById (root, "m5150_ir_b") != nullptr);
 
     // 2. head knobs: a creme caption BELOW each visible knob, nothing above; tooltips kept
     auto checkCaptions = [&] (const char* what, juce::StringArray expected)
@@ -103,8 +104,16 @@ int editorValidation()
         check ((juce::String (what) + ": caption below every knob").toRawUTF8(), below);
         check ((juce::String (what) + ": no labels above the knobs").toRawUTF8(), noneAbove);
         check ((juce::String (what) + ": captions creme, clear of controls and panel edge").toRawUTF8(), insidePanel);
+        std::printf ("  %s captions seen: %s\n", what, seen.joinIntoString (" | ").toRawUTF8());
         check ((juce::String (what) + ": captions read " + expected.joinIntoString (" ")).toRawUTF8(),
-               [&] { for (auto& e : expected) if (! seen.contains (e)) return false; return seen.size() == expected.size(); }());
+               [&] { // "FULL/SHORT": the short form is allowed when the full caption does not fit its column
+                   for (auto& e : expected)
+                   {
+                       bool any = false;
+                       for (auto& alt : juce::StringArray::fromTokens (e, "/", "")) any = any || seen.contains (alt);
+                       if (! any) return false;
+                   }
+                   return seen.size() == expected.size(); }());
         check ((juce::String (what) + ": every head knob keeps its hover tooltip").toRawUTF8(), tipsOk);
     };
     ed->getHead().syncModelNow();
@@ -127,14 +136,36 @@ int editorValidation()
     check ("Model toggle sets preamp_model = 5150", getParam (p, "preamp_model") > 0.5f);
     check ("faceplate fade starts from Rectifier", ed->getHead().getFaceplateMix() < 0.5f);
     ed->getHead().syncModelNow();
-    checkCaptions ("5150", { "INPUT", "GAIN", "LOW", "MID", "HIGH", "PRESENCE", "RESONANCE", "MASTER" });
+    checkCaptions ("5150", { "INPUT", "RHY PRE/R PRE", "LEAD PRE/L PRE", "LOW", "MID", "HIGH", "RHY POST/R POST", "LEAD POST/L POST",
+                             "RESONANCE/RESO", "PRESENCE/PRES" });
     check ("5150 faceplate: 5150 Presence/Resonance shown, Rectifier-only hidden",
            showing (findById (root, "lead_presence")) && showing (findById (root, "lead_resonance"))
                && ! showing (findById (root, "channel")) && ! showing (findById (root, "red_voice")) && ! showing (findById (root, "pre_presence")));
+    {   // Rev2.4 faceplate: no Master; channel select, Bright/Crunch, per-channel Pre/Post, its own Input
+        bool all5150 = true;
+        for (auto* id : { "m5150_input_trim", "m5150_channel", "m5150_bright", "m5150_crunch", "m5150_rhythm_pre", "m5150_lead_pre",
+                          "m5150_low", "m5150_mid", "m5150_high", "m5150_rhythm_post", "m5150_lead_post" })
+            all5150 = all5150 && showing (findById (root, id));
+        check ("5150 faceplate: own Input, RHY/LEAD, Bright, Crunch, Pre/Post per channel; no Master",
+               all5150 && ! showing (findById (root, "master")) && ! showing (findById (root, "pre_gain"))
+                   && ! showing (findById (root, "input_trim")));
+        check ("Bright/Crunch dimmed/disabled on Lead", ! findById (root, "m5150_bright")->isEnabled() && ! findById (root, "m5150_crunch")->isEnabled());
+        setParam (p, "m5150_channel", 0.0f);
+        ed->getHead().syncModelNow();
+        check ("Bright/Crunch enabled on Rhythm", findById (root, "m5150_bright")->isEnabled() && findById (root, "m5150_crunch")->isEnabled());
+        setParam (p, "m5150_channel", 1.0f);
+        ed->getHead().syncModelNow();
+        ed->getDrawer().syncAmpNow(); // the drawer follows the model on its timer
+        check ("pedalboard shows the 5150 set (boost, EQ, gate, cab)",
+               showing (findById (root, "m5150_od_drive")) && showing (findById (root, "m5150_eq_6k4")) && showing (findById (root, "m5150_gate_threshold"))
+                   && showing (findById (root, "m5150_cab_level")) && ! showing (findById (root, "od_drive")) && ! showing (findById (root, "eq_6k4")));
+    }
     check ("Rectifier channel/voice retained under 5150", getParam (p, "channel") > 0.5f && getParam (p, "red_voice") < 0.5f);
     setParam (p, "preamp_model", 0.0f);
     ed->getHead().syncModelNow();
     check ("back to Rectifier faceplate", showing (findById (root, "channel")) && ! showing (findById (root, "lead_presence")));
+    ed->getDrawer().syncAmpNow();
+    check ("pedalboard back on the Rectifier set", showing (findById (root, "od_drive")) && ! showing (findById (root, "m5150_od_drive")));
 
     // 5. drawer + fixed-aspect scaling
     check ("drawer open by default, pedals visible", ed->isDrawerOpen() && showing (findById (root, "od_drive")) && showing (findById (root, "eq_6k4")));

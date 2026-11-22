@@ -2,6 +2,7 @@
 #include "../PluginProcessor.h"
 #include "../Parameters.h"
 #include "../LevelTaper.h"
+#include "../dsp/Amp5150.h"
 
 namespace jb::gui
 {
@@ -18,6 +19,7 @@ namespace
     constexpr int labelTop = 381, labelHeight = 13; // below the tick dots (knob bottom 374), above the pinstripe (399)
     constexpr int knobSize = 68;
     constexpr int knobLeft = 488, knobRight = 1052;
+    constexpr int knob5150Size = 50, knob5150Left = 510; // 10 knobs on the 5150 faceplate
 
     String knobTip (const String& name, double v, const String& extra = {})
     {
@@ -27,46 +29,73 @@ namespace
     }
 }
 
+namespace
+{
+    using jb::params::AmpSlot;
+    String inputTip (double v)
+    {
+        return "Input " + String (v, 1) + " = " + String (taper::inputKnobToDb (v), 1) + " dB (5 = unity, 4.8 dB per number)";
+    }
+    String postTip (const char* name, double v)
+    {
+        return String (name) + " " + String (v, 1) + (v > 0.0 ? String (" = ") + String (20.0 * std::log10 (jb::dsp::audioTaper (v)), 1) + " dB re 10"
+                                                             : String (" (silent)"));
+    }
+}
+
 AmpHead::AmpHead (JuicyboiAudioProcessor& p, Component* popupParent)
     : proc (p),
-      input (p.apvts, pid::inputTrim, ParamSlider::Style::ampKnob, [] (double v)
-             { return "Input " + String (v, 1) + " = " + String (taper::inputKnobToDb (v), 1) + " dB (5 = unity, 4.8 dB per number)"; }),
+      input (p.apvts, pid::inputTrim, ParamSlider::Style::ampKnob, [] (double v) { return inputTip (v); }),
       gain (p.apvts, pid::gain, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("Gain", v); }),
-      bass (p.apvts, pid::bass, ParamSlider::Style::ampKnob, [this] (double v)
-            { return knobTip (targetModel() == 1 ? "Low (Bass)" : "Bass", v); }),
+      bass (p.apvts, pid::bass, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("Bass", v); }),
       mid (p.apvts, pid::mid, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("Mid", v); }),
-      treble (p.apvts, pid::treble, ParamSlider::Style::ampKnob, [this] (double v)
-              { return knobTip (targetModel() == 1 ? "High (Treble)" : "Treble", v); }),
+      treble (p.apvts, pid::treble, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("Treble", v); }),
       presence (p.apvts, pid::presence, ParamSlider::Style::ampKnob, [] (double v)
                 { return knobTip ("Presence", v, "Rectifier preamp presence"); }),
-      leadPresence (p.apvts, pid::leadPresence, ParamSlider::Style::ampKnob, [] (double v)
-                    { return knobTip ("5150 Presence", v, "5150-only feedback-response approximation, after EQ/before Cab. "
-                                                          "0 = unchanged reference tone; no nonlinear power amp."); }),
-      leadResonance (p.apvts, pid::leadResonance, ParamSlider::Style::ampKnob, [] (double v)
-                     { return knobTip ("5150 Resonance", v, "5150-only NFB Resonance (VR8 1M + C12 .0068u), after EQ/before Cab. "
-                                                            "0 = unchanged reference tone; more = more bass. Resistive load, no speaker/power-amp model."); }),
       master (p.apvts, pid::master, ParamSlider::Style::ampKnob, [] (double v)
               { return "Master " + String (v, 1) + " = " + (v > 0.0 ? String (taper::masterKnobToDb (v), 1) + " dB" : String ("mute"))
                        + " (7.5 = unity, 10 = +12 dB, 0 = silent)"; }),
+      input5 (p.apvts, jb::params::ampId (1, AmpSlot::inputTrim), ParamSlider::Style::ampKnob, [] (double v) { return inputTip (v) + " (5150 set)"; }),
+      rhythmPre (p.apvts, pid::m5150RhythmPre, ParamSlider::Style::ampKnob, [] (double v)
+                 { return knobTip ("Rhythm Pre Gain", v, "Rhythm channel input gain (Bright/Crunch change its network)"); }),
+      leadPre (p.apvts, pid::m5150LeadPre, ParamSlider::Style::ampKnob, [] (double v)
+               { return knobTip ("Lead Pre Gain", v, "470K/.0022 into 1M, .001 bright cap"); }),
+      low5 (p.apvts, pid::m5150Low, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("Low", v); }),
+      mid5 (p.apvts, pid::m5150Mid, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("Mid", v); }),
+      high5 (p.apvts, pid::m5150High, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("High", v); }),
+      rhythmPost (p.apvts, pid::m5150RhythmPost, ParamSlider::Style::ampKnob, [] (double v) { return postTip ("Rhythm Post Gain", v); }),
+      leadPost (p.apvts, pid::m5150LeadPost, ParamSlider::Style::ampKnob, [] (double v)
+                { return postTip ("Lead Post Gain", v) + "  -  drives the power section"; }),
+      leadResonance (p.apvts, pid::leadResonance, ParamSlider::Style::ampKnob, [] (double v)
+                     { return knobTip ("Resonance", v, "NFB Resonance (VR8 1M + C12 .0068u) acting on the 4x12 low resonance"); }),
+      leadPresence (p.apvts, pid::leadPresence, ParamSlider::Style::ampKnob, [] (double v)
+                    { return knobTip ("Presence", v, "NFB Presence (power-section feedback)"); }),
       standby (p.apvts, pid::bypass, "STBY", "ON", false),
       model (p.apvts, pid::preampModel, "5150", "RECT", true),
       channel (p.apvts, pid::channel, "ORNG", "RED", true),
-      voice (p.apvts, pid::redVoice, "V2", "V1", true)
+      voice (p.apvts, pid::redVoice, "V2", "V1", true),
+      channel5 (p.apvts, pid::m5150Channel, "LEAD", "RHY", true),
+      bright (p.apvts, pid::m5150Bright, "BRT", "OFF", true),
+      crunch (p.apvts, pid::m5150Crunch, "CRN", "OFF", true)
 {
     setOpaque (false);
-    for (auto* k : { &input, &gain, &bass, &mid, &treble, &presence, &leadPresence, &leadResonance, &master })
+    for (auto* k : labelledKnobs())
     {
         k->setPopupDisplayEnabled (true, false, popupParent);
-        addAndMakeVisible (*k);
+        addChildComponent (*k);
     }
     standby.extraTip = "Standby = plugin bypass (latency-aligned dry signal).";
-    model.extraTip = "Swaps faceplates: Rectifier (Red/Orange) or 5150-inspired Lead. Same plugin, same session.";
+    model.extraTip = "Swaps amps: Rectifier (Red/Orange) or 5150-inspired. Each amp keeps its own knobs, boost, EQ, cab and gate.";
     channel.extraTip = "Rectifier channel: Red (Ch1) or Orange (Ch2).";
     voice.extraTip = "Red channel voicing: V1 = original tight Red, V2 = max-gain / fat-bottom Red. Red channel only.";
-    for (auto* t : { &standby, &model, &channel, &voice })
+    channel5.extraTip = "5150 channel: Rhythm or Lead (each has its own Pre and Post Gain).";
+    bright.extraTip = "Rhythm Bright: treble boost through the Rhythm Pre Gain (strongest at low Pre). Rhythm channel only.";
+    crunch.extraTip = "Rhythm Crunch: more gain and a tighter Rhythm pre network. Rhythm channel only.";
+    for (auto* t : { &standby, &model })
         addAndMakeVisible (*t);
+    for (auto* t : { &channel, &voice, &channel5, &bright, &crunch })
+        addChildComponent (*t);
     addAndMakeVisible (pilot);
-    addChildComponent (leadMark);
     for (auto& l : knobLabels)
     {
         l.setFont (uiFont (10.5f));
@@ -78,6 +107,7 @@ AmpHead::AmpHead (JuicyboiAudioProcessor& p, Component* popupParent)
     }
 
     channel.onChange = [this] { updateFaceplate(); };
+    channel5.onChange = [this] { updateFaceplate(); };
     mix = (float) targetModel();
     updateFaceplate();
     startTimerHz (15);
@@ -119,6 +149,9 @@ void AmpHead::timerCallback()
     {
         startTimerHz (15);
     }
+    // keep the Rhythm-only switch dimming in step with automation of the channel
+    const bool rhythmNow = ! channel5.isOne();
+    if (rhythmNow != bright.isEnabled()) updateFaceplate();
 }
 
 void AmpHead::updateFaceplate()
@@ -131,31 +164,42 @@ void AmpHead::updateFaceplate()
     }
     const auto a = jlimit (0.0f, 1.0f, std::abs (1.0f - 2.0f * mix)); // dips to 0 mid-fade, controls hop
 
-    for (auto* c : std::initializer_list<Component*> { &input, &gain, &bass, &mid, &treble, &master })
-        c->setAlpha (a);
-
     const bool rect = m == 0;
-    presence.setVisible (rect);
+    const auto knobs = labelledKnobs();
+    for (size_t i = 0; i < knobs.size(); ++i)
+    {
+        knobs[i]->setVisible ((i < (size_t) numRectKnobs) == rect);
+        knobs[i]->setAlpha (a);
+    }
     channel.setVisible (rect);
     voice.setVisible (rect);
-    leadPresence.setVisible (! rect);
-    leadResonance.setVisible (! rect);
-    leadMark.setVisible (! rect);
+    channel5.setVisible (! rect);
+    bright.setVisible (! rect);
+    crunch.setVisible (! rect);
 
     const bool isRed = ! channel.isOne();
     voice.setEnabled (isRed);
-    presence.setAlpha (a);
     channel.setAlpha (a);
     voice.setAlpha (a * (isRed ? 1.0f : 0.45f));
-    leadPresence.setAlpha (a);
-    leadResonance.setAlpha (a);
-    leadMark.setAlpha (a);
+
+    const bool rhythm = ! channel5.isOne();
+    bright.setEnabled (rhythm);
+    crunch.setEnabled (rhythm);
+    channel5.setAlpha (a);
+    bright.setAlpha (a * (rhythm ? 1.0f : 0.45f));
+    crunch.setAlpha (a * (rhythm ? 1.0f : 0.45f));
+    // the inactive channel's Pre/Post knobs dim (still editable)
+    rhythmPre.setAlpha (a * (rhythm ? 1.0f : 0.6f));
+    rhythmPost.setAlpha (a * (rhythm ? 1.0f : 0.6f));
+    leadPre.setAlpha (a * (rhythm ? 0.6f : 1.0f));
+    leadPost.setAlpha (a * (rhythm ? 0.6f : 1.0f));
     syncKnobLabels();
 }
 
-std::array<ParamSlider*, 9> AmpHead::labelledKnobs() noexcept
+std::array<ParamSlider*, AmpHead::numKnobs> AmpHead::labelledKnobs() noexcept
 {
-    return { &input, &gain, &bass, &mid, &treble, &presence, &leadPresence, &leadResonance, &master };
+    return { &input, &gain, &bass, &mid, &treble, &presence, &master,
+             &input5, &rhythmPre, &leadPre, &low5, &mid5, &high5, &rhythmPost, &leadPost, &leadResonance, &leadPresence };
 }
 
 void AmpHead::syncKnobLabels()
@@ -170,31 +214,37 @@ void AmpHead::syncKnobLabels()
 
 void AmpHead::layoutKnobs (int m)
 {
-    std::vector<Component*> row;
-    if (m == 0) row = { &input, &gain, &bass, &mid, &treble, &presence, &master };
-    else        row = { &input, &gain, &bass, &mid, &treble, &leadPresence, &leadResonance, &master };
-    const auto pitch = (float) (knobRight - knobLeft) / (float) row.size();
-    for (size_t i = 0; i < row.size(); ++i)
+    pilot.setBounds (Rectangle<int> (44, 44).withCentre ({ m == 1 ? 486 : 462, panelCentreY }));
+    const auto knobs = labelledKnobs();
+    const int first = m == 0 ? 0 : numRectKnobs, count = m == 0 ? numRectKnobs : num5150Knobs;
+    const int left = m == 0 ? knobLeft : knob5150Left;
+    const int size = m == 0 ? knobSize : knob5150Size;
+    const auto pitch = (float) (knobRight - left) / (float) count;
+    for (int i = 0; i < count; ++i)
     {
-        const auto cx = (float) knobLeft + pitch * ((float) i + 0.5f);
-        row[i]->setBounds (Rectangle<int> (knobSize, knobSize).withCentre ({ roundToInt (cx), knobCentreY }));
+        const auto cx = (float) left + pitch * ((float) i + 0.5f);
+        knobs[(size_t) (first + i)]->setBounds (Rectangle<int> (size, size).withCentre ({ roundToInt (cx), knobCentreY }));
     }
 
-    // captions below the knobs; abbreviate only if a word would not fit its column
-    const auto knobs = labelledKnobs();
-    const char* rectNames[] = { "INPUT", "GAIN", "BASS", "MID", "TREBLE", "PRESENCE", "PRESENCE", "RESONANCE", "MASTER" };
-    const char* leadNames[] = { "INPUT", "GAIN", "LOW", "MID", "HIGH", "PRESENCE", "PRESENCE", "RESONANCE", "MASTER" };
-    const auto font = uiFont (10.5f);
-    const auto colW = roundToInt (pitch) - 4;
-    for (size_t i = 0; i < knobs.size(); ++i)
+    // captions below the knobs; the short form is used only if a caption would not fit its column
+    struct Caption { const char* full; const char* brief; };
+    static const Caption names[numKnobs] = {
+        { "INPUT", "IN" }, { "GAIN", "GAIN" }, { "BASS", "BASS" }, { "MID", "MID" }, { "TREBLE", "TREB" }, { "PRESENCE", "PRES" }, { "MASTER", "MAST" },
+        { "INPUT", "IN" }, { "RHY PRE", "R PRE" }, { "LEAD PRE", "L PRE" }, { "LOW", "LOW" }, { "MID", "MID" }, { "HIGH", "HIGH" },
+        { "RHY POST", "R POST" }, { "LEAD POST", "L POST" }, { "RESONANCE", "RESO" }, { "PRESENCE", "PRES" } };
+    const auto font = uiFont (m == 0 ? 10.5f : 9.5f); // ten 5150 knobs share the same width
+    const auto colW = roundToInt (pitch) - 2;
+    for (int i = 0; i < count; ++i)
     {
-        String text = m == 0 ? rectNames[i] : leadNames[i];
+        const auto k = (size_t) (first + i);
+        String text = names[k].full;
         if (GlyphArrangement::getStringWidth (font, text) > (float) colW - 2.0f)
-            text = text == "RESONANCE" ? "RESO" : text.substring (0, 4);
-        knobLabels[i].setText (text, dontSendNotification);
-        knobLabels[i].setTooltip (knobs[i]->getName());
-        knobLabels[i].setBounds (Rectangle<int> (colW, labelHeight)
-                                     .withCentre ({ knobs[i]->getBounds().getCentreX(), labelTop + labelHeight / 2 }));
+            text = names[k].brief;
+        knobLabels[k].setFont (font);
+        knobLabels[k].setText (text, dontSendNotification);
+        knobLabels[k].setTooltip (knobs[k]->getName());
+        knobLabels[k].setBounds (Rectangle<int> (colW, labelHeight)
+                                     .withCentre ({ knobs[k]->getBounds().getCentreX(), labelTop + labelHeight / 2 }));
     }
 }
 
@@ -205,8 +255,9 @@ void AmpHead::resized()
     place (model,   306, 46, 104);
     place (channel, 362, 46, 104);
     place (voice,   416, 46, 104);
-    place (pilot,   462, 44, 44);
-    leadMark.setBounds (Rectangle<int> (118, 100).withCentre ({ 389, panelCentreY }));
+    place (channel5, 356, 42, 104);
+    place (bright,   400, 42, 104);
+    place (crunch,   444, 42, 104);
     layoutKnobs (shownModel < 0 ? 0 : shownModel);
 }
 
@@ -218,22 +269,6 @@ void AmpHead::Pilot::paint (Graphics& g)
     Path bezel; bezel.addEllipse (c.x - 11.0f, c.y - 11.0f, 22.0f, 22.0f);
     fillChrome (g, bezel, bezel.getBounds());
     drawLed (g, c, 6.5f, colours::ledGreen, lit ? 0.85f : 0.0f);
-}
-
-void AmpHead::LeadMark::paint (Graphics& g)
-{
-    auto b = getLocalBounds().toFloat();
-    g.setFont (uiFont (10.5f));
-    const auto lamps = b.withSizeKeepingCentre (b.getWidth(), 50.0f);
-    const Point<float> rhy (lamps.getX() + 30.0f, lamps.getCentreY() - 4.0f), lead (lamps.getRight() - 30.0f, lamps.getCentreY() - 4.0f);
-    drawLed (g, rhy, 6.0f, colours::ledRed, 0.0f);
-    drawLed (g, lead, 6.0f, colours::ledRed, 1.0f);
-    g.setColour (colours::creme.withAlpha (0.8f));
-    g.drawText ("RHYTHM", Rectangle<float> (60.0f, 12.0f).withCentre ({ rhy.x, rhy.y + 20.0f }), Justification::centred, false);
-    g.setColour (colours::creme);
-    g.drawText ("LEAD", Rectangle<float> (60.0f, 12.0f).withCentre ({ lead.x, lead.y + 20.0f }), Justification::centred, false);
-    g.setColour (colours::creme.withAlpha (0.6f));
-    g.drawLine (rhy.x + 12.0f, rhy.y, lead.x - 12.0f, lead.y, 1.0f);
 }
 
 //==============================================================================

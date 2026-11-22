@@ -228,39 +228,39 @@ int resonanceValidation()
         check ("Lead Resonance has zero effect on Rectifier", leak < 1e-9f);
     }
 
-    // 7) Whole-processor null vs lead-rev2.3.f32, captured ONCE from the Rev2.3
-    //    build (Red v2 power-amp / 4x12 load bump) with the same 5 configurations
-    //    as the original 62a1239 capture. Every configuration except the Red v2
-    //    one (3) must still null against lead-rev2.2-clippers.f32 (Rev2.3 only
-    //    touches Red v2). lead-rev2-tonestack.f32 (Rev2.1) and lead-62a1239.f32
-    //    are kept as level references.
+    // 7) Whole-processor nulls. lead-rev2.3.f32 was captured ONCE from the Rev2.3 build
+    //    and lead-rev2.4.f32 ONCE from the Rev2.4 build, with the same 5 configurations
+    //    as the original 62a1239 capture. Rev2.4 replaced the 5150 engine, so the
+    //    Rectifier configurations (3 Red v2, 4 Orange) must still null against Rev2.3
+    //    (and Orange against Rev2.2), while the 5150 configurations (0-2) null against
+    //    the Rev2.4 capture. lead-rev2-tonestack.f32 (Rev2.1) and lead-62a1239.f32 are
+    //    kept as level references.
     {
-        juce::File file (juce::String (JUICYBOI_TEST_DIR) + "/lead-rev2.3.f32");
-        juce::File prev (juce::String (JUICYBOI_TEST_DIR) + "/lead-rev2.2-clippers.f32");
-        auto in = file.createInputStream();
-        auto old = prev.createInputStream();
+        auto open = [] (const char* name) { return juce::File (juce::String (JUICYBOI_TEST_DIR) + "/" + name).createInputStream(); };
+        auto r23 = open ("lead-rev2.3.f32"), r22 = open ("lead-rev2.2-clippers.f32"), r24 = open ("lead-rev2.4.f32");
         const auto perConfig = (size_t) (leadfixture::blocks * leadfixture::blockSize);
         const auto bytes = (juce::int64) (perConfig * leadfixture::numConfigs * sizeof (float));
-        bool ok = in != nullptr && in->getTotalLength() == bytes;
-        bool same = old != nullptr && old->getTotalLength() == bytes;
-        for (int c = 0; ok && same && c < leadfixture::numConfigs; ++c)
+        bool rectOk = r23 != nullptr && r23->getTotalLength() == bytes;
+        bool orangeOk = r22 != nullptr && r22->getTotalLength() == bytes;
+        bool leadOk = r24 != nullptr && r24->getTotalLength() == bytes;
+        for (int c = 0; rectOk && orangeOk && leadOk && c < leadfixture::numConfigs; ++c)
         {
-            float error = 0.0f, prevError = 0.0f; bool fin = true;
+            float e23 = 0.0f, e22 = 0.0f, e24 = 0.0f; bool fin = true;
             for (auto f : leadfixture::render (c))
             {
-                const auto r = in->readFloat(), p = old->readFloat();
-                fin = fin && std::isfinite (f) && std::isfinite (r);
-                error = std::max (error, std::abs (f - r));
-                prevError = std::max (prevError, std::abs (f - p));
+                const auto a = r23->readFloat(), b = r22->readFloat(), d = r24->readFloat();
+                fin = fin && std::isfinite (f);
+                e23 = std::max (e23, std::abs (f - a)); e22 = std::max (e22, std::abs (f - b)); e24 = std::max (e24, std::abs (f - d));
             }
-            std::printf ("Rev2.3 fixture null config %d (%s): max error %.9g; vs Rev2.2 %.9g%s\n", c,
-                         c < 3 ? "5150" : (c == 3 ? "Red v2" : "Orange"), (double) error, (double) prevError,
-                         c == 3 ? " (Red v2: changed on purpose)" : "");
-            ok = ok && fin && error < 2.0e-6f;
-            if (c != 3) same = same && prevError < 2.0e-6f;
+            std::printf ("fixture null config %d (%s): vs Rev2.4 %.9g, vs Rev2.3 %.9g, vs Rev2.2 %.9g\n", c,
+                         c < 3 ? "5150" : (c == 3 ? "Red v2" : "Orange"), (double) e24, (double) e23, (double) e22);
+            if (c < 3) leadOk = leadOk && fin && e24 < 2.0e-6f;
+            else       rectOk = rectOk && fin && e23 == 0.0f && e24 == 0.0f;
+            if (c == 4) orangeOk = orangeOk && e22 == 0.0f;
         }
-        check ("5150 + Rectifier configurations null vs the Rev2.3 fixture", ok);
-        check ("5150 + Orange configurations unchanged vs the Rev2.2 fixture", same);
+        check ("Rectifier configurations bit-identical to the Rev2.3 fixture", rectOk);
+        check ("Orange configuration bit-identical to the Rev2.2 fixture", orangeOk);
+        check ("5150 configurations null vs the Rev2.4 fixture", leadOk);
     }
 
     // 8) (Rev2) The old Rectifier Bass-shelf-centre check is superseded by the solved

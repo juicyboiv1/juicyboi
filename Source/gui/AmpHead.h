@@ -10,7 +10,8 @@ namespace jb::gui
 /** Rev1 amp head: tolex, corner caps, basketweave grille with the only juicyboi badge,
     and a black control panel with unlabelled chrome knobs (tooltips name them).
     The front-panel Model toggle is the `preamp_model` parameter: flipping it fades
-    (~200 ms) between the Rectifier faceplate (blonde grille) and the all-black 5150 faceplate. */
+    (~200 ms) between the Rectifier faceplate (blonde grille) and the all-black 5150 faceplate.
+    Rev2.4: each faceplate is bound to its own amp's parameter set (docs/per-amp-state.md). */
 class AmpHead final : public juce::Component, private juce::Timer
 {
 public:
@@ -43,25 +44,19 @@ private:
         juce::String getTooltip() override { return lit ? "Pilot lamp: amp on" : "Pilot lamp: bypassed (standby)"; }
         bool lit = true;
     };
-    struct LeadMark final : juce::Component, juce::TooltipClient
-    {
-        void paint (juce::Graphics&) override;
-        juce::String getTooltip() override
-        {
-            return "5150 faceplate: the 5150-inspired model is the Lead channel (Rhythm is not modelled). "
-                   "Flip the Model toggle for the Rectifier's Red/Orange channels.";
-        }
-    };
-
     JuicyboiAudioProcessor& proc;
-    ParamSlider input, gain, bass, mid, treble, presence, leadPresence, leadResonance, master;
+    // Rectifier faceplate (amp 0 set)
+    ParamSlider input, gain, bass, mid, treble, presence, master;
+    // 5150 faceplate (amp 1 set, Rev2.4): no Master - per-channel Pre and Post Gain
+    ParamSlider input5, rhythmPre, leadPre, low5, mid5, high5, rhythmPost, leadPost, leadResonance, leadPresence;
     ToggleSwitch standby, model, channel, voice;
+    ToggleSwitch channel5, bright, crunch;
     Pilot pilot;
-    LeadMark leadMark;
 
+    static constexpr int numRectKnobs = 7, num5150Knobs = 10, numKnobs = numRectKnobs + num5150Knobs;
     /** Small creme caption BELOW each head knob (nothing above the knobs). */
-    std::array<juce::Label, 9> knobLabels;
-    std::array<ParamSlider*, 9> labelledKnobs() noexcept;
+    std::array<juce::Label, numKnobs> knobLabels;
+    std::array<ParamSlider*, numKnobs> labelledKnobs() noexcept;
     void syncKnobLabels();
 
     float mix = 0.0f;

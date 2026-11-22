@@ -30,6 +30,7 @@ public:
     int getDesignHeight() const noexcept { return drawerOpen ? openHeight : closedHeight; }
 
     jb::gui::AmpHead& getHead() noexcept { return head; }
+    jb::gui::Pedalboard& getDrawer() noexcept { return drawer; }
     juce::Component& getRoot() noexcept { return root; }
 
 private:

@@ -117,11 +117,11 @@ void Pedal::paint (Graphics& g)
 }
 
 //==============================================================================
-IRDropZone::IRDropZone (JuicyboiAudioProcessor& p, int s) : proc (p), slot (s)
+IRDropZone::IRDropZone (JuicyboiAudioProcessor& p, int a, int s) : proc (p), amp (a), slot (s)
 {
-    setComponentID (s == 0 ? "ir_a" : "ir_b");
+    setComponentID (jb::params::ampIrKey (a, s));
     clearButton.setTooltip ("Clear IR");
-    clearButton.onClick = [this] { proc.clearCabIR (slot); refresh(); };
+    clearButton.onClick = [this] { proc.clearCabIR (amp, slot); refresh(); };
     addAndMakeVisible (clearButton);
     setMouseCursor (MouseCursor::PointingHandCursor);
     refresh();
@@ -129,7 +129,7 @@ IRDropZone::IRDropZone (JuicyboiAudioProcessor& p, int s) : proc (p), slot (s)
 
 void IRDropZone::refresh()
 {
-    clearButton.setVisible (proc.hasCabIR (slot));
+    clearButton.setVisible (proc.hasCabIR (amp, slot));
     repaint();
 }
 
@@ -140,9 +140,9 @@ void IRDropZone::resized()
 
 String IRDropZone::getTooltip()
 {
-    const auto name = dsp::CabSim::slotName (slot);
-    if (proc.hasCabIR (slot))
-        return name + ": " + proc.getCabIRFile (slot).getFullPathName() + "\nDrop or click to replace; x clears.";
+    const auto name = (amp == 1 ? String ("5150 ") : String()) + dsp::CabSim::slotName (slot);
+    if (proc.hasCabIR (amp, slot))
+        return name + ": " + proc.getCabIRFile (amp, slot).getFullPathName() + "\nDrop or click to replace; x clears.";
     return name + ": empty. Drop a .wav/.aif/.flac IR here, or click to browse.";
 }
 
@@ -156,7 +156,7 @@ void IRDropZone::mouseUp (const MouseEvent& e)
                               if (safe == nullptr) return;
                               const auto f = fc.getResult();
                               if (f.existsAsFile())
-                                  safe->proc.loadCabIR (safe->slot, f);
+                                  safe->proc.loadCabIR (safe->amp, safe->slot, f);
                               safe->refresh();
                           });
 }
@@ -175,7 +175,7 @@ void IRDropZone::filesDropped (const StringArray& files, int, int)
     for (auto& f : files)
         if (File (f).hasFileExtension ("wav;aif;aiff;flac"))
         {
-            proc.loadCabIR (slot, File (f));
+            proc.loadCabIR (amp, slot, File (f));
             break;
         }
     refresh();
@@ -184,7 +184,7 @@ void IRDropZone::filesDropped (const StringArray& files, int, int)
 void IRDropZone::paint (Graphics& g)
 {
     auto b = getLocalBounds().toFloat().reduced (1.0f);
-    const auto loaded = proc.hasCabIR (slot);
+    const auto loaded = proc.hasCabIR (amp, slot);
     g.setColour (hovering ? Colour (0xff2f4a22) : Colour (0xff0b0b0b));
     g.fillRoundedRectangle (b, 4.0f);
     Path border; border.addRoundedRectangle (b, 4.0f);
@@ -207,145 +207,181 @@ void IRDropZone::paint (Graphics& g)
     g.drawText (dsp::CabSim::slotName (slot), t.removeFromTop (t.getHeight() / 2), Justification::bottomLeft, false);
     g.setColour (loaded ? colours::creme : colours::creme.withAlpha (0.85f));
     g.setFont (uiFont (9.5f, false));
-    g.drawText (loaded ? proc.getCabIRFile (slot).getFileName() : String ("drop / click IR"), t, Justification::topLeft, true);
+    g.drawText (loaded ? proc.getCabIRFile (amp, slot).getFileName() : String ("drop / click IR"), t, Justification::topLeft, true);
 }
 
 //==============================================================================
+Pedalboard::AmpControls::AmpControls (JuicyboiAudioProcessor& p, int amp)
+    : odDrive (p.apvts, params::ampId (amp, params::AmpSlot::odDrive), ParamSlider::Style::pedalKnob),
+      odTone (p.apvts, params::ampId (amp, params::AmpSlot::odTone), ParamSlider::Style::pedalKnob),
+      odLevel (p.apvts, params::ampId (amp, params::AmpSlot::odLevel), ParamSlider::Style::pedalKnob, [] (double v)
+               { return "Boost Level " + String (v, 1) + " = " + String (taper::boostLevelKnobToDb (v), 1)
+                        + " dB (6.7 = unity, 3.6 dB per number, 10 = +12 dB)"; }),
+      odType (p.apvts, params::ampId (amp, params::AmpSlot::odType), "SD", "OD", true, true),
+      odSwitch (p.apvts, params::ampId (amp, params::AmpSlot::odEnable), "Boost"),
+      eqLevel (p.apvts, params::ampId (amp, params::AmpSlot::eqLevel), ParamSlider::Style::fader),
+      eqSwitch (p.apvts, params::ampId (amp, params::AmpSlot::eqEnable), "Graphic EQ"),
+      gateThreshold (p.apvts, params::ampId (amp, params::AmpSlot::gateThreshold), ParamSlider::Style::pedalKnob),
+      gateHold (p.apvts, params::ampId (amp, params::AmpSlot::gateHold), ParamSlider::Style::pedalKnob),
+      gateRelease (p.apvts, params::ampId (amp, params::AmpSlot::gateRelease), ParamSlider::Style::pedalKnob),
+      gateSwitch (p.apvts, params::ampId (amp, params::AmpSlot::gateEnable), "Gate"),
+      cabOn (p.apvts, params::ampId (amp, params::AmpSlot::cabEnable), "ON", "OFF", true, true),
+      cabBlend (p.apvts, params::ampId (amp, params::AmpSlot::cabMicBlend), ParamSlider::Style::pedalKnob),
+      cabLevel (p.apvts, params::ampId (amp, params::AmpSlot::cabLevel), ParamSlider::Style::pedalKnob, [] (double v)
+                { return "Cab Level " + String (v, 1) + " = " + String (taper::cabLevelKnobToDb (v), 1)
+                         + " dB (5 = unity, 4.8 dB per number)"; })
+{
+    for (size_t b = 0; b < eqBands.size(); ++b)
+        eqBands[b] = std::make_unique<ParamSlider> (p.apvts, params::ampEqBandId (amp, (int) b), ParamSlider::Style::fader);
+    for (int s = 0; s < 2; ++s)
+        irZones[(size_t) s] = std::make_unique<IRDropZone> (p, amp, s);
+}
+
+std::vector<Component*> Pedalboard::AmpControls::all()
+{
+    std::vector<Component*> v { &odDrive, &odTone, &odLevel, &odType, &odSwitch, &eqLevel, &eqSwitch,
+                                &gateThreshold, &gateHold, &gateRelease, &gateSwitch, &cabOn, &cabBlend, &cabLevel };
+    for (auto& b : eqBands) v.push_back (b.get());
+    for (auto& z : irZones) v.push_back (z.get());
+    return v;
+}
+
 Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
     : proc (p),
       boost (Pedal::Kind::stomp, colours::boostGreen, colours::boostGreenD, colours::creme, "BOOST"),
       eq (Pedal::Kind::stomp, colours::eqCreme, colours::eqCremeD, colours::ink, "7-BAND EQ"),
       gate (Pedal::Kind::stomp, Colour (0xff2a2a2a), Colour (0xff121212), colours::creme, "GATE"),
-      cab (Pedal::Kind::sidePanel, Colour (0xff1c1c1c), Colour (0xff0d0d0d), colours::creme, "CAB"),
-      odDrive (p.apvts, pid::odDrive, ParamSlider::Style::pedalKnob),
-      odTone (p.apvts, pid::odTone, ParamSlider::Style::pedalKnob),
-      odLevel (p.apvts, pid::odLevel, ParamSlider::Style::pedalKnob, [] (double v)
-               { return "Boost Level " + String (v, 1) + " = " + String (taper::boostLevelKnobToDb (v), 1)
-                        + " dB (6.7 = unity, 3.6 dB per number, 10 = +12 dB)"; }),
-      odType (p.apvts, pid::odType, "SD", "OD", true, true),
-      odSwitch (p.apvts, pid::odEnable, "Boost"),
-      eqLevel (p.apvts, pid::eqLevel, ParamSlider::Style::fader),
-      eqSwitch (p.apvts, pid::eqEnable, "Graphic EQ"),
-      gateThreshold (p.apvts, pid::gateThreshold, ParamSlider::Style::pedalKnob),
-      gateHold (p.apvts, pid::gateHold, ParamSlider::Style::pedalKnob),
-      gateRelease (p.apvts, pid::gateRelease, ParamSlider::Style::pedalKnob),
-      gateSwitch (p.apvts, pid::gateEnable, "Gate"),
-      cabOn (p.apvts, pid::cabEnable, "ON", "OFF", true, true),
-      cabBlend (p.apvts, pid::cabMicBlend, ParamSlider::Style::pedalKnob),
-      cabLevel (p.apvts, pid::cabLevel, ParamSlider::Style::pedalKnob, [] (double v)
-                { return "Cab Level " + String (v, 1) + " = " + String (taper::cabLevelKnobToDb (v), 1)
-                         + " dB (5 = unity, 4.8 dB per number)"; })
+      cab (Pedal::Kind::sidePanel, Colour (0xff1c1c1c), Colour (0xff0d0d0d), colours::creme, "CAB")
 {
     for (auto* pd : { &boost, &eq, &gate, &cab })
         addAndMakeVisible (*pd);
 
     auto popup = [popupParent] (ParamSlider& s) { s.setPopupDisplayEnabled (true, false, popupParent); };
 
-    // --- Boost
+    for (int amp = 0; amp < 2; ++amp)
+    {
+        sets[(size_t) amp] = std::make_unique<AmpControls> (p, amp);
+        auto& c = *sets[(size_t) amp];
+
+        // --- Boost
+        {
+            const float xs[] = { 42.0f, 115.0f, 188.0f };
+            ParamSlider* ks[] = { &c.odDrive, &c.odTone, &c.odLevel };
+            for (int i = 0; i < 3; ++i)
+            {
+                popup (*ks[i]);
+                boost.addChildComponent (*ks[i]);
+                ks[i]->setBounds (Rectangle<int> (60, 60).withCentre ({ (int) xs[i], 48 }));
+            }
+            c.odType.extraTip = "OD-808 = symmetric mid hump; SD-1 = asymmetric, open-top voicing.";
+            boost.addChildComponent (c.odType);
+            c.odType.setBounds (Rectangle<int> (100, 30).withCentre ({ 115, 116 }));
+            boost.addChildComponent (c.odSwitch);
+            c.odSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 115, (int) switchY }));
+        }
+        // --- 7-band EQ (100 Hz .. 6.4 kHz) + Level
+        {
+            for (size_t b = 0; b < c.eqBands.size(); ++b)
+            {
+                c.eqBands[b]->extraTip = "(double-click = 0 dB)";
+                popup (*c.eqBands[b]);
+                eq.addChildComponent (*c.eqBands[b]);
+                c.eqBands[b]->setBounds (14 + (int) b * 36, 14, 32, 136);
+            }
+            c.eqLevel.extraTip = "(double-click = 0 dB)";
+            popup (c.eqLevel);
+            eq.addChildComponent (c.eqLevel);
+            c.eqLevel.setBounds (276, 14, 32, 136);
+            eq.addChildComponent (c.eqSwitch);
+            c.eqSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 160, (int) switchY }));
+        }
+        // --- Gate
+        {
+            const float xs[] = { 40.0f, 110.0f, 180.0f };
+            ParamSlider* ks[] = { &c.gateThreshold, &c.gateHold, &c.gateRelease };
+            for (int i = 0; i < 3; ++i)
+            {
+                popup (*ks[i]);
+                gate.addChildComponent (*ks[i]);
+                ks[i]->setBounds (Rectangle<int> (60, 60).withCentre ({ (int) xs[i], 48 }));
+            }
+            gate.addChildComponent (c.gateSwitch);
+            c.gateSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 110, (int) switchY }));
+        }
+        // --- Cab side panel
+        {
+            c.cabOn.extraTip = "Off = hard bypass (e.g. into a real power amp / FX return). No IRs loaded = passthrough.";
+            cab.addChildComponent (c.cabOn);
+            c.cabOn.setBounds (Rectangle<int> (104, 28).withCentre ({ 74, 46 }));
+            c.cabBlend.extraTip = "(left = IR A, right = IR B)";
+            const float xs[] = { 40.0f, 108.0f };
+            ParamSlider* ks[] = { &c.cabBlend, &c.cabLevel };
+            for (int i = 0; i < 2; ++i)
+            {
+                ks[i]->getProperties().set ("jbTick", colours::creme.toString());
+                popup (*ks[i]);
+                cab.addChildComponent (*ks[i]);
+                ks[i]->setBounds (Rectangle<int> (56, 56).withCentre ({ (int) xs[i], 96 }));
+            }
+            for (int s = 0; s < 2; ++s)
+            {
+                cab.addChildComponent (*c.irZones[(size_t) s]);
+                c.irZones[(size_t) s]->setBounds (10, 146 + s * 42, 128, 36);
+            }
+        }
+    }
+
+    // captions, titles and LEDs are shared by both sets; the LEDs follow the shown amp
     {
         const float xs[] = { 42.0f, 115.0f, 188.0f };
         const char* caps[] = { "DRIVE", "TONE", "LEVEL" };
-        ParamSlider* ks[] = { &odDrive, &odTone, &odLevel };
         for (int i = 0; i < 3; ++i)
-        {
-            popup (*ks[i]);
-            boost.addAndMakeVisible (*ks[i]);
-            ks[i]->setBounds (Rectangle<int> (60, 60).withCentre ({ (int) xs[i], 48 }));
             boost.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 11.0f });
-        }
-        odType.extraTip = "OD-808 = symmetric mid hump; SD-1 = asymmetric, open-top voicing.";
-        boost.addAndMakeVisible (odType);
-        odType.setBounds (Rectangle<int> (100, 30).withCentre ({ 115, 116 }));
         boost.titleArea = { 0.0f, 140.0f, 230.0f, 40.0f };
         boost.titleSize = 32.0f;
-        boost.addAndMakeVisible (odSwitch);
-        odSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 115, (int) switchY }));
         boost.ledCentre = { 182.0f, switchY };
-        boost.ledAmount = [this] { return rawParam (proc, pid::odEnable) > 0.5f ? 1.0f : 0.0f; };
+        boost.ledAmount = [this] { return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::odEnable)) > 0.5f ? 1.0f : 0.0f; };
     }
-
-    // --- 7-band EQ (100 Hz .. 6.4 kHz) + Level
     {
         const char* caps[] = { "100", "200", "400", "800", "1.6k", "3.2k", "6.4k" };
-        for (size_t b = 0; b < eqBands.size(); ++b)
-        {
-            eqBands[b] = std::make_unique<ParamSlider> (p.apvts, pid::eqBands[b], ParamSlider::Style::fader);
-            eqBands[b]->extraTip = "(double-click = 0 dB)";
-            popup (*eqBands[b]);
-            eq.addAndMakeVisible (*eqBands[b]);
-            const auto x = 14 + (int) b * 36;
-            eqBands[b]->setBounds (x, 14, 32, 136);
-            eq.captions.push_back ({ Rectangle<float> ((float) x - 2.0f, 152.0f, 36.0f, 13.0f), caps[b], 10.0f });
-        }
-        eqLevel.extraTip = "(double-click = 0 dB)";
-        popup (eqLevel);
-        eq.addAndMakeVisible (eqLevel);
-        eqLevel.setBounds (276, 14, 32, 136);
+        for (int b = 0; b < 7; ++b)
+            eq.captions.push_back ({ Rectangle<float> ((float) (14 + b * 36) - 2.0f, 152.0f, 36.0f, 13.0f), caps[b], 10.0f });
         eq.captions.push_back ({ Rectangle<float> (274.0f, 152.0f, 36.0f, 13.0f), "LEVEL", 9.0f });
         eq.titleArea = { 0.0f, 172.0f, 320.0f, 32.0f };
         eq.titleSize = 26.0f;
-        eq.addAndMakeVisible (eqSwitch);
-        eqSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 160, (int) switchY }));
         eq.ledCentre = { 228.0f, switchY };
-        eq.ledAmount = [this] { return rawParam (proc, pid::eqEnable) > 0.5f ? 1.0f : 0.0f; };
+        eq.ledAmount = [this] { return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::eqEnable)) > 0.5f ? 1.0f : 0.0f; };
     }
-
-    // --- Gate
     {
         const float xs[] = { 40.0f, 110.0f, 180.0f };
         const char* caps[] = { "THRESH", "HOLD", "RELEASE" };
-        ParamSlider* ks[] = { &gateThreshold, &gateHold, &gateRelease };
         for (int i = 0; i < 3; ++i)
-        {
-            popup (*ks[i]);
-            gate.addAndMakeVisible (*ks[i]);
-            ks[i]->setBounds (Rectangle<int> (60, 60).withCentre ({ (int) xs[i], 48 }));
             gate.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 11.0f });
-        }
         gate.titleArea = { 0.0f, 140.0f, 220.0f, 40.0f };
         gate.titleSize = 32.0f;
-        gate.addAndMakeVisible (gateSwitch);
-        gateSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 110, (int) switchY }));
         gate.ledCentre = { 172.0f, switchY };
         gate.ledAmount = [this]
         {
-            return (proc.isGateActive() && rawParam (proc, pid::gateEnable) > 0.5f) ? 1.0f : 0.0f;
+            const int a = activeAmp();
+            return (proc.isGateActive (a) && rawParam (proc, params::ampId (a, params::AmpSlot::gateEnable)) > 0.5f) ? 1.0f : 0.0f;
         };
         gate.ledColour = [this]
         {
             // green = open, orange-red = closed (keyed from the dry input)
-            return colours::ledRed.interpolatedWith (colours::ledGreen, jlimit (0.0f, 1.0f, proc.getGateOpenAmount()));
+            return colours::ledRed.interpolatedWith (colours::ledGreen, jlimit (0.0f, 1.0f, proc.getGateOpenAmount (activeAmp())));
         };
     }
-
-    // --- Cab side panel
     {
+        const float xs[] = { 40.0f, 108.0f };
+        const char* caps[] = { "BLEND", "LEVEL" };
+        for (int i = 0; i < 2; ++i)
+            cab.captions.push_back ({ Rectangle<float> (64.0f, 12.0f).withCentre ({ xs[i], 130.0f }), caps[i], 10.5f });
         cab.titleArea = { 0.0f, 8.0f, 148.0f, 18.0f };
         cab.titleSize = 14.0f;
         cab.ledCentre = { 126.0f, 17.0f };
-        cab.ledAmount = [this] { return rawParam (proc, pid::cabEnable) > 0.5f ? 1.0f : 0.0f; };
-        cabOn.extraTip = "Off = hard bypass (e.g. into a real power amp / FX return). No IRs loaded = passthrough.";
-        cab.addAndMakeVisible (cabOn);
-        cabOn.setBounds (Rectangle<int> (104, 28).withCentre ({ 74, 46 }));
-        cabBlend.extraTip = "(left = IR A, right = IR B)";
-        const float xs[] = { 40.0f, 108.0f };
-        const char* caps[] = { "BLEND", "LEVEL" };
-        ParamSlider* ks[] = { &cabBlend, &cabLevel };
-        for (int i = 0; i < 2; ++i)
-        {
-            ks[i]->getProperties().set ("jbTick", colours::creme.toString());
-            popup (*ks[i]);
-            cab.addAndMakeVisible (*ks[i]);
-            ks[i]->setBounds (Rectangle<int> (56, 56).withCentre ({ (int) xs[i], 96 }));
-            cab.captions.push_back ({ Rectangle<float> (64.0f, 12.0f).withCentre ({ xs[i], 130.0f }), caps[i], 10.5f });
-        }
-        for (int s = 0; s < 2; ++s)
-        {
-            irZones[(size_t) s] = std::make_unique<IRDropZone> (p, s);
-            cab.addAndMakeVisible (*irZones[(size_t) s]);
-            irZones[(size_t) s]->setBounds (10, 146 + s * 42, 128, 36);
-        }
+        cab.ledAmount = [this] { return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::cabEnable)) > 0.5f ? 1.0f : 0.0f; };
     }
+    showAmp (activeAmp());
 
     front.onClick = [this] { if (onToggle) onToggle(); };
     front.setMouseCursor (MouseCursor::PointingHandCursor);
@@ -353,10 +389,26 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
     startTimerHz (30);
 }
 
+int Pedalboard::activeAmp() const
+{
+    return proc.apvts.getRawParameterValue (pid::preampModel)->load() > 0.5f ? 1 : 0;
+}
+
+void Pedalboard::showAmp (int amp)
+{
+    if (amp == shownAmp) return;
+    shownAmp = amp;
+    for (int a = 0; a < 2; ++a)
+        for (auto* c : sets[(size_t) a]->all())
+            c->setVisible (a == amp);
+    for (auto& z : sets[(size_t) amp]->irZones) z->refresh();
+}
+
 Pedalboard::~Pedalboard() { stopTimer(); }
 
 void Pedalboard::timerCallback()
 {
+    showAmp (activeAmp());
     if (! open) return;
     for (auto* pd : { &boost, &eq, &gate, &cab })
         pd->pollLed();

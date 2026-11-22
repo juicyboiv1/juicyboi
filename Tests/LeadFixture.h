@@ -20,7 +20,9 @@ inline void setParam (JuicyboiAudioProcessor& p, const char* id, float v)
 
 inline constexpr int numConfigs = 5, blocks = 32, blockSize = 256;
 
-// 0: 5150 defaults                1: 5150 Presence 6, SD-1 on, Gain 8, Bass 7, EQ on
+// Rev2.4: configs 0-2 drive the 5150's own set (m5150_* IDs); before Rev2.4 they set the
+// shared legacy IDs, which is the same musical setting on the old single set.
+// 0: 5150 defaults                1: 5150 Presence 6, SD-1 on, Lead Pre 8, Low 7, EQ on
 // 2: 5150 Presence 10, OD-808     3: Red v2, Bass 5, Mid 2, Treble 8, Presence 7, Gain 8
 // 4: Orange, Bass 5, Mid 7, Treble 3, Presence 2, OD-808 on, EQ on
 inline void configure (JuicyboiAudioProcessor& p, int config)
@@ -29,11 +31,11 @@ inline void configure (JuicyboiAudioProcessor& p, int config)
     {
         case 0: setParam (p, "preamp_model", 1.0f); break;
         case 1: setParam (p, "preamp_model", 1.0f); setParam (p, "lead_presence", 6.0f);
-                setParam (p, "od_enable", 1.0f); setParam (p, "od_type", 1.0f);
-                setParam (p, "pre_gain", 8.0f); setParam (p, "pre_bass", 7.0f);
-                setParam (p, "eq_enable", 1.0f); setParam (p, "eq_100", 4.0f); setParam (p, "eq_800", -3.0f); break;
+                setParam (p, "m5150_od_enable", 1.0f); setParam (p, "m5150_od_type", 1.0f);
+                setParam (p, "m5150_lead_pre", 8.0f); setParam (p, "m5150_low", 7.0f);
+                setParam (p, "m5150_eq_enable", 1.0f); setParam (p, "m5150_eq_100", 4.0f); setParam (p, "m5150_eq_800", -3.0f); break;
         case 2: setParam (p, "preamp_model", 1.0f); setParam (p, "lead_presence", 10.0f);
-                setParam (p, "od_enable", 1.0f); break;
+                setParam (p, "m5150_od_enable", 1.0f); break;
         case 3: setParam (p, "pre_mid", 2.0f); setParam (p, "pre_treble", 8.0f);
                 setParam (p, "pre_presence", 7.0f); setParam (p, "pre_gain", 8.0f); break;
         default: setParam (p, "channel", 1.0f); setParam (p, "pre_mid", 7.0f); setParam (p, "pre_treble", 3.0f);

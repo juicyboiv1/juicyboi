@@ -3,6 +3,7 @@
 #include <vector>
 #include <chrono>
 #include <algorithm>
+#include <string>
 
 namespace
 {
@@ -20,8 +21,13 @@ float signal (int i, double fs)
 }
 void setup (JuicyboiAudioProcessor& p, double fs, int channels, int preparedBlock, int model, int boost, float gain)
 {
-    set (p, "preamp_model", (float) model); set (p, "pre_gain", gain);
-    set (p, "od_enable", boost > 0 ? 1.0f : 0.0f); set (p, "od_type", boost == 2 ? 1.0f : 0.0f);
+    // Rev2.4: the 5150 has its own set (m5150_* IDs; Lead Pre Gain is its gain knob)
+    // Both sets get the same setting so a model switch compares like with like.
+    set (p, "preamp_model", (float) model); set (p, "pre_gain", gain); set (p, "m5150_lead_pre", gain);
+    for (const std::string pre : { "", "m5150_" })
+    {
+        set (p, (pre + "od_enable").c_str(), boost > 0 ? 1.0f : 0.0f); set (p, (pre + "od_type").c_str(), boost == 2 ? 1.0f : 0.0f);
+    }
     p.setPlayConfigDetails (channels, 2, fs, preparedBlock);
     p.prepareToPlay (fs, preparedBlock);
 }
@@ -66,10 +72,16 @@ int modelValidation()
     };
     {
         JuicyboiAudioProcessor p;
+        // Rev2.3 order is untouched; every Rev2.4 parameter is appended after lead_resonance
+        const int lastOld = p.apvts.getParameter ("lead_resonance")->getParameterIndex();
+        bool appended = true;
+        for (auto* q : p.getParameters())
+            if (auto* wid = dynamic_cast<juce::AudioProcessorParameterWithID*> (q))
+                if (wid->paramID.startsWith ("m5150_")) appended = appended && q->getParameterIndex() > lastOld;
         check ("default Rectifier; old/new indices preserved", get (p, "preamp_model") < 0.5f
-               && p.apvts.getParameter ("preamp_model")->getParameterIndex() == p.getParameters().size() - 3
-               && p.apvts.getParameter ("lead_presence")->getParameterIndex() == p.getParameters().size() - 2
-               && p.apvts.getParameter ("lead_resonance")->getParameterIndex() == p.getParameters().size() - 1);
+               && p.apvts.getParameter ("preamp_model")->getParameterIndex() == lastOld - 2
+               && p.apvts.getParameter ("lead_presence")->getParameterIndex() == lastOld - 1
+               && p.apvts.getParameter ("m5150_channel")->getParameterIndex() == lastOld + 1 && appended);
         set (p, "channel", 1.0f); set (p, "red_voice", 0.0f); set (p, "preamp_model", 1.0f);
         set (p, "lead_presence", 9.0f);
         auto old = p.apvts.copyState();
@@ -190,7 +202,7 @@ int modelValidation()
     // Clean key must still close the post-gain gate with Lead running hot.
     {
         JuicyboiAudioProcessor p; setup (p, 48000.0, 1, 256, 1, 2, 10.0f);
-        set (p, "gate_enable", 1.0f); juce::MidiBuffer midi; juce::Random noise (991);
+        set (p, "m5150_gate_enable", 1.0f); juce::MidiBuffer midi; juce::Random noise (991);
         float tail = 0.0f; bool opened = false;
         for (int b = 0; b < 200; ++b)
         {
@@ -198,10 +210,10 @@ int modelValidation()
             for (int i = 0; i < 256; ++i)
                 x.setSample (0, i, b < 60 ? signal (b * 256 + i, 48000.0) : 5e-5f * (noise.nextFloat() * 2.0f - 1.0f));
             p.processBlock (x, midi);
-            if (b == 50) opened = p.getGateOpenAmount() > 0.99f;
+            if (b == 50) opened = p.getGateOpenAmount (1) > 0.99f;
             if (b > 180) tail = std::max (tail, x.getMagnitude (0, 256));
         }
-        check ("Lead dry-key gate opens for note, closes for hiss", opened && tail < 1e-5f && p.getGateOpenAmount() < 0.01f);
+        check ("Lead dry-key gate opens for note, closes for hiss", opened && tail < 1e-5f && p.getGateOpenAmount (1) < 0.01f);
     }
 
     // Multi-input Standalone processing regression (wrapper-unmute patch itself
