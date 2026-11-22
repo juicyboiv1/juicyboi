@@ -42,19 +42,29 @@ int main (int argc, char** argv)
 
     ed.setDrawerOpen (false);
     ed.getHead().syncModelNow();
-    shoot (ed, "rev2-rectifier");
+    shoot (ed, "rev2.4-rectifier");
 
     set (p, "preamp_model", 1.0f);
     set (p, "lead_presence", 5.0f);
     set (p, "lead_resonance", 4.0f);
+    set (p, "m5150_gate_enable", 1.0f); // the 5150 has its own pedalboard settings (Rev2.4)
     ed.getHead().syncModelNow();
-    shoot (ed, "rev2-5150");
+    ed.getDrawer().syncAmpNow();
+    shoot (ed, "rev2.4-5150-lead");
+
+    set (p, "m5150_channel", 0.0f);
+    set (p, "m5150_crunch", 1.0f);
+    ed.getHead().syncModelNow();
+    shoot (ed, "rev2.4-5150-rhythm-crunch");
+    set (p, "m5150_channel", 1.0f);
+    ed.getHead().syncModelNow();
 
     ed.setDrawerOpen (true);
-    shoot (ed, "rev2-5150-drawer-open");
+    shoot (ed, "rev2.4-5150-drawer-open");
 
     set (p, "preamp_model", 0.0f);
     ed.getHead().syncModelNow();
-    shoot (ed, "rev2-rectifier-drawer-open");
+    ed.getDrawer().syncAmpNow();
+    shoot (ed, "rev2.4-rectifier-drawer-open");
     return 0;
 }

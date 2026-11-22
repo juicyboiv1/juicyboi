@@ -1,5 +1,34 @@
 # Headless regression tests
 
+**Rev2.4 (per-amp settings + new 5150 engine).**
+- `lead-rev2.4.f32` was captured ONCE from the Rev2.4 build with the five
+  `LeadFixture` configs. In those configs, configs 0–2 now set the 5150's own
+  `m5150_*` IDs. `ResonanceTest` section 7 requires:
+  - the 5150 configs (0–2) to null vs Rev2.4;
+  - Red v2 / Orange (3–4) to be **bit-identical** (error 0) to `lead-rev2.3.f32`;
+  - Orange to be bit-identical to Rev2.2.
+- `rect-rev2.3.f32` still nulls exactly (`legacyRegression`).
+- `PerAmpTest.cpp` loads four sessions saved by the Rev2.3 build
+  (`rev2.3-state-{0..3}.bin`). It checks:
+  - the Rectifier renders bit-identically to what Rev2.3 rendered from them
+    (`rev2.3-migration-rect.f32`);
+  - the v3→v4 migration copies boost/EQ/cab/gate/input into the 5150 set and
+    maps Gain→Lead Pre, Bass/Mid/Treble→Low/Mid/High, Master→Post;
+  - there is no re-migration on re-save;
+  - each amp's settings have zero effect on the other amp's audio;
+  - switching amps keeps both sets.
+- `Amp5150Test.cpp` checks:
+  - the Pre Gain networks (time-domain vs analytic nodal magnitude, < 0.1 dB);
+  - the Lead bright cap;
+  - Rhythm Bright (+6 dB at 2 kHz between Pre 5 and 7) and Crunch gain;
+  - a click-free Bright/Crunch switch;
+  - that the 4x12 bump grows with Resonance;
+  - the Post taper.
+- `EditorTest`: the 5150 faceplate (no Master; RHY/LEAD, Bright/Crunch,
+  per-channel Pre/Post, its own Input) and the per-amp pedalboard.
+- Capture code was removed again. Do not regenerate fixtures from later
+  feature code to bless a failure.
+
 `cmake --build build --target juicyboi_smoketest -j8` then run
 `build/juicyboi_smoketest_artefacts/Release/juicyboi_smoketest` (Linux).
 

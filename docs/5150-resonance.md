@@ -1,5 +1,13 @@
 # 5150 Resonance: declared small-signal model
 
+> **Rev2.4 update.** The 5150 now has a 4x12 load model (`SpeakerLoad5150`, see
+> `docs/5150.md`). Its output impedance comes from this same NFB loop, so
+> Resonance now also raises the cabinet peak near 100 Hz. That is the
+> real-amp behaviour that assumption 2 below says was missing: +5.4 dB at
+> Resonance 0, rising to +8.5 dB at 10 re 1 kHz. Position 0 is no longer a
+> bit-identical reference of the old Lead, because the whole 5150 engine
+> changed in Rev2.4.
+
 Like Output Presence, this is a **relative closed-loop response approximation**,
 not measured hardware or a nonlinear power-amp/speaker simulation. Position
 0/default is the existing Lead sound **bit-for-bit**; turning up adds the
