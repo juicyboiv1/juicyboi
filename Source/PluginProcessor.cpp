@@ -81,6 +81,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
         rs.bias  = voicingA.recoveryBias;
         rs.outGain = voicingA.recoveryOutGain;
         rectRecovery.prepare (osRate, rs);
+        rectSpeaker.prepare (osRate, voicingA.speakerLoad); // Rev2.3, Red v2 only
         recoveryRed = voicingA.recoveryDrive;
         recoveryOrange = voicingB.recoveryDrive;
         leadRecovery.prepare (osRate, dsp::leadRecovery());
@@ -312,6 +313,7 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
             const auto chAmt   = channelMix.getNextValue();
             const auto rvAmt   = redVoiceMix.getNextValue(); // 0 = Red v1, 1 = Red v2
             const auto recDrive = recoveryRed + chAmt * (recoveryOrange - recoveryRed);
+            const auto spkAmt  = rvAmt * (1.0f - chAmt); // Red v2 share of the Rect output (Rev2.3)
 
             // Boost stages needed this frame (both while a crossfade is running)
             const bool boostAudible = odAmt > 0.0f || odMix.isSmoothing();
@@ -346,7 +348,12 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
 
                 // Passive TMB, then the post-stack recovery gain (both at 4x)
                 const auto rect = tone.process (a + chAmt * (b - a), ch);
-                d[i] = rectRecovery.process (rect, recDrive, ch);
+                const auto rec  = rectRecovery.process (rect, recDrive, ch);
+                // Rev2.3: Red v2 power-amp / 4x12 low-end interaction. Linear,
+                // always running (warm state); weight 0 (Red v1, Orange) passes
+                // `rec` through untouched, so those voices stay bit-identical.
+                const auto spk  = rectSpeaker.process (rec, ch);
+                d[i] = spkAmt > 0.0f ? rec + spkAmt * (spk - rec) : rec;
                 leadUp.getChannelPointer ((size_t) ch)[i] =
                     leadRecovery.process (leadTone.process (lead.process (boosted, ch), ch), ch);
             }

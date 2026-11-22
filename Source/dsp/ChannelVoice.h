@@ -36,6 +36,16 @@ struct TmbComponents
     double makeupDb = 5.0; // after the stack: brings default-knob level back to Rev1
 };
 
+/** Speaker-load interaction parts (SpeakerLoad.h, Rev2.3). res = 0 -> bypass. */
+struct SpeakerLoadParams
+{
+    double re   = 6.4;   // speaker DC (voice-coil) resistance, ohms
+    double res  = 0.0;   // motional resistance at resonance (|Z|max - Re), ohms
+    double f0   = 106.0; // in-cabinet impedance resonance, Hz
+    double q    = 3.0;   // resonance (mechanical) Q of the impedance peak
+    double zout = 3.7;   // amplifier output impedance at the speaker tap, ohms
+};
+
 struct TriodeStageVoicing
 {
     double couplingHpHz;  // coupling / cathode-bypass style low cut
@@ -74,6 +84,10 @@ struct ChannelVoicing
     float recoveryDrive = 0.0f;
     float recoveryBias  = 0.40f;
     float recoveryOutGain = 1.07f; // +0.6 dB: undoes the stage's compression at default knobs
+
+    // Power-amp / 4x12 load interaction after the recovery stage (Rev2.3).
+    // Default = bypass; only Red v2 sets it (rectoSpeakerLoad()).
+    SpeakerLoadParams speakerLoad {};
 };
 
 namespace voicings
@@ -98,6 +112,26 @@ inline TmbComponents redTmb()
 inline TmbComponents orangeTmb()
 {
     return { 250e3, 1e6, 25e3, 47e3, 500e-12, 20e-9, 20e-9, 6.00 };
+}
+
+/** Rev2.3 Red v2 low end: tube power amp into a closed-back V30 4x12.
+    Values (nominal; the amp's own output impedance was not measured):
+      f0 = 106 Hz  impedance resonance of a Rectifier Oversized 4x12 with
+                   Vintage 30s (Redwirez impedance sweep, Fractal Audio forum
+                   thread "LF Resonant Frequency"; Recto 4x12s measure ~106-111 Hz)
+      Re = 6.4 ohm, |Z|max ~31 ohm (Res = 25), Q = 3: typical 8-ohm V30 4x12
+                   closed-box impedance peak (nominal, not a measured curve)
+      Zo = 3.7 ohm closed-loop output impedance (damping factor ~2.2 at the
+                   8-ohm tap) for Red VINTAGE, which has power-amp NFB: the
+                   switching matrix turns LDR19 ON in "RD VINT" (OFF in "RD
+                   MDRN"), closing FB -> .1uF -> R275 47K into R372 4.7K at the
+                   phase-inverter tail (Dual Rectifier power-amp sheet).
+                   Chosen as a moderate damping factor: +3.0 dB at f0.
+    Result: +0.8 dB at 40 Hz, +2.6 dB at 80 Hz, +3.0 dB at 100-106 Hz,
+    +1.5 dB at 200 Hz, +0.07 dB at 1 kHz. See docs/red-v2-bass.md. */
+inline SpeakerLoadParams rectoSpeakerLoad()
+{
+    return { 6.4, 25.0, 106.0, 3.0, 3.7 };
 }
 
 /** Channel 1 — Red, voicing v1 (original juicyboi v1.x Red).
@@ -135,7 +169,13 @@ inline ChannelVoicing redV1()
     ceiling, harder grid-conduction knees and a touch more cold-cathode bias
     on V2A/V2B for denser saturation. To stay musical rather than fuzzy, the
     V2B coupling HP is nudged *up* (palm-mute tightness) and the plate / post
-    low-passes come down a little to keep the extra drive from fizzing. */
+    low-passes come down a little to keep the extra drive from fizzing.
+    Rev2.3: the cascade is unchanged. The real amp's V2A->V2B coupling is
+    5.4 Hz (C22 .02u, R242 470K + R212 1M) with an unbypassed V2B cathode, but
+    restoring it here adds only +0.6 dB of output bass and costs palm-mute
+    tightness (no blocking dynamics in this static model). The 150 Hz corner
+    is therefore a deliberate deviation; see docs/red-v2-bass.md. The extra low
+    end comes from speakerLoad, applied after the recovery stage. */
 inline ChannelVoicing redV2()
 {
     ChannelVoicing v;
@@ -154,6 +194,7 @@ inline ChannelVoicing redV2()
     v.postLpHz = 7400.0;
     v.makeup = 0.49f; // ~-1.5 dB vs v1: rough level-match so the A/B is about tone, not loudness
     v.recoveryDrive = 2.0f; // Red: Rectifier FX-loop recovery / PI stand-in (Rev2.2)
+    v.speakerLoad = rectoSpeakerLoad(); // Rev2.3: power-amp / 4x12 low-end interaction
 
     v.tmb = redTmb();
     v.presenceHz = 2400.0;

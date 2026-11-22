@@ -3,6 +3,22 @@
 `cmake --build build --target juicyboi_smoketest -j8` then run
 `build/juicyboi_smoketest_artefacts/Release/juicyboi_smoketest` (Linux).
 
+**Rev2.3 fixtures.** Rev2.3 changes Red v2 only (power-amp / 4x12 load bump
+after the recovery stage). The same renders were re-captured ONCE from the
+Rev2.3 build: `rect-rev2.3.f32` and `lead-rev2.3.f32` are now the null
+references. The Rev2.2 fixtures stay and must still null (< 2e-6; 0 on Linux)
+for every configuration except Red v2: Red v1 and Orange × 3 boosts, and the
+four 5150/Orange `LeadFixture` configs. Red v2 must be 0.3–3 dB louder than
+Rev2.2 on the 82.4 Hz-heavy signal (measured +2.13 dB Boost off, +0.49 dB
+boosted). `SpeakerLoadTest.cpp` checks:
+- the analytic bump (+3.0 dB at 106 Hz, +2.4–2.8 at 80 Hz, +2.8–3.1 at 100 Hz, < +1 dB at 40 Hz, flat at 1/5 kHz);
+- digital vs analytic gain within 0.02 dB at 4× of 44.1/48/96 kHz;
+- the exact bypass, and that only Red v2 enables the bump;
+- a click-free Red v1 → v2 switch.
+
+Capture code was removed again. `juicyboi_bassprobe` (BassProbe.cpp) is the
+measurement tool behind docs/red-v2-bass.md.
+
 **Rev2.2 fixtures.** Rev2.2 changes the audio again (solved Boost clippers,
 post-TMB recovery on Red/5150, tone stacks inside the 4× section), so the same
 renders were re-captured ONCE from the Rev2.2 build: `rect-rev2.2-clippers.f32`

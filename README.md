@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (Rev2.2)
+# juicyboi — heavy-riff preamp (Rev2.3)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -13,6 +13,8 @@ networks from the part values printed on the referenced schematics (see
 *DSP stage notes → ToneStack* and [docs/tonestack.md](docs/tonestack.md)), and
 since Rev2.2 the Boost clipping stages are solved op-amp/diode circuits with the
 schematic part values ([docs/diode-clippers.md](docs/diode-clippers.md)).
+Rev2.3 adds the low-frequency power-amp / 4x12 load interaction to Red v2
+([docs/red-v2-bass.md](docs/red-v2-bass.md)).
 Descriptive product names belong to their respective owners; no affiliation is implied.
 
 ## Build
@@ -33,7 +35,7 @@ Artifacts (Linux):
 | Format     | Path |
 |------------|------|
 | VST3       | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev2.vst3` |
-| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2` |
+| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.3` |
 | LV2        | `build/juicyboi_artefacts/Release/LV2/juicyboi Rev2.lv2` |
 
 The build also makes AU on macOS, and AAX on macOS/Windows (JUCE 9 ships a
@@ -45,7 +47,13 @@ bundled AAX SDK; you can point at a separate Avid tree with
 | AU | `build/juicyboi_artefacts/Release/AU/juicyboi Rev2.component` |
 | VST3 | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev2.vst3` |
 | AAX | `build/juicyboi_artefacts/Release/AAX/juicyboi Rev2.aaxplugin` |
-| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.app` |
+| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.3.app` |
+
+Since Rev2.3 the Standalone app carries the full version (`juicyboi Rev2.3.app`;
+the patch level is not included), so an old and a new app are easy to tell
+apart. The plugins keep the name `juicyboi Rev2` and the same IDs (`Jcb2`,
+`com.juicyboi.juicyboi-rev2`): sessions keep loading, and installing a new
+Rev2.x replaces the previous bundles.
 
 ### Rev1 and Rev2 side by side
 
@@ -73,6 +81,7 @@ Input trim
   └─► [ 4x oversampled ]
         Boost (OD-808 | SD-1, solved op-amp diode clippers) ── type + on/off crossfades (~15–20 ms)
           ├─► Rectifier Red v1/v2 / Orange ─► passive TMB (RF-1F parts, Red/Orange set) + presence ─► recovery stage (Red)
+          │                                  ─► Red v2 only: power-amp / 4x12 load bump (Rev2.3, linear)
           └─► 5150-inspired Lead (6 stages) ─► passive TMB (5150 sheet-3 parts) ─► recovery stage
   └─► Graphic EQ (per model) ─► 5150: Lead Presence ─► Lead Resonance   (base rate)
   └─► Preamp Model crossfade (30 ms; after respective EQ / Presence paths)
@@ -412,6 +421,7 @@ Source/
     Od808Stage.h/.cpp      OD-808 boost (TS-808 values, solved clipper)
     Sd1Stage.h/.cpp        SD-1 boost (Boutique-mod values, solved asym clipper)
     RecoveryStage.h        post-TMB recovery gain (Rectifier Red, 5150 Lead; Rev2.2)
+    SpeakerLoad.h          Red v2 tube-amp / 4x12 impedance-peak low-end bump (Rev2.3)
     ChannelVoice.h         Red v1 / Red v2 / Orange voicing structs (stage corners, gains, bias)
     PreampCascade.h/.cpp   4× [coupling HP → gain → asym sat (inverting) → plate LP]
     ToneStack.h/.cpp       passive TMB: closed-form H(s), bilinear, nodal state-space realisation
@@ -427,6 +437,8 @@ Tests/
   ClipperTest.cpp          clippers vs analytic network + stored ngspice runs, stability, smoothing, CPU
   ClipperDump.cpp          juicyboi_clipper_dump (tools/clippers/plot_clippers.py)
   HarmonicsCompare.cpp     juicyboi_harmonics: THD / harmonic probe for Rev A/B at matched knobs
+  SpeakerLoadTest.cpp      Rev2.3 load bump: analytic values, digital vs analytic, bypass, switch clicks
+  BassProbe.cpp            juicyboi_bassprobe: LF response, low-E THD, 2-tone/SMPTE IMD, palm-mute flub
   ToneStackDump.cpp        juicyboi_tonestack_dump: CSV response for the plot script
 tools/tonestack/
   tmb-red.cir / tmb-orange.cir / tmb-lead.cir   SPICE netlists (LTspice / ngspice), same parts
@@ -451,6 +463,16 @@ tools/tonestack/
   small-signal asymmetric triode curve, so the stack's insertion loss is made up
   with harmonics instead of clean gain. Brings Red v2 / Lead THD and harmonic
   count to at least Rev1 at matched knobs (see the doc, §6).
+- **SpeakerLoad (Rev2.3, Red v2 only)**: the bass bump a tube power amp
+  makes into a 4x12's impedance peak, which an IR captured with a low-impedance
+  amp lacks. The divider Zs/(Zs+Zo) with a parallel-RLC speaker resonance
+  reduces exactly to one peaking biquad. Values: f0 106 Hz (Recto Oversized V30
+  sweep), Re 6.4 Ω, |Z|max ≈ 31 Ω, Q 3, and Zo 3.7 Ω (Red Vintage keeps the
+  power-amp NFB, LDR19). Response: +2.6 dB at 80 Hz, +3.0 dB at 100 Hz, +0.8 dB
+  at 40 Hz, flat above 1 kHz. It is linear and sits after the recovery stage,
+  so the saturation is bit-identical to Rev2.2. Schematic coupling corners
+  ahead of the clipping stages were measured and rejected (flub).
+  [docs/red-v2-bass.md](docs/red-v2-bass.md).
 - **PreampCascade**: tight HP → 4 triode-like stages, each with a coupling HP,
   a gain, an asymmetric soft-sat (positive half flattens harder, bias offset gives
   even harmonics, polarity inverts per stage), and a plate/Miller LP. The Gain pot
@@ -511,11 +533,32 @@ tools/tonestack/
    of the feedback clipper).~~ **Done in Rev2.2**: Newton-solved op-amp/diode
    clippers validated against ngspice. Follow-ups: solve the active Tone stage
    after the clipper; op-amp rails.
-5. Add a power-amp stage with presence moved into its NFB loop. (Cab IR and the
+5. Add a power-amp stage with presence moved into its NFB loop (Rev2.3 has only
+   the Red v2 low-frequency speaker-load bump; voice-coil treble rise, NFB-cap
+   damping loss and Red Modern's no-NFB load are still open). (Cab IR and the
    key/sidechain noise gate are now in.)
 6. ~~Smooth OD level changes per sample~~ (done in Rev2.2). Add an oversampling
    quality setting and presets.
 7. Rev1 GUI polish after hands-on testing (see *Rev1 GUI*).
+
+## Rev2.3 changelog
+
+- **More low end on Rectifier Red v2** (only). A linear power-amp / V30 4x12
+  load bump after the recovery stage gives +2.6 dB at 80 Hz and +3.0 dB at
+  100 Hz (Bass 5 and Bass 10, small-signal and driven), +0.8 dB at 40 Hz and
+  +0.07 dB at 1 kHz.
+- Palm mutes stay tight: the ≤200 Hz release is unchanged within 0.3 ms at
+  −20 dB, sub-45 Hz energy drops 2 dB relative to the note, and SMPTE IMD is
+  identical. See [docs/red-v2-bass.md](docs/red-v2-bass.md) for the schematic
+  comparison and the variants that were measured and rejected.
+- Red v1, Orange and the 5150 Lead are bit-identical to Rev2.2 (fixture nulls,
+  max error 0).
+- Standalone app is now named with the version: **`juicyboi Rev2.3.app`**
+  (Linux `juicyboi Rev2.3`). The plugin name stays `juicyboi Rev2` with the
+  same IDs, so sessions keep working.
+- New fixtures `rect-rev2.3.f32` and `lead-rev2.3.f32`; the Rev2.2 fixtures
+  must still null for every voice except Red v2. New `SpeakerLoadTest` and
+  `juicyboi_bassprobe`. Version 2.3.0.
 
 ## Rev2.2 changelog
 

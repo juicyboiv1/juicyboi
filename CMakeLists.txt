@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(JUICYBOI VERSION 2.2.0 LANGUAGES C CXX)
+project(JUICYBOI VERSION 2.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -49,6 +49,30 @@ juce_add_plugin(juicyboi
     NEEDS_WEB_BROWSER FALSE
     NEEDS_CURL FALSE)
 
+# Rev2.3: the Standalone app carries the full version ("juicyboi Rev2.3.app",
+# Linux: "juicyboi Rev2.3") so builds are easy to tell apart. The plugin name and
+# IDs stay "juicyboi Rev2" / Jcb2 / com.juicyboi.juicyboi-rev2 (AU/VST3/AAX/LV2)
+# so existing sessions keep loading and each install replaces the previous Rev2.x.
+set(JUICYBOI_APP_NAME "juicyboi Rev${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+if(TARGET juicyboi_Standalone)
+    set_target_properties(juicyboi_Standalone PROPERTIES
+        OUTPUT_NAME "${JUICYBOI_APP_NAME}"
+        XCODE_ATTRIBUTE_PRODUCT_NAME "${JUICYBOI_APP_NAME}")
+    if(APPLE)
+        # JUCE writes one Info.plist per format from PRODUCT_NAME; the app's
+        # CFBundleExecutable must match the renamed binary, so patch a copy.
+        get_target_property(_jb_plist juicyboi_Standalone MACOSX_BUNDLE_INFO_PLIST)
+        file(READ "${_jb_plist}" _jb_plist_text)
+        foreach(_jb_key CFBundleExecutable CFBundleName CFBundleDisplayName)
+            string(REGEX REPLACE "(<key>${_jb_key}</key>[ \t\r\n]*<string>)[^<]*(</string>)"
+                   "\\1${JUICYBOI_APP_NAME}\\2" _jb_plist_text "${_jb_plist_text}")
+        endforeach()
+        file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/juicyboi_Standalone-Info.plist" "${_jb_plist_text}")
+        set_target_properties(juicyboi_Standalone PROPERTIES
+            MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_BINARY_DIR}/juicyboi_Standalone-Info.plist")
+    endif()
+endif()
+
 target_sources(juicyboi
     PRIVATE
         Source/PluginProcessor.cpp
@@ -86,7 +110,7 @@ target_link_libraries(juicyboi
 option(JUICYBOI_BUILD_TESTS "Build the headless smoke test" ON)
 if(JUICYBOI_BUILD_TESTS)
     juce_add_console_app(juicyboi_smoketest PRODUCT_NAME "juicyboi_smoketest")
-    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp)
+    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp Tests/SpeakerLoadTest.cpp)
     # Reuse the plugin's JUCE module objects/includes/defines rather than
     # compiling the modules a second time.
     target_include_directories(juicyboi_smoketest PRIVATE Source
@@ -108,6 +132,15 @@ if(JUICYBOI_BUILD_TESTS)
     target_compile_definitions(juicyboi_harmonics PRIVATE
         $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
     target_link_libraries(juicyboi_harmonics PRIVATE juicyboi juce::juce_recommended_config_flags)
+
+    # Rev2.3 low-end / palm-mute probe (Red v2 bass work): juicyboi_bassprobe [csv-dir|-] [cfg]
+    juce_add_console_app(juicyboi_bassprobe PRODUCT_NAME "juicyboi_bassprobe")
+    target_sources(juicyboi_bassprobe PRIVATE Tests/BassProbe.cpp)
+    target_include_directories(juicyboi_bassprobe PRIVATE Source
+        $<TARGET_PROPERTY:juicyboi,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(juicyboi_bassprobe PRIVATE
+        $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
+    target_link_libraries(juicyboi_bassprobe PRIVATE juicyboi juce::juce_recommended_config_flags)
 
     # Rev2.2 clipper dump (plain C++, no JUCE): tools/clippers/plot_clippers.py
     add_executable(juicyboi_clipper_dump Tests/ClipperDump.cpp Source/dsp/Od808Stage.cpp Source/dsp/Sd1Stage.cpp)

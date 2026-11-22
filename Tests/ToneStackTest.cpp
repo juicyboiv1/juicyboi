@@ -396,7 +396,9 @@ int toneStackValidation()
                 static const char* vn[] { "Red v1", "Red v2", "Orange" };
                 static const char* bn[] { "Boost off", "OD-808", "SD-1" };
                 std::printf ("Level at defaults vs 348fc68: %-6s %-9s %+.2f dB\n", vn[voice], bn[boost], d);
-                ok = ok && std::abs (d) < 2.0;
+                // Rev2.3: Red v2 adds the 4x12 load bump (+2.6/+3.0 dB at 80/100 Hz),
+                // worth ~+2.2 dB on this 82.4 Hz-heavy signal; mids are unchanged.
+                ok = ok && (voice == 1 ? (d > -2.0 && d < 3.5) : std::abs (d) < 2.0);
             }
         // 5150 defaults (config 0 of lead-62a1239.f32)
         juce::File lead (juce::String (JUICYBOI_TEST_DIR) + "/lead-62a1239.f32");
@@ -407,7 +409,7 @@ int toneStackValidation()
         const auto d = ref.size() == out.size() ? rmsDb (out.data() + settle, out.size() - settle) - rmsDb (ref.data() + settle, ref.size() - settle) : 99.0;
         std::printf ("Level at defaults vs 62a1239: 5150 Lead %+.2f dB\n", d);
         ok = ok && in != nullptr && std::abs (d) < 2.0;
-        check ("whole-plugin level at default knobs within 2 dB of the pre-tone-stack build (all voices/boosts + 5150)", ok);
+        check ("whole-plugin level at default knobs within 2 dB of the pre-tone-stack build (Red v2: -2..+3.5 dB, Rev2.3 bass; all voices/boosts + 5150)", ok);
     }
 
     // 7) Whole processor stays finite with tone knobs at extremes at every rate
