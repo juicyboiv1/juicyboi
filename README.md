@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (Rev2.3)
+# juicyboi — heavy-riff preamp (Rev2.4)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -15,6 +15,14 @@ since Rev2.2 the Boost clipping stages are solved op-amp/diode circuits with the
 schematic part values ([docs/diode-clippers.md](docs/diode-clippers.md)).
 Rev2.3 adds the low-frequency power-amp / 4x12 load interaction to Red v2
 ([docs/red-v2-bass.md](docs/red-v2-bass.md)).
+Rev2.4 rebuilds the 5150 as Rhythm (Bright/Crunch) + Lead channels:
+- real Pre Gain networks;
+- Post Gain driving a power-section stage;
+- a 4x12 load on which Resonance acts ([docs/5150.md](docs/5150.md));
+- a separate full set of settings for each amp (knobs, boost, EQ, cab, gate),
+  recalled when you switch amps ([docs/per-amp-state.md](docs/per-amp-state.md)).
+
+The Rectifier renders bit-identically to Rev2.3.
 Descriptive product names belong to their respective owners; no affiliation is implied.
 
 ## Build
@@ -35,7 +43,7 @@ Artifacts (Linux):
 | Format     | Path |
 |------------|------|
 | VST3       | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev2.vst3` |
-| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.3` |
+| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.4` |
 | LV2        | `build/juicyboi_artefacts/Release/LV2/juicyboi Rev2.lv2` |
 
 The build also makes AU on macOS, and AAX on macOS/Windows (JUCE 9 ships a
@@ -47,7 +55,7 @@ bundled AAX SDK; you can point at a separate Avid tree with
 | AU | `build/juicyboi_artefacts/Release/AU/juicyboi Rev2.component` |
 | VST3 | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev2.vst3` |
 | AAX | `build/juicyboi_artefacts/Release/AAX/juicyboi Rev2.aaxplugin` |
-| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.3.app` |
+| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.4.app` |
 
 Since Rev2.3 the Standalone app carries the full version (`juicyboi Rev2.3.app`;
 the patch level is not included), so an old and a new app are easy to tell
@@ -66,7 +74,7 @@ from a separate worktree (`git worktree add ../juicyboi-rev1 rev1`) and install 
 bundles side by side (AAX: `/Library/Application Support/Avid/Audio/Plug-Ins/`,
 AU: `~/Library/Audio/Plug-Ins/Components/`). Hosts treat Rev2 as a different
 plugin, so existing sessions keep their Rev1 instances (Rev1 must stay installed for
-them). Rev2 keeps the same parameter IDs, ranges and state format (version 3).
+them). Rev2 keeps the same parameter IDs and ranges. Rev2.4 appends the 5150 set and uses state version 4 (older sessions migrate automatically; see docs/per-amp-state.md).
 
 Install AAX to `/Library/Application Support/Avid/Audio/Plug-Ins/` (needs sudo).
 Retail Pro Tools usually expects PACE-signed AAX; unsigned builds may not load
