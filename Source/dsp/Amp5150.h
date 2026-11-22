@@ -304,6 +304,7 @@ struct Voicing5150
     double rhythmV1bShelfN = 187.0, rhythmV1bShelfD = 87.0; // C26 22uF: undoes the 1uF bypass shelf
     float  rhythmV2aGridLoss = 0.408f; // R20 220K shunt: (1M||220K)/(470K+1M||220K) / (1M/1.47M)
     float  rhythmTrim = 3.5f;   // Rhythm clean at Pre 3-5, crunchy from ~7 (Post 5)
+    float  rhythmCrunchTrim = 0.6f; // with Crunch: below the Lead channel's gain at the same Pre
 
     // Power section (Post Gain -> RecoveryStage)
     float postScale = 17.0f;     // Post knob gain (audio taper) x postScale into the stage
@@ -386,7 +387,8 @@ public:
             if (s.lp2 > 0.0) x = lp2[i].process (x, ch);
             if (i == 1 && rhythm) x = shelf.process (x, ch);
             x = -shape::triode (x * s.drive, s.bias, s.positive, s.negative) * s.attenuation;
-            if (i == 0) x = net.process (x, ch) * voicing.preGainTrim * (rhythm ? voicing.rhythmTrim : 1.0f);
+            if (i == 0) x = net.process (x, ch) * voicing.preGainTrim
+                             * (rhythm ? voicing.rhythmTrim + crunchNow * (voicing.rhythmCrunchTrim - voicing.rhythmTrim) : 1.0f);
             if (i == 1) x *= v2aLoss;
         }
         // Six inversions: same nominal polarity as the input.
