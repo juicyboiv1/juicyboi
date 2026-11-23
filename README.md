@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (Rev2.4)
+# juicyboi — heavy-riff preamp (Rev3)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -25,7 +25,12 @@ Rev2.4 rebuilds the 5150 as Rhythm (Bright/Crunch) + Lead channels:
 - a global **Preamp Out** toggle (Full Amp vs Preamp Out) for a real amp's
   effects return ([docs/per-amp-state.md](docs/per-amp-state.md)).
 
-The Rectifier renders bit-identically to Rev2.3.
+**Rev3 (v3.0.0, new baseline)** replaces every preamp tube's behavioural
+waveshaper with a solved 12AX7 stage (Koren plate law, Cohen/Hélie grid current,
+coupling-cap bias shift / blocking), validated against ngspice to < 0.03 % RMS
+of swing ([docs/triode.md](docs/triode.md)). Bass at 40/80/100 Hz stays within
+~1 dB of Rev2.4. Rev3 is a new plugin (`juicyboi Rev3`, `Jcb3`) that replaces Rev2;
+Rev2.4 is the git tag `rev2.4`. Next step: power-supply sag.
 Descriptive product names belong to their respective owners; no affiliation is implied.
 
 ## Build
@@ -45,9 +50,9 @@ Artifacts (Linux):
 
 | Format     | Path |
 |------------|------|
-| VST3       | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev2.vst3` |
-| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.4` |
-| LV2        | `build/juicyboi_artefacts/Release/LV2/juicyboi Rev2.lv2` |
+| VST3       | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev3.vst3` |
+| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev3` |
+| LV2        | `build/juicyboi_artefacts/Release/LV2/juicyboi Rev3.lv2` |
 
 The build also makes AU on macOS, and AAX on macOS/Windows (JUCE 9 ships a
 bundled AAX SDK; you can point at a separate Avid tree with
@@ -55,18 +60,19 @@ bundled AAX SDK; you can point at a separate Avid tree with
 
 | Format (macOS) | Path |
 |----------------|------|
-| AU | `build/juicyboi_artefacts/Release/AU/juicyboi Rev2.component` |
-| VST3 | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev2.vst3` |
-| AAX | `build/juicyboi_artefacts/Release/AAX/juicyboi Rev2.aaxplugin` |
-| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev2.4.app` |
+| AU | `build/juicyboi_artefacts/Release/AU/juicyboi Rev3.component` |
+| VST3 | `build/juicyboi_artefacts/Release/VST3/juicyboi Rev3.vst3` |
+| AAX | `build/juicyboi_artefacts/Release/AAX/juicyboi Rev3.aaxplugin` |
+| Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev3.app` |
 
-Since Rev2.3 the Standalone app carries the full version (`juicyboi Rev2.3.app`;
-the patch level is not included), so an old and a new app are easy to tell
-apart. The plugins keep the name `juicyboi Rev2` and the same IDs (`Jcb2`,
-`com.juicyboi.juicyboi-rev2`): sessions keep loading, and installing a new
-Rev2.x replaces the previous bundles.
+The Standalone app carries the version (`juicyboi Rev3.app` for 3.0, `juicyboi
+Rev3.1.app` for 3.1; the patch level is not included). Rev3 has its own identity
+(`juicyboi Rev3`, code `Jcb3`, bundle/AAX ID `com.juicyboi.juicyboi-rev3`, LV2
+`urn:juicyboi:juicyboi-rev3`) and replaces Rev2 as the baseline: remove the old
+`juicyboi Rev2` / `juicyboi` bundles when installing. Rev2 sessions do not load
+into Rev3 (Rev2.4 = tag `rev2.4`, Rev1 = tag `rev1`).
 
-### Rev1 and Rev2 side by side
+### Rev1 and Rev2 side by side (history)
 
 Rev2 is a separate plugin so both can sit in one session for A/B: product name
 `juicyboi Rev2`, plugin code `Jcb2` (Rev1: `Jcb1`; this also sets the AU subtype,
