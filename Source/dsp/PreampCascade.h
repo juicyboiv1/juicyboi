@@ -49,7 +49,7 @@ public:
         }
 
         s = postLP.process (s, ch);
-        return dcBlock.process (s * v.makeup, ch);
+        return dcBlock.process (s * (v.behavioural ? v.makeup : v.makeup * v.triodeMakeup), ch);
     }
 
 private:

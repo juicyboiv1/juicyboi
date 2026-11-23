@@ -303,7 +303,11 @@ struct Voicing5150
     // drive/bias/pos/neg above set each stage's drive level (TriodeCalibration.h).
     std::array<triode::StageParts, 6> tubes {{ triodeparts::f5150V1A(), triodeparts::f5150V1B(), triodeparts::f5150V2A(),
                                                triodeparts::f5150V2B(), triodeparts::f5150V5B(), triodeparts::f5150V5A() }};
-    std::array<float, 6> triodeDrive { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }; // per-stage drive trim
+    // per-stage drive trims (juicyboi_triode_tune lead|rhythm search) and the level
+    // that restores the Rev2.4 cascade output at Pre 7-10
+    std::array<float, 6> triodeDrive       { 2.837f, 3.356f, 2.82f, 1.843f, 0.914f, 1.0f };   // Lead
+    std::array<float, 6> rhythmTriodeDrive { 2.583f, 1.673f, 3.074f, 4.0f, 1.672f, 2.587f }; // Rhythm
+    float triodeLevelLead = 1.58f, triodeLevelRhythm = 2.66f;
     bool behavioural = false;    // tests/tools only: Rev2.4 static curves (A/B reference)
     double outLpHz = 12000.0;    // power-section / OT bandwidth stand-in (not a preamp part)
     float  outGain = 0.72f;
@@ -348,7 +352,7 @@ public:
             lp2[i].setup (OnePole::Type::lowPass, s.lp2 > 0.0 ? s.lp2 : 20000.0, fs);
             hp[i].reset(); lp[i].reset(); lp2[i].reset();
             tube[i].prepare (fs, voicing.tubes[i]);
-            map[i] = triode::mapStage (voicing.tubes[i], s.drive, s.bias, s.positive, s.negative, (double) voicing.triodeDrive[i]);
+            map[i] = triode::mapStage (voicing.tubes[i], s.drive, s.bias, s.positive, s.negative, (double) (rhythm ? voicing.rhythmTriodeDrive[i] : voicing.triodeDrive[i]));
             map[i].outScale *= s.attenuation;
         }
         shelf.setup (voicing.rhythmV1bShelfN, voicing.rhythmV1bShelfD, fs); shelf.reset();
@@ -413,7 +417,8 @@ public:
             if (i == 1) x *= v2aLoss;
         }
         // Six inversions: same nominal polarity as the input.
-        return dc.process (out.process (x, ch) * voicing.outGain, ch);
+        const auto level = voicing.behavioural ? 1.0f : (rhythm ? voicing.triodeLevelRhythm : voicing.triodeLevelLead);
+        return dc.process (out.process (x, ch) * voicing.outGain * level, ch);
     }
 
 private:

@@ -508,6 +508,6 @@ void AmpHead::paintStatic (Graphics& g, int m)
 }
 String AmpHead::revisionPlateText (bool leadFaceplate)
 {
-    return leadFaceplate ? String (CharPointer_UTF8 ("Rev2 \xc2\xb7 5150")) : String ("Rev2");
+    return leadFaceplate ? String (CharPointer_UTF8 ("Rev3 \xc2\xb7 5150")) : String ("Rev3");
 }
 } // namespace jb::gui

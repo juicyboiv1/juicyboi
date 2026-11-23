@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(JUICYBOI VERSION 2.4.0 LANGUAGES C CXX)
+project(JUICYBOI VERSION 3.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,14 +27,16 @@ endif()
 juce_add_plugin(juicyboi
     COMPANY_NAME "juicyboi"
     PLUGIN_MANUFACTURER_CODE Jcyb
-    # Rev2 installs NEXT TO Rev1 (tag rev1): new plugin code (AU subtype, VST3
-    # UID, AAX product ID), bundle ID, AAX identifier and LV2 URI. Same
-    # manufacturer code. Rev1 used PLUGIN_CODE Jcb1 / PRODUCT_NAME "juicyboi".
-    PLUGIN_CODE Jcb2
+    # Rev3 (solved triode stages) REPLACES Rev2 as the baseline, with a new
+    # identity: plugin code, bundle ID, AAX identifier and LV2 URI. Hosts see a
+    # different plugin, so Rev2 sessions do not load into Rev3 (docs/triode.md).
+    # Rev2 = Jcb2 / "juicyboi Rev2" / com.juicyboi.juicyboi-rev2 (git tag rev2.4);
+    # Rev1 = Jcb1 / "juicyboi" (tag rev1). Same manufacturer code throughout.
+    PLUGIN_CODE Jcb3
     FORMATS ${JUICYBOI_FORMATS}
-    PRODUCT_NAME "juicyboi Rev2"
-    BUNDLE_ID com.juicyboi.juicyboi-rev2
-    AAX_IDENTIFIER com.juicyboi.juicyboi-rev2
+    PRODUCT_NAME "juicyboi Rev3"
+    BUNDLE_ID com.juicyboi.juicyboi-rev3
+    AAX_IDENTIFIER com.juicyboi.juicyboi-rev3
     MICROPHONE_PERMISSION_ENABLED TRUE
     MICROPHONE_PERMISSION_TEXT "juicyboi needs microphone access to take guitar input from your audio interface."
     IS_SYNTH FALSE
@@ -45,15 +47,18 @@ juce_add_plugin(juicyboi
     COPY_PLUGIN_AFTER_BUILD FALSE
     VST3_CATEGORIES Fx Distortion
     AAX_CATEGORY Effect
-    LV2URI "urn:juicyboi:juicyboi-rev2"
+    LV2URI "urn:juicyboi:juicyboi-rev3"
     NEEDS_WEB_BROWSER FALSE
     NEEDS_CURL FALSE)
 
-# Rev2.3: the Standalone app carries the full version ("juicyboi Rev2.3.app",
-# Linux: "juicyboi Rev2.3") so builds are easy to tell apart. The plugin name and
-# IDs stay "juicyboi Rev2" / Jcb2 / com.juicyboi.juicyboi-rev2 (AU/VST3/AAX/LV2)
-# so existing sessions keep loading and each install replaces the previous Rev2.x.
-set(JUICYBOI_APP_NAME "juicyboi Rev${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+# The Standalone app carries the version ("juicyboi Rev3.app" for 3.0, "juicyboi
+# Rev3.1.app" for 3.1, ...) so builds are easy to tell apart. Within Rev3 the
+# plugin name and IDs stay "juicyboi Rev3" / Jcb3, so each 3.x replaces the last.
+if(PROJECT_VERSION_MINOR EQUAL 0)
+    set(JUICYBOI_APP_NAME "juicyboi Rev${PROJECT_VERSION_MAJOR}")
+else()
+    set(JUICYBOI_APP_NAME "juicyboi Rev${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
+endif()
 if(TARGET juicyboi_Standalone)
     set_target_properties(juicyboi_Standalone PROPERTIES
         OUTPUT_NAME "${JUICYBOI_APP_NAME}"

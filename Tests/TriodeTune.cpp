@@ -68,7 +68,7 @@ M run (Voice v, bool behavioural, const std::vector<double>& drive, double gain,
     if (v.is5150)
     {
         v.v5.behavioural = behavioural;
-        for (size_t i = 0; i < drive.size() && i < 6; ++i) v.v5.triodeDrive[i] = (float) drive[i];
+        for (size_t i = 0; i < drive.size() && i < 6; ++i) (v.rhythm ? v.v5.rhythmTriodeDrive[i] : v.v5.triodeDrive[i]) = (float) drive[i];
         Cascade5150 c; c.configure (v.v5, v.rhythm); c.setPreGain ((float) gain); c.prepare (fs); c.snap();
         for (long i = 0; i < settle + len; ++i)
         {
@@ -117,7 +117,9 @@ int main (int argc, char** argv)
     if (argc < 2) { std::fprintf (stderr, "usage: %s voice [drives...|search]\n", argv[0]); return 2; }
     const auto v = makeVoice (argv[1]);
     const size_t ns = v.is5150 ? 6 : 4;
-    std::vector<double> d (ns, 1.0);
+    std::vector<double> d (ns, 1.0); // start from the voicing's own trims
+    for (size_t i = 0; i < ns; ++i)
+        d[i] = v.is5150 ? (v.rhythm ? v.v5.rhythmTriodeDrive[i] : v.v5.triodeDrive[i]) : v.cv.triodeDrive[i];
     const bool search = argc > 2 && std::strcmp (argv[2], "search") == 0;
     if (! search) for (int i = 2; i < argc && (size_t) (i - 2) < ns; ++i) d[(size_t) (i - 2)] = std::atof (argv[i]);
     std::vector<M> ref;
