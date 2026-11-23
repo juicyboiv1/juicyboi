@@ -19,7 +19,7 @@ namespace
     constexpr int labelTop = 381, labelHeight = 13; // below the tick dots (knob bottom 374), above the pinstripe (399)
     constexpr int knobSize = 68;
     constexpr int knobLeft = 488, knobRight = 1052;
-    constexpr int knob5150Size = 50, knob5150Left = 510; // 10 knobs on the 5150 faceplate
+    constexpr int knob5150Size = 54, knob5150Left = 500; // 9 knobs on the 5150 faceplate (no Input)
 
     String knobTip (const String& name, double v, const String& extra = {})
     {
@@ -31,11 +31,6 @@ namespace
 
 namespace
 {
-    using jb::params::AmpSlot;
-    String inputTip (double v)
-    {
-        return "Input " + String (v, 1) + " = " + String (taper::inputKnobToDb (v), 1) + " dB (5 = unity, 4.8 dB per number)";
-    }
     String postTip (const char* name, double v)
     {
         return String (name) + " " + String (v, 1) + (v > 0.0 ? String (" = ") + String (20.0 * std::log10 (jb::dsp::audioTaper (v)), 1) + " dB re 10"
@@ -45,7 +40,6 @@ namespace
 
 AmpHead::AmpHead (JuicyboiAudioProcessor& p, Component* popupParent)
     : proc (p),
-      input (p.apvts, pid::inputTrim, ParamSlider::Style::ampKnob, [] (double v) { return inputTip (v); }),
       gain (p.apvts, pid::gain, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("Gain", v); }),
       bass (p.apvts, pid::bass, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("Bass", v); }),
       mid (p.apvts, pid::mid, ParamSlider::Style::ampKnob, [] (double v) { return knobTip ("Mid", v); }),
@@ -55,7 +49,6 @@ AmpHead::AmpHead (JuicyboiAudioProcessor& p, Component* popupParent)
       master (p.apvts, pid::master, ParamSlider::Style::ampKnob, [] (double v)
               { return "Master " + String (v, 1) + " = " + (v > 0.0 ? String (taper::masterKnobToDb (v), 1) + " dB" : String ("mute"))
                        + " (7.5 = unity, 10 = +12 dB, 0 = silent)"; }),
-      input5 (p.apvts, jb::params::ampId (1, AmpSlot::inputTrim), ParamSlider::Style::ampKnob, [] (double v) { return inputTip (v) + " (5150 set)"; }),
       rhythmPre (p.apvts, pid::m5150RhythmPre, ParamSlider::Style::ampKnob, [] (double v)
                  { return knobTip ("Rhythm Pre Gain", v, "Rhythm channel input gain (Bright/Crunch change its network)"); }),
       leadPre (p.apvts, pid::m5150LeadPre, ParamSlider::Style::ampKnob, [] (double v)
@@ -198,8 +191,8 @@ void AmpHead::updateFaceplate()
 
 std::array<ParamSlider*, AmpHead::numKnobs> AmpHead::labelledKnobs() noexcept
 {
-    return { &input, &gain, &bass, &mid, &treble, &presence, &master,
-             &input5, &rhythmPre, &leadPre, &low5, &mid5, &high5, &rhythmPost, &leadPost, &leadResonance, &leadPresence };
+    return { &gain, &bass, &mid, &treble, &presence, &master,
+             &rhythmPre, &leadPre, &low5, &mid5, &high5, &rhythmPost, &leadPost, &leadResonance, &leadPresence };
 }
 
 void AmpHead::syncKnobLabels()
@@ -229,10 +222,10 @@ void AmpHead::layoutKnobs (int m)
     // captions below the knobs; the short form is used only if a caption would not fit its column
     struct Caption { const char* full; const char* brief; };
     static const Caption names[numKnobs] = {
-        { "INPUT", "IN" }, { "GAIN", "GAIN" }, { "BASS", "BASS" }, { "MID", "MID" }, { "TREBLE", "TREB" }, { "PRESENCE", "PRES" }, { "MASTER", "MAST" },
-        { "INPUT", "IN" }, { "RHY PRE", "R PRE" }, { "LEAD PRE", "L PRE" }, { "LOW", "LOW" }, { "MID", "MID" }, { "HIGH", "HIGH" },
+        { "GAIN", "GAIN" }, { "BASS", "BASS" }, { "MID", "MID" }, { "TREBLE", "TREB" }, { "PRESENCE", "PRES" }, { "MASTER", "MAST" },
+        { "RHY PRE", "R PRE" }, { "LEAD PRE", "L PRE" }, { "LOW", "LOW" }, { "MID", "MID" }, { "HIGH", "HIGH" },
         { "RHY POST", "R POST" }, { "LEAD POST", "L POST" }, { "RESONANCE", "RESO" }, { "PRESENCE", "PRES" } };
-    const auto font = uiFont (m == 0 ? 10.5f : 9.5f); // ten 5150 knobs share the same width
+    const auto font = uiFont (m == 0 ? 10.5f : 9.5f); // nine 5150 knobs share the same width
     const auto colW = roundToInt (pitch) - 2;
     for (int i = 0; i < count; ++i)
     {

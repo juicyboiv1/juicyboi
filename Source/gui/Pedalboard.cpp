@@ -251,7 +251,15 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
       boost (Pedal::Kind::stomp, colours::boostGreen, colours::boostGreenD, colours::creme, "BOOST"),
       eq (Pedal::Kind::stomp, colours::eqCreme, colours::eqCremeD, colours::ink, "7-BAND EQ"),
       gate (Pedal::Kind::stomp, Colour (0xff2a2a2a), Colour (0xff121212), colours::creme, "GATE"),
-      cab (Pedal::Kind::sidePanel, Colour (0xff1c1c1c), Colour (0xff0d0d0d), colours::creme, "CAB")
+      cab (Pedal::Kind::sidePanel, Colour (0xff1c1c1c), Colour (0xff0d0d0d), colours::creme, "CAB"),
+      inputCal (p.apvts, pid::inputTrim, ParamSlider::Style::pedalKnob,
+                [] (double v)
+                {
+                    return "Input Cal " + String (v, 1) + " = " + String (taper::inputKnobToDb (v), 1)
+                           + " dB (shared by both amps; 5 = unity, 4.8 dB per number). "
+                             "Set once for your interface level - this is not a preamp gain knob.";
+                }),
+      unused5150Input (p.apvts, jb::params::ampId (1, jb::params::AmpSlot::inputTrim), ParamSlider::Style::pedalKnob)
 {
     for (auto* pd : { &boost, &eq, &gate, &cab })
         addAndMakeVisible (*pd);
@@ -386,6 +394,22 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
     front.onClick = [this] { if (onToggle) onToggle(); };
     front.setMouseCursor (MouseCursor::PointingHandCursor);
     addAndMakeVisible (front);
+
+    inputCal.setPopupDisplayEnabled (true, false, popupParent);
+    addAndMakeVisible (inputCal);
+    inputCalLabel.setText ("INPUT CAL", dontSendNotification);
+    inputCalLabel.setFont (uiFont (9.5f));
+    inputCalLabel.setColour (Label::textColourId, colours::creme.withAlpha (0.9f));
+    inputCalLabel.setJustificationType (Justification::centredLeft);
+    inputCalLabel.setBorderSize ({});
+    inputCalLabel.setInterceptsMouseClicks (false, false);
+    inputCalLabel.setTooltip (inputCal.getTooltip());
+    addAndMakeVisible (inputCalLabel);
+    // Bound but unused / hidden: keeps host parameter index and the "every
+    // parameter has a control" editor check, without a second Input knob.
+    unused5150Input.setVisible (false);
+    addChildComponent (unused5150Input);
+
     startTimerHz (30);
 }
 
@@ -432,6 +456,11 @@ void Pedalboard::resized()
     gate.setBounds (gateArea);
     cab.setBounds (cabArea);
     front.setBounds (getLocalBounds().removeFromBottom (frontHeight));
+    // Small setup trim on the left of the drawer front (always visible).
+    const auto fb = front.getBounds();
+    inputCal.setBounds (Rectangle<int> (32, 32).withCentre ({ fb.getX() + 30, fb.getCentreY() }));
+    inputCalLabel.setBounds (fb.getX() + 50, fb.getY() + 8, 100, fb.getHeight() - 16);
+    unused5150Input.setBounds ({});
 }
 
 void Pedalboard::paint (Graphics& g)
@@ -483,6 +512,17 @@ void Pedalboard::Front::paint (Graphics& g)
     g.drawRect (b.reduced (0.5f), 1.5f);
     g.setColour (Colours::black.withAlpha (0.35f));
     g.fillRect (b.withHeight (2.0f));
+
+    // Recessed setup plate on the left (Input Cal knob sits on top of it).
+    {
+        const auto plate = Rectangle<float> (10.0f, 8.0f, 142.0f, b.getHeight() - 16.0f);
+        g.setColour (Colours::black.withAlpha (0.4f));
+        g.fillRoundedRectangle (plate.translated (0.0f, 1.5f), 5.0f);
+        g.setColour (Colour (0xff24150c));
+        g.fillRoundedRectangle (plate, 5.0f);
+        g.setColour (colours::woodHi.withAlpha (0.35f));
+        g.drawRoundedRectangle (plate, 5.0f, 1.0f);
+    }
 
     // chrome pull handle
     const auto handle = Rectangle<float> (190.0f, 14.0f).withCentre (b.getCentre());

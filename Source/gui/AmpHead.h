@@ -45,15 +45,16 @@ private:
         bool lit = true;
     };
     JuicyboiAudioProcessor& proc;
-    // Rectifier faceplate (amp 0 set)
-    ParamSlider input, gain, bass, mid, treble, presence, master;
-    // 5150 faceplate (amp 1 set, Rev2.4): no Master - per-channel Pre and Post Gain
-    ParamSlider input5, rhythmPre, leadPre, low5, mid5, high5, rhythmPost, leadPost, leadResonance, leadPresence;
+    // Rectifier faceplate (amp 0 set). No Input knob: input_trim is the shared
+    // calibration in the pedalboard setup strip, not on the head.
+    ParamSlider gain, bass, mid, treble, presence, master;
+    // 5150 faceplate (amp 1 set, Rev2.4): no Master, no Input - per-channel Pre and Post Gain
+    ParamSlider rhythmPre, leadPre, low5, mid5, high5, rhythmPost, leadPost, leadResonance, leadPresence;
     ToggleSwitch standby, model, channel, voice;
     ToggleSwitch channel5, bright, crunch;
     Pilot pilot;
 
-    static constexpr int numRectKnobs = 7, num5150Knobs = 10, numKnobs = numRectKnobs + num5150Knobs;
+    static constexpr int numRectKnobs = 6, num5150Knobs = 9, numKnobs = numRectKnobs + num5150Knobs;
     /** Small creme caption BELOW each head knob (nothing above the knobs). */
     std::array<juce::Label, numKnobs> knobLabels;
     std::array<ParamSlider*, numKnobs> labelledKnobs() noexcept;

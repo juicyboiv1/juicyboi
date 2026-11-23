@@ -60,7 +60,9 @@ private:
 /** The pedalboard drawer under the head: Boost, 7-band EQ and Gate stompboxes plus the
     Cab side panel. Closed = only the wooden drawer front shows; click it to open/close.
     Rev2.4: there is one control set per amp (docs/per-amp-state.md); the set of the amp
-    selected by `preamp_model` is shown, the other is hidden but stays bound. */
+    selected by `preamp_model` is shown, the other is hidden but stays bound.
+    A small Input Cal trim on the drawer front is the shared interface-level
+    calibration (input_trim), used by both amps and not shown on either head. */
 class Pedalboard final : public juce::Component, private juce::Timer
 {
 public:
@@ -123,6 +125,11 @@ private:
     void showAmp (int amp);
 
     Front front;
+    // Shared input calibration (always visible on the drawer front).
+    ParamSlider inputCal;
+    juce::Label inputCalLabel;
+    // Hidden: keeps a bound control for unused m5150_input_trim (stable host index).
+    ParamSlider unused5150Input;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Pedalboard)
 };
