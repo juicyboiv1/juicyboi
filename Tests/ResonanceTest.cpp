@@ -240,8 +240,6 @@ int resonanceValidation()
         std::vector<float> all;
         for (int c = 0; c < leadfixture::numConfigs; ++c) { const auto r = leadfixture::render (c); all.insert (all.end(), r.begin(), r.end()); }
         const juce::File fx (juce::String (JUICYBOI_TEST_DIR) + "/lead-rev3.f32");
-        if (std::getenv ("JB_CAPTURE_REV3") != nullptr) // one-off capture (removed after use)
-            fx.replaceWithData (all.data(), all.size() * sizeof (float));
         auto open = [] (const char* name) { return juce::File (juce::String (JUICYBOI_TEST_DIR) + "/" + name).createInputStream(); };
         auto r3 = open ("lead-rev3.f32"), r23 = open ("lead-rev2.3.f32"), r24 = open ("lead-rev2.4.f32");
         const auto bytes = (juce::int64) (all.size() * sizeof (float));

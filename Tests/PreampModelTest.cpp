@@ -47,8 +47,6 @@ int legacyRegression()
                 result.insert (result.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + 256);
             }
         }
-    if (std::getenv ("JB_CAPTURE_REV3") != nullptr) // one-off capture (removed after use)
-        file.replaceWithData (result.data(), result.size() * sizeof (float));
     auto in = file.createInputStream();
     float error = 0.0f; bool finite = in != nullptr && in->getTotalLength() == (juce::int64) (result.size() * sizeof (float));
     for (size_t i = 0; finite && i < result.size(); ++i)

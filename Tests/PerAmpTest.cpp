@@ -87,8 +87,6 @@ int perAmpValidation()
             const auto y = render (q);
             all.insert (all.end(), y.begin(), y.end());
         }
-        if (std::getenv ("JB_CAPTURE_REV3") != nullptr) // one-off capture (removed after use)
-            f3.replaceWithData (all.data(), all.size() * sizeof (float));
         f3.loadFileAsData (ref3);
         bool ok = ref.getSize() == per * 4 * sizeof (float) && ref3.getSize() == ref.getSize();
         for (int c = 0; ok && c < 4; ++c)
