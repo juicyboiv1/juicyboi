@@ -1,0 +1,22 @@
+* juicyboi Rev3 triode stage rV3A (Source/dsp/TriodeParts.h), 40.0 V 100.0 Hz
+* 12AX7: Koren plate law (mu 100, ex 1.4, kg1 1060, kp 600, kvb 300),
+*        Cohen-Helie grid current (Gg 6.062e-4, xi 1.354, Cg 13.9, Ig0 3.917e-8)
+BIN in 0 V = (time < 0.1 ? 40.0 : 0.5) * sin(2*pi*100.0*time)
+RS in a 100000.0
+CC a n 2e-08
+RG n 0 330000.0
+RGS n g 220000.0
+VB vb 0 409.0
+RA vb p 220000.0
+RK k 0 1800.0
+CK k 0 1e-06
+BP p k I = 2*pwr(max(V(p,k)/600*ln(1+exp(600*(0.01+V(g,k)/sqrt(300+V(p,k)*V(p,k))))),1e-12),1.4)/1060
+BG g k I = 6.062e-4*pwr(ln(1+exp(13.9*V(g,k)))/13.9,1.354)+3.917e-8
+.options method=trap reltol=1e-6 abstol=1e-13 vntol=1e-7
+.tran 1.3020833333333333e-06 0.4 0 1.3020833333333333e-06
+.control
+run
+wrdata out.txt v(in) v(p) v(g,k)
+quit
+.endc
+.end

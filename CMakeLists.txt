@@ -146,6 +146,10 @@ if(JUICYBOI_BUILD_TESTS)
     add_executable(juicyboi_clipper_dump Tests/ClipperDump.cpp Source/dsp/Od808Stage.cpp Source/dsp/Sd1Stage.cpp)
     target_include_directories(juicyboi_clipper_dump PRIVATE Source)
 
+    # Rev3 triode stage dump (plain C++, no JUCE): tools/triode/plot_triode.py
+    add_executable(juicyboi_triode_dump Tests/TriodeDump.cpp)
+    target_include_directories(juicyboi_triode_dump PRIVATE Source)
+
     # Offscreen editor screenshots: juicyboi_screenshots <output-dir>
     juce_add_console_app(juicyboi_screenshots PRODUCT_NAME "juicyboi_screenshots")
     target_sources(juicyboi_screenshots PRIVATE Tests/Screenshots.cpp)
