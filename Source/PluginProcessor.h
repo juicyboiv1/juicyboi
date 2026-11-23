@@ -180,6 +180,8 @@ private:
     jb::dsp::Od808Stage od, od5;               // per-amp boosts
     jb::dsp::Sd1Stage   sd1, sd15;
     jb::dsp::PreampCascade riffA, riffAv1, riffB; // Red v2, Red v1, Orange
+    // Rev3: which solved cascades ran last frame (gating; see processBlock)
+    bool riffARunning = false, riffAv1Running = false, riffBRunning = false, lead5Running = false, rhythm5Running = false;
     jb::dsp::ToneStack tone;
     jb::dsp::RecoveryStage rectRecovery; // post-TMB recovery gain (Rev2.2)
     jb::dsp::SpeakerLoad rectSpeaker; // Red v2 power-amp / 4x12 low end (Rev2.3)

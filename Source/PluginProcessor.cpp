@@ -170,6 +170,7 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     }
 
     lastChannel = -1;
+    riffARunning = riffAv1Running = riffBRunning = lead5Running = rhythm5Running = false; // Rev3: re-wake from rest
     updateParameters();
     tone.snap();     // passive TMBs: start on the session's knobs/channel, no fade-in
     leadTone.snap();
@@ -387,8 +388,14 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
 
     auto leadBlock = juce::dsp::AudioBlock<float> (leadBuffer)
                          .getSubsetChannelBlock (0, (size_t) numProc).getSubBlock (0, (size_t) len);
+    // Rev3: the solved triode cascades only run while they can be heard (the
+    // selected amp / channel / voice, and both sides of any crossfade). A
+    // cascade that wakes up restarts from its quiescent point; its crossfade
+    // weight starts at 0, so this is click-free.
+    const bool rectAudible = modelMix.getCurrentValue() < 1.0f || modelMix.isSmoothing();
+    const bool amp5Audible = modelMix.getCurrentValue() > 0.0f || modelMix.isSmoothing();
     oversampler.processParallel (block, leadBlock, leadOversampler,
-        [this, numProc] (juce::dsp::AudioBlock<float>& up, juce::dsp::AudioBlock<float>& leadUp)
+        [this, numProc, rectAudible, amp5Audible] (juce::dsp::AudioBlock<float>& up, juce::dsp::AudioBlock<float>& leadUp)
     {
         const auto n = (int) up.getNumSamples();
         for (int i = 0; i < n; ++i)
@@ -432,6 +439,21 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
             od5Running = runOd5;
             sd15Running = runSd15;
 
+            // Rev3 cascade gating (see above)
+            const bool rectMorph = channelMix.isSmoothing() || redVoiceMix.isSmoothing();
+            const bool runA   = rectAudible && (rectMorph || ((1.0f - chAmt) * rvAmt > 0.0f));
+            const bool runAv1 = rectAudible && (rectMorph || ((1.0f - chAmt) * (1.0f - rvAmt) > 0.0f));
+            const bool runB   = rectAudible && (rectMorph || chAmt > 0.0f);
+            const bool runLead5   = amp5Audible && (chMix5.isSmoothing() || leadAmt > 0.0f);
+            const bool runRhythm5 = amp5Audible && (chMix5.isSmoothing() || leadAmt < 1.0f);
+            if (runA && ! riffARunning)          riffA.reset();
+            if (runAv1 && ! riffAv1Running)      riffAv1.reset();
+            if (runB && ! riffBRunning)          riffB.reset();
+            if (runLead5 && ! lead5Running)      lead5.reset();
+            if (runRhythm5 && ! rhythm5Running)  rhythm5.reset();
+            riffARunning = runA; riffAv1Running = runAv1; riffBRunning = runB;
+            lead5Running = runLead5; rhythm5Running = runRhythm5;
+
             for (int ch = 0; ch < numProc; ++ch)
             {
                 auto* d = up.getChannelPointer ((size_t) ch);
@@ -447,10 +469,10 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
 
                 // All cascades run (state stays warm); Red v1/v2 and
                 // Red/Orange switching are short equal-gain crossfades.
-                const auto a2 = riffA.process (boosted, ch);
-                const auto a1 = riffAv1.process (boosted, ch);
+                const auto a2 = runA   ? riffA.process (boosted, ch)   : 0.0f;
+                const auto a1 = runAv1 ? riffAv1.process (boosted, ch) : 0.0f;
                 const auto a  = a1 + rvAmt * (a2 - a1);
-                const auto b  = riffB.process (boosted, ch);
+                const auto b  = runB   ? riffB.process (boosted, ch)   : 0.0f;
 
                 // Passive TMB, then the post-stack recovery gain (both at 4x)
                 const auto rect = tone.process (a + chAmt * (b - a), ch);
@@ -474,8 +496,8 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                 const auto od5Out  = runOd5  ? od5.process (x5, ch)  : x5;
                 const auto sd15Out = runSd15 ? sd15.process (x5, ch) : x5;
                 const auto boosted5 = x5 + odAmt5 * ((od5Out + typeAmt5 * (sd15Out - od5Out)) - x5);
-                const auto rhy = rhythm5.process (boosted5, ch) * gRhythm;
-                const auto ld  = lead5.process (boosted5, ch) * gLead;
+                const auto rhy = runRhythm5 ? rhythm5.process (boosted5, ch) * gRhythm : 0.0f;
+                const auto ld  = runLead5   ? lead5.process (boosted5, ch) * gLead     : 0.0f;
                 l[i] = power5.process (leadTone.process (rhy + leadAmt * (ld - rhy), ch), ch);
             }
         }

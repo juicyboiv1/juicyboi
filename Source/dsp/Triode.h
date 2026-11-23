@@ -59,9 +59,10 @@ inline double fastExp (double x) noexcept
     const auto t = x * 1.4426950408889634;           // log2(e)
     const auto n = (t + 6755399441055744.0) - 6755399441055744.0; // round to nearest (no SSE4.1 floor call)
     const auto f = (t - n) * 0.6931471805599453;      // |f| <= ln2/2
-    // e^f, degree-8 Taylor (|f| <= 0.347: error < 4e-10)
-    auto p = 1.0 + f * (1.0 + f * (0.5 + f * (1.0 / 6.0 + f * (1.0 / 24.0 + f * (1.0 / 120.0
-               + f * (1.0 / 720.0 + f * (1.0 / 5040.0 + f * (1.0 / 40320.0))))))));
+    // e^f, degree-7 Taylor (|f| <= 0.347: relative error < 2e-9)
+    const auto f2 = f * f;
+    auto p = (1.0 + f) + f2 * ((0.5 + f * (1.0 / 6.0)) + f2 * ((1.0 / 24.0 + f * (1.0 / 120.0))
+               + f2 * (1.0 / 720.0 + f * (1.0 / 5040.0))));
     std::int64_t bits;
     std::memcpy (&bits, &p, sizeof bits);
     bits += (std::int64_t) n << 52;
@@ -79,7 +80,8 @@ inline double fastLog (double x) noexcept
     std::memcpy (&m, &bits, sizeof m);               // m in [1, 2)
     if (m > 1.4142135623730951) { m *= 0.5; ++e; }
     const auto s = (m - 1.0) / (m + 1.0), s2 = s * s; // |s| <= 0.172
-    const auto l = 2.0 * s * (1.0 + s2 * (1.0 / 3.0 + s2 * (1.0 / 5.0 + s2 * (1.0 / 7.0 + s2 * (1.0 / 9.0 + s2 * (1.0 / 11.0))))));
+    const auto s4 = s2 * s2; // |s| <= 0.172: error < 3e-10
+    const auto l = 2.0 * s * ((1.0 + s2 * (1.0 / 3.0)) + s4 * ((1.0 / 5.0 + s2 * (1.0 / 7.0)) + s4 * (1.0 / 9.0)));
     return l + (double) e * 0.6931471805599453;
 }
 
@@ -206,7 +208,7 @@ public:
     {
         for (auto& s : st)
         {
-            s.u = op.vg - op.vk; s.w = op.vp - op.vk; s.k = op.vk; s.ick = 0.0;
+            s.u = s.u1 = op.vg - op.vk; s.w = s.w1 = op.vp - op.vk; s.k = op.vk; s.ick = 0.0;
             // DC: grid-leak node n = vg + rgs*ig, cap holds vs - n with vs = 0
             const auto n = op.vg + p.rgs * op.ig;
             s.vc = p.cc > 0.0 ? -n : 0.0;
@@ -224,7 +226,9 @@ public:
         const auto vth = (gb * vs - ib) / gn;
         const auto jck = gck * s.k + s.ick;
 
-        auto u = s.u, w = s.w;
+        // predictor: linear extrapolation of the last two solutions
+        auto u = 2.0 * s.u - s.u1, w = 2.0 * s.w - s.w1;
+        if (w < 0.0) w = 0.0;
         double ip = 0, ig = 0, k = s.k;
         int it = 0;
         for (; it < 50; ++it)
@@ -243,16 +247,18 @@ public:
             auto dw = (j11 * r2 - j21 * r1) / det;
             du = std::clamp (du, -2.0, 2.0);
             dw = std::clamp (dw, -100.0, 100.0);
+            if (w - dw < 0.0) dw = w;
             u -= du; w -= dw;
-            if (w < 0.0) w = 0.0;
-            if (std::abs (du) < 1.0e-7 && std::abs (dw) < 1.0e-5) { ++it; break; }
-        }
-        // final currents at the converged point
-        {
-            double a, b, c;
-            ip = triode::plateCurrent (t, u, w, a, b);
-            ig = triode::gridCurrent (t, u, c);
-            k = (ip + ig + jck) / gkt;
+            if (std::abs (du) < 1.0e-6 && std::abs (dw) < 1.0e-4)
+            {
+                // converged: carry the currents to the final point linearly
+                // (the step is tiny; saves a full model evaluation)
+                ip -= dIpu * du + dIpw * dw;
+                ig -= dIgu * du;
+                k = (ip + ig + jck) / gkt;
+                ++it;
+                break;
+            }
         }
         lastIt = it;
         // update the companions
@@ -264,7 +270,7 @@ public:
             s.ic = i;
         }
         s.ick = gck * k - jck;
-        s.k = k; s.u = u; s.w = w;
+        s.k = k; s.u1 = s.u; s.w1 = s.w; s.u = u; s.w = w;
         return (w + k) - op.vp;
     }
 
@@ -296,7 +302,7 @@ public:
     }
 
 private:
-    struct State { double u = 0, w = 0, k = 0, ick = 0, vc = 0, ic = 0; };
+    struct State { double u = 0, w = 0, u1 = 0, w1 = 0, k = 0, ick = 0, vc = 0, ic = 0; };
     triode::StageParts p;
     triode::Tube t;
     triode::OperatingPoint op;

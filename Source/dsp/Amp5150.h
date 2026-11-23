@@ -6,6 +6,9 @@
 #include "SpeakerLoad.h"
 #include "LeadPresence.h"
 #include "LeadResonance.h"
+#include "Triode.h"
+#include "TriodeParts.h"
+#include "TriodeCalibration.h"
 
 #include <array>
 #include <cmath>
@@ -296,6 +299,12 @@ struct Voicing5150
         {  65.0, 22700.0,    0.0,     4.4f,-0.15f, 1.10f, 0.95f, 0.60f }, // V5B: R32/R101 ~91K x ~77 pF
         {  25.0,  2200.0,    0.0,     4.5f, 0.25f, 1.05f, 0.95f, 1.00f }  // V5A: R87/R88/R91 ~1.5M x ~47 pF
     }};
+    // Rev3: the six tubes are solved 12AX7 stages with these parts (TriodeParts.h);
+    // drive/bias/pos/neg above set each stage's drive level (TriodeCalibration.h).
+    std::array<triode::StageParts, 6> tubes {{ triodeparts::f5150V1A(), triodeparts::f5150V1B(), triodeparts::f5150V2A(),
+                                               triodeparts::f5150V2B(), triodeparts::f5150V5B(), triodeparts::f5150V5A() }};
+    std::array<float, 6> triodeDrive { 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f }; // per-stage drive trim
+    bool behavioural = false;    // tests/tools only: Rev2.4 static curves (A/B reference)
     double outLpHz = 12000.0;    // power-section / OT bandwidth stand-in (not a preamp part)
     float  outGain = 0.72f;
     float  preGainTrim = 3.0f;   // level into V1B after the Pre Gain network
@@ -338,6 +347,9 @@ public:
             lp[i].setup (OnePole::Type::lowPass, s.lp, fs);
             lp2[i].setup (OnePole::Type::lowPass, s.lp2 > 0.0 ? s.lp2 : 20000.0, fs);
             hp[i].reset(); lp[i].reset(); lp2[i].reset();
+            tube[i].prepare (fs, voicing.tubes[i]);
+            map[i] = triode::mapStage (voicing.tubes[i], s.drive, s.bias, s.positive, s.negative, (double) voicing.triodeDrive[i]);
+            map[i].outScale *= s.attenuation;
         }
         shelf.setup (voicing.rhythmV1bShelfN, voicing.rhythmV1bShelfD, fs); shelf.reset();
         out.setup (OnePole::Type::lowPass, voicing.outLpHz, fs); out.reset();
@@ -348,6 +360,14 @@ public:
         crunchNow = crunchTarget; brightNow = brightTarget;
         if (rhythm) net.setParts (rhythmPreParts (brightNow, crunchNow));
         net.snap();
+    }
+
+    /** Rev3: back to rest (filters cleared, tubes at their quiescent point).
+        Used when an inaudible cascade is woken up (it is not run while silent). */
+    void reset() noexcept
+    {
+        for (size_t i = 0; i < 6; ++i) { hp[i].reset(); lp[i].reset(); lp2[i].reset(); tube[i].reset(); }
+        shelf.reset(); out.reset(); dc.reset(); net.reset();
     }
 
     void setPreGain (float knob) noexcept { net.setKnob ((double) knob); }
@@ -386,7 +406,8 @@ public:
             x = lp[i].process (x, ch);
             if (s.lp2 > 0.0) x = lp2[i].process (x, ch);
             if (i == 1 && rhythm) x = shelf.process (x, ch);
-            x = -shape::triode (x * s.drive, s.bias, s.positive, s.negative) * s.attenuation;
+            x = voicing.behavioural ? -shape::triode (x * s.drive, s.bias, s.positive, s.negative) * s.attenuation
+                                    : (float) (tube[i].process ((double) x * map[i].inScale, ch) * map[i].outScale); // Rev3 solved stage
             if (i == 0) x = net.process (x, ch) * voicing.preGainTrim
                              * (rhythm ? voicing.rhythmTrim + crunchNow * (voicing.rhythmCrunchTrim - voicing.rhythmTrim) : 1.0f);
             if (i == 1) x *= v2aLoss;
@@ -399,6 +420,8 @@ private:
     Voicing5150 voicing;
     bool rhythm = false;
     std::array<OnePole, 6> hp, lp, lp2;
+    std::array<TriodeStage, 6> tube;
+    std::array<triode::StageMap, 6> map {};
     ShelfOnePole shelf;
     OnePole out, dc;
     PreGainNetwork net;

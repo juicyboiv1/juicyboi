@@ -16,6 +16,8 @@
 //   - Presence (Red path): 25k + ~22k + 3n ≈ 2.4 kHz NFB-shelf corner
 //   - Gain pot: audio taper, 250k (always)
 
+#include "TriodeParts.h"
+
 #include <array>
 #include <algorithm>
 #include <cmath>
@@ -62,6 +64,15 @@ struct ChannelVoicing
 
     int numStages = 4;
     std::array<TriodeStageVoicing, maxStages> stages {};
+
+    // Rev3: every stage is a solved 12AX7 (TriodeStage) with these parts. The
+    // behavioural gain/bias/hardness above no longer shape the curve: they set
+    // each stage's drive level (TriodeCalibration.h). All Rectifier voices
+    // share the amp's one cascade (V1A -> gain pot -> V2A -> V2B -> V3A).
+    std::array<triode::StageParts, maxStages> tubes { triodeparts::rectoV1A(), triodeparts::rectoV2A(),
+                                                      triodeparts::rectoV2B(), triodeparts::rectoV3A() };
+    std::array<float, maxStages> triodeDrive { 1.0f, 1.0f, 1.0f, 1.0f }; // per-stage drive trim (TriodeCalibration::mapStage)
+    bool behavioural = false;   // tests/tools only: run the Rev2.4 static curves instead (A/B reference)
 
     int    gainPotAfterStage = 0;
     float  gainPotMin = 0.02f;
