@@ -58,6 +58,8 @@ namespace id
     inline constexpr const char* m5150High        = "m5150_high";
     inline constexpr const char* m5150RhythmPost  = "m5150_rhythm_post";
     inline constexpr const char* m5150LeadPost    = "m5150_lead_post";
+    // Appended after the 5150 slot set. 0 = Full Amp (default), 1 = Preamp Out.
+    inline constexpr const char* preampOut        = "preamp_out";
 }
 
 /** Rev2.4 per-amp settings. Amp 0 = Rectifier (Red v1 / Red v2 / Orange share
@@ -66,8 +68,9 @@ namespace id
     amp 1 the same ID with the "m5150_" prefix. Amp knobs are per amp by
     construction (Rectifier: pre_gain..pre_presence, channel, red_voice, master;
     5150: the m5150_* knobs above plus lead_presence / lead_resonance).
-    Global (not per amp): preamp_model, bypass, and input_trim (shared input
-    calibration for both amps; no longer a per-amp head knob).
+    Global (not per amp): preamp_model, bypass, input_trim (shared input
+    calibration for both amps; no longer a per-amp head knob), and preamp_out
+    (Full Amp vs Preamp Out).
     AmpSlot::inputTrim stays in this list so m5150_input_trim keeps its host
     index, but that 5150 slot parameter is unused and hidden. See docs/per-amp-state.md. */
 enum class AmpSlot

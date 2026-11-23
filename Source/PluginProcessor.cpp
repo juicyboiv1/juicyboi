@@ -57,6 +57,7 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     p5High       = apvts.getRawParameterValue (params::id::m5150High);
     p5RhythmPost = apvts.getRawParameterValue (params::id::m5150RhythmPost);
     p5LeadPost   = apvts.getRawParameterValue (params::id::m5150LeadPost);
+    pPreampOut   = apvts.getRawParameterValue (params::id::preampOut);
 
     voicingA   = dsp::voicings::riffA();   // Red v2
     voicingAv1 = dsp::voicings::riffAv1(); // Red v1
@@ -89,6 +90,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     leadResonance.setPosition (pLeadResonance->load());
     leadResonance.prepare (sampleRate, leadPresence.resistance());
     leadBuffer.setSize (numCh, maxChunk, false, true, false);
+    preampBuffer.setSize (numCh, maxChunk, false, true, false);
+    preampBuffer5.setSize (numCh, maxChunk, false, true, false);
 
     od.prepare (osRate);
     sd1.prepare (osRate);
@@ -141,6 +144,8 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     chMix5    .reset (osRate, 0.02);
     postLead5 .reset (osRate, 0.02);
     postRhythm5.reset (osRate, 0.02);
+    preampOutMix  .reset (sampleRate, preampOutFadeSeconds);
+    preampOutMixOs.reset (osRate, preampOutFadeSeconds);
 
     // Snap smoothers to current values so there is no fade-in on load
     inputGain .setCurrentAndTargetValue (taper::inputKnobToGain (pInputTrim->load()));
@@ -157,6 +162,11 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
         chMix5    .setCurrentAndTargetValue (p5Channel->load() > 0.5f ? 1.0f : 0.0f);
         postLead5 .setCurrentAndTargetValue (dsp::Power5150::postGain (p5LeadPost->load()));
         postRhythm5.setCurrentAndTargetValue (dsp::Power5150::postGain (p5RhythmPost->load()));
+    }
+    {
+        const auto po = pPreampOut->load() > 0.5f ? 1.0f : 0.0f;
+        preampOutMix  .setCurrentAndTargetValue (po);
+        preampOutMixOs.setCurrentAndTargetValue (po);
     }
 
     lastChannel = -1;
@@ -273,6 +283,10 @@ void JuicyboiAudioProcessor::updateParameters()
         cab5.setParameters (p5 (S::cabEnable) > 0.5f, p5 (S::cabMicBlend), taper::cabLevelKnobToGain (p5 (S::cabLevel)));
         gate5.setParameters (p5 (S::gateEnable) > 0.5f, p5 (S::gateThreshold), p5 (S::gateHold), p5 (S::gateRelease));
     }
+
+    const auto po = pPreampOut->load() > 0.5f ? 1.0f : 0.0f;
+    preampOutMix  .setTargetValue (po);
+    preampOutMixOs.setTargetValue (po);
 }
 
 void JuicyboiAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -387,6 +401,7 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
             const auto rvAmt   = redVoiceMix.getNextValue(); // 0 = Red v1, 1 = Red v2
             const auto recDrive = recoveryRed + chAmt * (recoveryOrange - recoveryRed);
             const auto spkAmt  = rvAmt * (1.0f - chAmt); // Red v2 share of the Rect output (Rev2.3)
+            const auto poOs    = preampOutMixOs.getNextValue(); // 0 = Full Amp, 1 = skip SpeakerLoad
 
             // Boost stages needed this frame (both while a crossfade is running)
             const bool boostAudible = odAmt > 0.0f || odMix.isSmoothing();
@@ -444,7 +459,12 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                 // always running (warm state); weight 0 (Red v1, Orange) passes
                 // `rec` through untouched, so those voices stay bit-identical.
                 const auto spk  = rectSpeaker.process (rec, ch);
-                d[i] = spkAmt > 0.0f ? rec + spkAmt * (spk - rec) : rec;
+                // Full Amp (poOs == 0): exact previous blend, so Red v2 fixtures stay
+                // bit-identical. Preamp Out fades the 4x12 load out (Red v1 / Orange
+                // already pass `rec` through, so they are unaffected).
+                d[i] = poOs <= 0.0f
+                           ? (spkAmt > 0.0f ? rec + spkAmt * (spk - rec) : rec)
+                           : rec + (spkAmt * (1.0f - poOs)) * (spk - rec);
 
                 // 5150: both channels run (warm); the relay is a short crossfade
                 // after each channel's Post pot (the TMB between is linear and
@@ -475,6 +495,20 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         leadGraphicEq.process (alt, numProc, len);
     }
 
+    // Preamp Out copies the post-EQ (pre-cab, and for the 5150 pre-Presence /
+    // Resonance / speaker-load) signal so the fade can mix it back in. When
+    // the mode is settled Full Amp this is skipped and the path below is
+    // byte-for-byte the previous build.
+    const bool preampOutActive = preampOutMix.isSmoothing() || preampOutMix.getCurrentValue() > 0.0f;
+    if (preampOutActive)
+    {
+        for (int ch = 0; ch < numProc; ++ch)
+        {
+            preampBuffer.copyFrom (ch, 0, buffer, ch, start, len);
+            preampBuffer5.copyFrom (ch, 0, leadBuffer, ch, 0, len);
+        }
+    }
+
     // 3c) 5150 Presence + Resonance (one NFB loop) and the 4x12 load, whose
     //     output impedance follows the same loop (Resonance acts at the cab peak).
     speaker5.setLoop (leadResonance.resistance(), leadPresence.resistance());
@@ -492,10 +526,14 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
     }
 
     // 4) Cab IR sims, one per amp (no-op when that Cab is off). An amp that is
-    //    fully faded out skips its convolution; it restarts clean when needed.
+    //    fully faded out, or fully in Preamp Out, skips its convolution; it
+    //    restarts clean when needed.
     {
         const auto m = modelMix.getCurrentValue();
-        const bool audible[2] { m < 1.0f || modelMix.isSmoothing(), m > 0.0f || modelMix.isSmoothing() };
+        const auto poNow = preampOutMix.getCurrentValue();
+        const bool cabWanted = poNow < 1.0f || preampOutMix.isSmoothing();
+        const bool audible[2] { cabWanted && (m < 1.0f || modelMix.isSmoothing()),
+                                cabWanted && (m > 0.0f || modelMix.isSmoothing()) };
         for (int a = 0; a < 2; ++a)
         {
             if (! audible[a]) { cabIdle[a] = true; continue; }
@@ -508,9 +546,27 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         }
     }
 
-    // 4b) Gate VCAs after the cabs (true bypass when off), each keyed from its
-    //     own post-trim input. The key runs ~oversampler-latency ahead of the
-    //     wet path: a tiny look-ahead so pick attacks are never clipped.
+    // 4b) Preamp Out crossfade: mix the post-EQ preamp signal (no cab, and for
+    //     the 5150 no Presence/Resonance/speaker load) with the Full Amp path.
+    //     Settled Full Amp never enters this block (bit-identical).
+    if (preampOutActive)
+    {
+        for (int i = 0; i < len; ++i)
+        {
+            const auto po = preampOutMix.getNextValue();
+            for (int ch = 0; ch < numProc; ++ch)
+            {
+                auto& r = buffer.getWritePointer (ch, start)[i];
+                r += po * (preampBuffer.getReadPointer (ch)[i] * preampOutGain - r);
+                auto& l = leadBuffer.getWritePointer (ch)[i];
+                l += po * (preampBuffer5.getReadPointer (ch)[i] * preampOutGain - l);
+            }
+        }
+    }
+
+    // 4c) Gate VCAs after the cabs / Preamp Out mix (true bypass when off), each
+    //     keyed from its own post-trim input. The key runs ~oversampler-latency
+    //     ahead of the wet path: a tiny look-ahead so pick attacks are never clipped.
     {
         float* chans[dsp::kMaxChannels] {}, *chans5[dsp::kMaxChannels] {};
         for (int ch = 0; ch < numProc; ++ch)

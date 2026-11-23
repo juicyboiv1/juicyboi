@@ -205,6 +205,11 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (knob (id::m5150LeadPost,   "5150 Lead Post Gain",   5.0f));
     addAmpSlots (layout, 1);
 
+    // Appended: Full Amp (default) vs Preamp Out. Every earlier index stays put,
+    // so Full Amp (the default) remains bit-identical to the previous build.
+    layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::preampOut, versionHint }, "Preamp Out",
+                                                        StringArray { "Full Amp", "Preamp Out" }, 0));
+
     return layout;
 }
 } // namespace jb::params

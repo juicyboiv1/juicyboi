@@ -27,8 +27,13 @@
       5150:      [4x: Boost -> Rhythm|Lead cascade (Pre Gain networks)
                  -> shared TMB -> Post Gain -> power section] -> EQ ->
                  Presence/Resonance + 4x12 load -> Cab -> Gate   (no Master)
-    The two amp outputs crossfade (30 ms) after their gates, then the global
-    bypass crossfade against the latency-aligned dry input. */
+    Preamp Out (global `preamp_out`) skips cab IR, Red v2 / 5150 speaker-load
+    modelling, and 5150 Presence/Resonance (power-amp NFB). Preamp stages,
+    tone stacks, boosts, post EQ, gate, Rectifier recovery, 5150 Post Gain /
+    Power5150 and the Rectifier Master stay. A 25 ms crossfade makes the
+    switch click-free. The two amp outputs crossfade (30 ms) after their
+    gates, then the global bypass crossfade against the latency-aligned dry
+    input. */
 class JuicyboiAudioProcessor final : public juce::AudioProcessor
 {
 public:
@@ -106,6 +111,13 @@ public:
         small-signal level change (Master 6.5 = Post 5). */
     static float leadPostForMaster (float masterKnob);
 
+    /** Preamp Out path gain (linear). 1 = the preamp, post-EQ level with no
+        pad, which is already a sensible FX-return line level at default knobs
+        (documented in docs/per-amp-state.md and PreampOutTest). */
+    static constexpr float preampOutGain = 1.0f;
+    /** Click-free Full Amp <-> Preamp Out fade. */
+    static constexpr float preampOutFadeSeconds = 0.025f;
+
 private:
     void migrateToPerAmp (juce::ValueTree& tree);
     void updateParameters();
@@ -154,6 +166,7 @@ private:
     std::atomic<float>* p5High = nullptr;
     std::atomic<float>* p5RhythmPost = nullptr;
     std::atomic<float>* p5LeadPost = nullptr;
+    std::atomic<float>* pPreampOut = nullptr; // 0 = Full Amp, 1 = Preamp Out
     float p5 (jb::params::AmpSlot s) const noexcept { return p5150[(size_t) s]->load(); }
     juce::AudioParameterBool* bypassParam = nullptr;
     int baseLatency = 0;
@@ -188,10 +201,13 @@ private:
     juce::SmoothedValue<float> inputGain, masterGain, bypassMix; // base rate (inputGain = shared cal)
     juce::SmoothedValue<float> odMix, odTypeMix, channelMix, redVoiceMix; // oversampled rate
     juce::SmoothedValue<float> odMix5, odTypeMix5, chMix5, postLead5, postRhythm5; // oversampled rate
+    juce::SmoothedValue<float> preampOutMix;   // base rate, cab / 5150 load crossfade
+    juce::SmoothedValue<float> preampOutMixOs; // 4x rate, Red v2 SpeakerLoad crossfade
 
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay { 8192 };
     juce::AudioBuffer<float> dryBuffer, leadBuffer;
     juce::AudioBuffer<float> keyBuffer, keyBuffer5; // mono gate keys: post shared-cal, pre-gain (per amp)
+    juce::AudioBuffer<float> preampBuffer, preampBuffer5; // post-EQ copies for the Preamp Out mix
 
     int maxChunk = 512;
     int lastChannel = -1;
