@@ -62,6 +62,14 @@ int main (int argc, char** argv)
     ed.setDrawerOpen (true);
     shoot (ed, "rev2.4-5150-drawer-open");
 
+    set (p, "preamp_out", 1.0f);
+    ed.getHead().syncModelNow();
+    ed.getDrawer().syncAmpNow();
+    shoot (ed, "preamp-out-5150-drawer-open");
+    set (p, "preamp_out", 0.0f);
+    ed.getHead().syncModelNow();
+    ed.getDrawer().syncAmpNow();
+
     set (p, "preamp_model", 0.0f);
     ed.getHead().syncModelNow();
     ed.getDrawer().syncAmpNow();

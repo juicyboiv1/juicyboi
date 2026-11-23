@@ -29,7 +29,12 @@
   - the Post taper.
 - `EditorTest`: the 5150 faceplate (no Master or Input; RHY/LEAD, Bright/Crunch,
   per-channel Pre/Post) and the per-amp pedalboard, plus the shared Input Cal
-  trim on the drawer front.
+  trim and Preamp Out toggle on the drawer front (bypassed cab / Presence /
+  Resonance controls grey out).
+- `PreampOutTest.cpp`: `preamp_out` is last and defaults to Full Amp; Red v1 /
+  Orange with cab off are bit-identical in Preamp Out; Red v2 and 5150 differ;
+  cab / Presence / Resonance are silent in Preamp Out; the 25 ms switch is
+  click-free; old sessions load as Full Amp; default RMS/peak is printed.
 - Capture code was removed again. Do not regenerate fixtures from later
   feature code to bless a failure.
 

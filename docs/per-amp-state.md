@@ -13,11 +13,12 @@ Each amp has its own complete set of settings, and switching amps
 | cab | cab_enable, cab_mic_blend, cab_level, IR A/B files (state properties ir_a / ir_b) | m5150_cab_*, m5150_ir_a / m5150_ir_b |
 | gate | gate_enable, gate_threshold, gate_hold, gate_release | m5150_gate_* |
 
-Global: `preamp_model` (which amp), `bypass`, and `input_trim` (shared input
-calibration for both amps; 0–10, 5 = 0 dB). This is an interface-level trim
-(set once for the Scarlett, or any other DI), not a faceplate gain knob. It
-lives in a small setup plate on the pedalboard drawer front, labelled
-**INPUT CAL**.
+Global: `preamp_model` (which amp), `bypass`, `input_trim` (shared input
+calibration for both amps; 0–10, 5 = 0 dB), and `preamp_out` (Full Amp /
+Preamp Out). The Input Cal trim is an interface-level calibration (set once
+for the Scarlett, or any other DI), not a faceplate gain knob. It lives in a
+small setup plate on the left of the pedalboard drawer front, labelled
+**INPUT CAL**, next to the **PREAMP OUT** toggle.
 
 `m5150_input_trim` stays in the parameter layout (same ID, index and range)
 so host automation indices stay stable, but it is unused and hidden. Lanes
@@ -91,3 +92,38 @@ value (`input_trim`, i.e. the Rectifier's old Input). The unused
 path at default and at migrated settings is bit-identical to Rev2.4
 (`PerAmpTest` vs `rev2.3-migration-rect.f32`, `legacyRegression` vs
 `rect-rev2.3.f32`, `ResonanceTest` section 7 vs `lead-rev2.3.f32`).
+
+## Preamp Out (`preamp_out`)
+
+A global toggle, default **Full Amp**, for running juicyboi into a real amp's
+effects return (for example a Mesa Triple Rectifier FX return).
+
+| | Full Amp (default) | Preamp Out |
+|---|---|---|
+| preamp stages, tone stacks, boosts, post EQ, gate | yes | yes |
+| Rectifier recovery, 5150 Post Gain / Power5150, Rectifier Master | yes | yes |
+| cab IR / cab sim | yes | bypassed |
+| Red v2 SpeakerLoad, 5150 SpeakerLoad | yes | bypassed |
+| 5150 Presence and Resonance (power-amp NFB) | yes | bypassed |
+
+The parameter is **appended** after the 5150 slot set (`preamp_out`, choice
+"Full Amp" / "Preamp Out", default Full Amp). Every earlier host index is
+unchanged, and old sessions without the parameter load as Full Amp, so
+existing Rectifier and 5150 fixtures stay bit-identical.
+
+Switching is a 25 ms crossfade (click-free). While Preamp Out is on, the
+bypassed controls are greyed out and disabled: the cab panel (both amps) and
+the 5150 Presence and Resonance knobs. Their saved values are kept.
+
+**Level.** Preamp Out is unity gain relative to the post-EQ preamp signal
+(`JuicyboiAudioProcessor::preampOutGain = 1`). There is no extra pad. At
+default knobs (cab and gate off, 110 Hz sine) `PreampOutTest` measured:
+
+| | Full Amp rms / peak | Preamp Out rms / peak | vs Full Amp |
+|---|---|---|---|
+| Red v2 | −11.27 / −6.67 dBFS | −13.87 / −9.10 dBFS | −2.60 dB rms |
+| 5150 Lead | −11.24 / −7.67 dBFS | −16.40 / −13.14 dBFS | −5.16 dB rms |
+
+That is already a sensible line level for an FX return. Preamp Out is
+quieter here because the speaker-load bump (and, when Cab is on, the cab
+sim) is out of the path — which is what you want into a real power amp.

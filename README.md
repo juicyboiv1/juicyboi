@@ -21,7 +21,9 @@ Rev2.4 rebuilds the 5150 as Rhythm (Bright/Crunch) + Lead channels:
 - a 4x12 load on which Resonance acts ([docs/5150.md](docs/5150.md));
 - a separate full set of settings for each amp (knobs, boost, EQ, cab, gate),
   recalled when you switch amps ([docs/per-amp-state.md](docs/per-amp-state.md));
-- a shared **Input Cal** trim (not on either faceplate) for the interface level.
+- a shared **Input Cal** trim (not on either faceplate) for the interface level;
+- a global **Preamp Out** toggle (Full Amp vs Preamp Out) for a real amp's
+  effects return ([docs/per-amp-state.md](docs/per-amp-state.md)).
 
 The Rectifier renders bit-identically to Rev2.3.
 Descriptive product names belong to their respective owners; no affiliation is implied.
@@ -205,8 +207,14 @@ an Input knob; the shared Input Cal trim sits on the drawer front.
 **Pedalboard drawer.** Click the wooden drawer front (or its handle) to open or
 close it. The window grows or shrinks to match, and the open/closed state and
 window width are remembered while the plugin stays loaded. A small **INPUT CAL**
-setup trim on the left of the drawer front is always visible (drawer open or
-closed); it is the shared `input_trim` calibration described above.
+setup plate on the left of the drawer front is always visible (drawer open or
+closed). It holds the shared `input_trim` calibration described above and a
+**PREAMP OUT** toggle (Full Amp / Preamp Out). Preamp Out bypasses the cab,
+the Red v2 and 5150 speaker-load models, and 5150 Presence/Resonance, and
+keeps the preamp, boosts, tone stacks, post EQ and gate — for a real amp's
+effects return. Those bypassed controls are greyed out while it is on.
+Switching is a 25 ms crossfade. The output is the post-EQ preamp at unity
+gain, a sensible FX-return line level (see `docs/per-amp-state.md`).
 - **Boost**: green stompbox with Drive, Tone and Level, an OD/SD mini toggle
   (`od_type`), a footswitch for `od_enable`, and an LED.
 - **7-band EQ**: creme pedal with all 7 faders (100, 200, 400, 800, 1.6k, 3.2k
@@ -418,6 +426,7 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `gate_release` | Gate Release| 1 … 500 ms (−60 dB fall time) | 60 ms |
 | `master`       | Master      | 0 … 10 audio taper (0 = mute, 7.5 = 0 dB, 10 = +12 dB) | 6.5 (= −6 dB) |
 | `bypass`       | Bypass      | bool (host bypass param) | off |
+| `preamp_out`   | Preamp Out  | Full Amp / Preamp Out (appended; default Full Amp) | Full Amp |
 
 All parameter IDs use version hint 1.
 
@@ -430,7 +439,7 @@ Source/
   gui/Rev1Style.h/.cpp     palette, LookAndFeel (chrome/pedal knobs, faders, tooltips),
                            ParamSlider / ToggleSwitch / Footswitch parameter controls
   gui/AmpHead.h/.cpp       amp head, Rectifier/5150 faceplates + fade, cached static art
-  gui/Pedalboard.h/.cpp    drawer: Boost, 7-band EQ, Gate pedals, Cab panel, IR slots, Input Cal
+  gui/Pedalboard.h/.cpp    drawer: Boost, 7-band EQ, Gate pedals, Cab panel, IR slots, Input Cal, Preamp Out
   Parameters.h/.cpp        parameter IDs + layout
   dsp/
     Filters.h              OnePole (RC-style 6 dB/oct) + RBJ Biquad, per-channel state

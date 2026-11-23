@@ -123,6 +123,9 @@ int editorValidation()
     check ("Input Cal lives on the drawer, not on the Rectifier faceplate; 5150 Input slot is hidden",
            showing (findById (root, "input_trim")) && findById (ed->getHead(), "input_trim") == nullptr
                && findById (root, "m5150_input_trim") != nullptr && ! showing (findById (root, "m5150_input_trim")));
+    check ("Preamp Out toggle is on the drawer, not on the head, default Full Amp",
+           showing (findById (root, "preamp_out")) && findById (ed->getHead(), "preamp_out") == nullptr
+               && getParam (p, "preamp_out") < 0.5f);
     if (auto* ma = dynamic_cast<juce::Slider*> (findById (root, "master")))
         check ("Master tooltip keeps the dB equivalent", ma->getTooltip().contains ("-6.0 dB"));
 
@@ -163,6 +166,20 @@ int editorValidation()
         check ("pedalboard shows the 5150 set (boost, EQ, gate, cab)",
                showing (findById (root, "m5150_od_drive")) && showing (findById (root, "m5150_eq_6k4")) && showing (findById (root, "m5150_gate_threshold"))
                    && showing (findById (root, "m5150_cab_level")) && ! showing (findById (root, "od_drive")) && ! showing (findById (root, "eq_6k4")));
+        check ("5150 Presence, Resonance and cab are enabled in Full Amp",
+               findById (root, "lead_presence")->isEnabled() && findById (root, "lead_resonance")->isEnabled()
+                   && findById (root, "m5150_cab_level")->isEnabled());
+        if (auto* po = dynamic_cast<jb::gui::ToggleSwitch*> (findById (root, "preamp_out")))
+            po->flip();
+        ed->getHead().syncModelNow();
+        ed->getDrawer().syncAmpNow();
+        check ("Preamp Out greys out 5150 Presence, Resonance and cab",
+               getParam (p, "preamp_out") > 0.5f
+                   && ! findById (root, "lead_presence")->isEnabled() && ! findById (root, "lead_resonance")->isEnabled()
+                   && ! findById (root, "m5150_cab_level")->isEnabled() && ! findById (root, "m5150_cab_enable")->isEnabled());
+        setParam (p, "preamp_out", 0.0f);
+        ed->getHead().syncModelNow();
+        ed->getDrawer().syncAmpNow();
     }
     check ("Rectifier channel/voice retained under 5150", getParam (p, "channel") > 0.5f && getParam (p, "red_voice") < 0.5f);
     setParam (p, "preamp_model", 0.0f);
@@ -178,6 +195,7 @@ int editorValidation()
     check ("drawer closed hides pedals and shrinks the window",
            ! showing (findById (root, "od_drive")) && ed->getHeight() < openH && ! p.editorDrawerOpen);
     check ("Input Cal stays visible when the drawer is closed", showing (findById (root, "input_trim")));
+    check ("Preamp Out stays visible when the drawer is closed", showing (findById (root, "preamp_out")));
     check ("closed aspect = 1100 x closed design height",
            std::abs ((double) ed->getWidth() / ed->getHeight() - 1100.0 / JuicyboiAudioProcessorEditor::closedHeight) < 0.01);
     ed->setDrawerOpen (true);
