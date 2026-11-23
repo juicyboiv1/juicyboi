@@ -137,6 +137,7 @@ int presenceValidation()
     {
         JuicyboiAudioProcessor mixed, rect, lead, rectZero;
         configure (mixed, 0.0f, 10.0f, eq); configure (rect, 0.0f, 10.0f, eq);
+        mixed.keepAllCascadesWarm = true; // Rev3: blend logic vs warm endpoints
         configure (lead, 1.0f, 10.0f, eq); configure (rectZero, 0.0f, 0.0f, eq);
         juce::SmoothedValue<float> blend; blend.reset (48000.0, 0.030); blend.setCurrentAndTargetValue (0.0f);
         juce::MidiBuffer midi; float error = 0.0f, legacyError = 0.0f, max = 0.0f; bool finite = true;

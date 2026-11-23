@@ -15,6 +15,7 @@ static void setParam (juce::AudioProcessor& p, const char* id, float plain)
 }
 
 int legacyRegression();
+int triodeValidation();
 int modelValidation();
 int presenceValidation();
 int resonanceValidation();
@@ -38,7 +39,7 @@ int main()
     p->prepareToPlay (sr, bs);
     std::printf ("latency: %d samples\n", p->getLatencySamples());
 
-    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation() + levelTaperValidation() + editorValidation() + toneStackValidation() + clipperValidation() + speakerLoadValidation() + amp5150Validation() + perAmpValidation() + preampOutValidation();
+    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation() + levelTaperValidation() + editorValidation() + toneStackValidation() + clipperValidation() + speakerLoadValidation() + amp5150Validation() + perAmpValidation() + preampOutValidation() + triodeValidation();
     juce::MidiBuffer midi;
 
     {

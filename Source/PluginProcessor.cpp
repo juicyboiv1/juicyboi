@@ -392,10 +392,11 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
     // selected amp / channel / voice, and both sides of any crossfade). A
     // cascade that wakes up restarts from its quiescent point; its crossfade
     // weight starts at 0, so this is click-free.
-    const bool rectAudible = modelMix.getCurrentValue() < 1.0f || modelMix.isSmoothing();
-    const bool amp5Audible = modelMix.getCurrentValue() > 0.0f || modelMix.isSmoothing();
+    const bool warm = keepAllCascadesWarm;
+    const bool rectAudible = warm || modelMix.getCurrentValue() < 1.0f || modelMix.isSmoothing();
+    const bool amp5Audible = warm || modelMix.getCurrentValue() > 0.0f || modelMix.isSmoothing();
     oversampler.processParallel (block, leadBlock, leadOversampler,
-        [this, numProc, rectAudible, amp5Audible] (juce::dsp::AudioBlock<float>& up, juce::dsp::AudioBlock<float>& leadUp)
+        [this, numProc, rectAudible, amp5Audible, warm] (juce::dsp::AudioBlock<float>& up, juce::dsp::AudioBlock<float>& leadUp)
     {
         const auto n = (int) up.getNumSamples();
         for (int i = 0; i < n; ++i)
@@ -440,12 +441,12 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
             sd15Running = runSd15;
 
             // Rev3 cascade gating (see above)
-            const bool rectMorph = channelMix.isSmoothing() || redVoiceMix.isSmoothing();
+            const bool rectMorph = warm || channelMix.isSmoothing() || redVoiceMix.isSmoothing();
             const bool runA   = rectAudible && (rectMorph || ((1.0f - chAmt) * rvAmt > 0.0f));
             const bool runAv1 = rectAudible && (rectMorph || ((1.0f - chAmt) * (1.0f - rvAmt) > 0.0f));
             const bool runB   = rectAudible && (rectMorph || chAmt > 0.0f);
-            const bool runLead5   = amp5Audible && (chMix5.isSmoothing() || leadAmt > 0.0f);
-            const bool runRhythm5 = amp5Audible && (chMix5.isSmoothing() || leadAmt < 1.0f);
+            const bool runLead5   = amp5Audible && (warm || chMix5.isSmoothing() || leadAmt > 0.0f);
+            const bool runRhythm5 = amp5Audible && (warm || chMix5.isSmoothing() || leadAmt < 1.0f);
             if (runA && ! riffARunning)          riffA.reset();
             if (runAv1 && ! riffAv1Running)      riffAv1.reset();
             if (runB && ! riffBRunning)          riffB.reset();
@@ -471,11 +472,12 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                 // Red/Orange switching are short equal-gain crossfades.
                 const auto a2 = runA   ? riffA.process (boosted, ch)   : 0.0f;
                 const auto a1 = runAv1 ? riffAv1.process (boosted, ch) : 0.0f;
-                const auto a  = a1 + rvAmt * (a2 - a1);
+                // exact endpoints when settled (a gated-off cascade contributes nothing)
+                const auto a  = rvAmt >= 1.0f ? a2 : (rvAmt <= 0.0f ? a1 : a1 + rvAmt * (a2 - a1));
                 const auto b  = runB   ? riffB.process (boosted, ch)   : 0.0f;
 
                 // Passive TMB, then the post-stack recovery gain (both at 4x)
-                const auto rect = tone.process (a + chAmt * (b - a), ch);
+                const auto rect = tone.process (chAmt >= 1.0f ? b : (chAmt <= 0.0f ? a : a + chAmt * (b - a)), ch);
                 const auto rec  = rectRecovery.process (rect, recDrive, ch);
                 // Rev2.3: Red v2 power-amp / 4x12 low-end interaction. Linear,
                 // always running (warm state); weight 0 (Red v1, Orange) passes
@@ -498,7 +500,7 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                 const auto boosted5 = x5 + odAmt5 * ((od5Out + typeAmt5 * (sd15Out - od5Out)) - x5);
                 const auto rhy = runRhythm5 ? rhythm5.process (boosted5, ch) * gRhythm : 0.0f;
                 const auto ld  = runLead5   ? lead5.process (boosted5, ch) * gLead     : 0.0f;
-                l[i] = power5.process (leadTone.process (rhy + leadAmt * (ld - rhy), ch), ch);
+                l[i] = power5.process (leadTone.process (leadAmt >= 1.0f ? ld : (leadAmt <= 0.0f ? rhy : rhy + leadAmt * (ld - rhy)), ch), ch);
             }
         }
     });

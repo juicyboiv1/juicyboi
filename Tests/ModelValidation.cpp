@@ -170,6 +170,7 @@ int modelValidation()
     {
         JuicyboiAudioProcessor p, rectP, leadP;
         setup (p, 48000.0, 1, 64, 0, 2, 10.0f);
+        p.keepAllCascadesWarm = true; // Rev3: blend logic vs warm endpoints (gated wake tested below)
         setup (rectP, 48000.0, 1, 64, 0, 2, 10.0f);
         setup (leadP, 48000.0, 1, 64, 1, 2, 10.0f);
         juce::SmoothedValue<float> blend; blend.reset (48000.0, 0.030); blend.setCurrentAndTargetValue (0.0f);

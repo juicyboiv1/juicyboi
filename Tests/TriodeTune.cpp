@@ -95,11 +95,19 @@ const double gains[] { 3, 5, 7, 10 }, amps[] { 0.05, 0.25 };
 
 double cost (const Voice& v, const std::vector<M>& ref, const std::vector<double>& d, bool print)
 {
+    // the level difference may be a constant (it is made up after the cascade),
+    // but its spread across settings is a compression change: penalise that too
+    std::vector<M> ms;
+    for (auto g : gains) for (auto a : amps) ms.push_back (run (v, false, d, g, a));
+    double meanDl = 0;
+    for (size_t k = 0; k < ms.size(); ++k) meanDl += (ms[k].lvl - ref[k].lvl) / (double) ms.size();
     double c = 0; size_t j = 0;
     for (auto g : gains) for (auto a : amps)
     {
-        const auto m = run (v, false, d, g, a);
+        const auto& m = ms[j];
         const auto& r = ref[j++];
+        const auto dl = m.lvl - r.lvl - meanDl;
+        c += 0.5 * dl * dl * (g >= 7 ? 1.0 : g >= 5 ? 0.5 : 0.25);
         const auto e = (m.thd - r.thd) * (m.thd - r.thd) + 0.25 * (m.eo - r.eo) * (m.eo - r.eo)
                      + 0.1 * (std::max (m.hf, -60.0) - std::max (r.hf, -60.0)) * (std::max (m.hf, -60.0) - std::max (r.hf, -60.0))
                      + 0.25 * (m.n - r.n) * (m.n - r.n);
@@ -139,6 +147,8 @@ int main (int argc, char** argv)
                     }
     }
     const auto c = cost (v, ref, d, true);
+    double meanDl = 0; { size_t j = 0; for (auto g : gains) for (auto a : amps) meanDl += (run (v, false, d, g, a).lvl - ref[j++].lvl) / 8.0; }
+    std::printf ("mean level change %+.2f dB (make up with the voicing's level trim)\n", meanDl);
     std::printf ("cost %.2f drives:", c);
     for (auto x : d) std::printf (" %.3f", x);
     std::printf ("\n");

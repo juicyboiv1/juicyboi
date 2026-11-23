@@ -200,6 +200,7 @@ int resonanceValidation()
         JuicyboiAudioProcessor mixed, rect, lead, rectZero;
         configure (mixed, 0.0f, 10.0f, eq); configure (rect, 0.0f, 10.0f, eq);
         configure (lead, 1.0f, 10.0f, eq); configure (rectZero, 0.0f, 0.0f, eq);
+        mixed.keepAllCascadesWarm = true; // Rev3: blend logic vs warm endpoints
         juce::SmoothedValue<float> blend; blend.reset (48000.0, 0.030); blend.setCurrentAndTargetValue (0.0f);
         juce::MidiBuffer midi; float error = 0.0f, leak = 0.0f, max = 0.0f; bool ok = true;
         for (int b = 0; b < 220; ++b)
@@ -228,39 +229,44 @@ int resonanceValidation()
         check ("Lead Resonance has zero effect on Rectifier", leak < 1e-9f);
     }
 
-    // 7) Whole-processor nulls. lead-rev2.3.f32 was captured ONCE from the Rev2.3 build
-    //    and lead-rev2.4.f32 ONCE from the Rev2.4 build, with the same 5 configurations
-    //    as the original 62a1239 capture. Rev2.4 replaced the 5150 engine, so the
-    //    Rectifier configurations (3 Red v2, 4 Orange) must still null against Rev2.3
-    //    (and Orange against Rev2.2), while the 5150 configurations (0-2) null against
-    //    the Rev2.4 capture. lead-rev2-tonestack.f32 (Rev2.1) and lead-62a1239.f32 are
-    //    kept as level references.
+    // 7) Whole-processor nulls. lead-rev3.f32 was captured ONCE from the Rev3 build
+    //    (solved triode stages) with the same 5 configurations as the original
+    //    62a1239 capture; every configuration must null against it. Rev3 changes
+    //    the audio of every configuration on purpose, so lead-rev2.4.f32 (5150,
+    //    configs 0-2) and lead-rev2.3.f32 (Rectifier, 3-4; bit-identical in Rev2.4)
+    //    are the level references: each configuration within 1.5 dB of Rev2.4.
     {
-        auto open = [] (const char* name) { return juce::File (juce::String (JUICYBOI_TEST_DIR) + "/" + name).createInputStream(); };
-        auto r23 = open ("lead-rev2.3.f32"), r22 = open ("lead-rev2.2-clippers.f32"), r24 = open ("lead-rev2.4.f32");
         const auto perConfig = (size_t) (leadfixture::blocks * leadfixture::blockSize);
-        const auto bytes = (juce::int64) (perConfig * leadfixture::numConfigs * sizeof (float));
-        bool rectOk = r23 != nullptr && r23->getTotalLength() == bytes;
-        bool orangeOk = r22 != nullptr && r22->getTotalLength() == bytes;
-        bool leadOk = r24 != nullptr && r24->getTotalLength() == bytes;
-        for (int c = 0; rectOk && orangeOk && leadOk && c < leadfixture::numConfigs; ++c)
+        std::vector<float> all;
+        for (int c = 0; c < leadfixture::numConfigs; ++c) { const auto r = leadfixture::render (c); all.insert (all.end(), r.begin(), r.end()); }
+        const juce::File fx (juce::String (JUICYBOI_TEST_DIR) + "/lead-rev3.f32");
+        if (std::getenv ("JB_CAPTURE_REV3") != nullptr) // one-off capture (removed after use)
+            fx.replaceWithData (all.data(), all.size() * sizeof (float));
+        auto open = [] (const char* name) { return juce::File (juce::String (JUICYBOI_TEST_DIR) + "/" + name).createInputStream(); };
+        auto r3 = open ("lead-rev3.f32"), r23 = open ("lead-rev2.3.f32"), r24 = open ("lead-rev2.4.f32");
+        const auto bytes = (juce::int64) (all.size() * sizeof (float));
+        bool nullOk = r3 != nullptr && r3->getTotalLength() == bytes;
+        bool levelOk = r23 != nullptr && r24 != nullptr && r23->getTotalLength() == bytes && r24->getTotalLength() == bytes;
+        for (int c = 0; nullOk && levelOk && c < leadfixture::numConfigs; ++c)
         {
-            float e23 = 0.0f, e22 = 0.0f, e24 = 0.0f; bool fin = true;
-            for (auto f : leadfixture::render (c))
+            float e3 = 0.0f; bool fin = true; double a = 0, b = 0;
+            for (size_t i = 0; i < perConfig; ++i)
             {
-                const auto a = r23->readFloat(), b = r22->readFloat(), d = r24->readFloat();
+                const auto f = all[(size_t) c * perConfig + i];
+                const auto x3 = r3->readFloat(), x23 = r23->readFloat(), x24 = r24->readFloat();
+                const auto ref = c < 3 ? x24 : x23;
                 fin = fin && std::isfinite (f);
-                e23 = std::max (e23, std::abs (f - a)); e22 = std::max (e22, std::abs (f - b)); e24 = std::max (e24, std::abs (f - d));
+                e3 = std::max (e3, std::abs (f - x3));
+                if (i >= perConfig / 2) { a += (double) f * f; b += (double) ref * ref; }
             }
-            std::printf ("fixture null config %d (%s): vs Rev2.4 %.9g, vs Rev2.3 %.9g, vs Rev2.2 %.9g\n", c,
-                         c < 3 ? "5150" : (c == 3 ? "Red v2" : "Orange"), (double) e24, (double) e23, (double) e22);
-            if (c < 3) leadOk = leadOk && fin && e24 < 2.0e-6f;
-            else       rectOk = rectOk && fin && e23 == 0.0f && e24 == 0.0f;
-            if (c == 4) orangeOk = orangeOk && e22 == 0.0f;
+            const auto d = 10.0 * std::log10 (a / b);
+            std::printf ("fixture config %d (%s): null vs Rev3 %.9g, level vs Rev2.4 %+.2f dB\n", c,
+                         c < 3 ? "5150" : (c == 3 ? "Red v2" : "Orange"), (double) e3, d);
+            nullOk = nullOk && fin && e3 < 2.0e-6f;
+            levelOk = levelOk && std::abs (d) < 1.5;
         }
-        check ("Rectifier configurations bit-identical to the Rev2.3 fixture", rectOk);
-        check ("Orange configuration bit-identical to the Rev2.2 fixture", orangeOk);
-        check ("5150 configurations null vs the Rev2.4 fixture", leadOk);
+        check ("all configurations null vs the Rev3 fixture", nullOk);
+        check ("every configuration within 1.5 dB of Rev2.4", levelOk);
     }
 
     // 8) (Rev2) The old Rectifier Bass-shelf-centre check is superseded by the solved

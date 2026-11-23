@@ -115,7 +115,7 @@ target_link_libraries(juicyboi
 option(JUICYBOI_BUILD_TESTS "Build the headless smoke test" ON)
 if(JUICYBOI_BUILD_TESTS)
     juce_add_console_app(juicyboi_smoketest PRODUCT_NAME "juicyboi_smoketest")
-    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp Tests/SpeakerLoadTest.cpp Tests/Amp5150Test.cpp Tests/PerAmpTest.cpp Tests/PreampOutTest.cpp)
+    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp Tests/SpeakerLoadTest.cpp Tests/Amp5150Test.cpp Tests/PerAmpTest.cpp Tests/PreampOutTest.cpp Tests/TriodeTest.cpp)
     # Reuse the plugin's JUCE module objects/includes/defines rather than
     # compiling the modules a second time.
     target_include_directories(juicyboi_smoketest PRIVATE Source
@@ -146,6 +146,19 @@ if(JUICYBOI_BUILD_TESTS)
     target_compile_definitions(juicyboi_bassprobe PRIVATE
         $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
     target_link_libraries(juicyboi_bassprobe PRIVATE juicyboi juce::juce_recommended_config_flags)
+
+    # Rev3 dynamics / bias-shift probe + CPU meter: juicyboi_dynamics [chord|levels|cpu|all] [csv-dir]
+    juce_add_console_app(juicyboi_dynamics PRODUCT_NAME "juicyboi_dynamics")
+    target_sources(juicyboi_dynamics PRIVATE Tests/DynamicsProbe.cpp)
+    target_include_directories(juicyboi_dynamics PRIVATE Source
+        $<TARGET_PROPERTY:juicyboi,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(juicyboi_dynamics PRIVATE
+        $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
+    target_link_libraries(juicyboi_dynamics PRIVATE juicyboi juce::juce_recommended_config_flags)
+
+    # Rev3 drive-staging probe (plain C++): juicyboi_triode_tune <voice> [trims|search]
+    add_executable(juicyboi_triode_tune Tests/TriodeTune.cpp Source/dsp/PreampCascade.cpp)
+    target_include_directories(juicyboi_triode_tune PRIVATE Source)
 
     # Rev2.2 clipper dump (plain C++, no JUCE): tools/clippers/plot_clippers.py
     add_executable(juicyboi_clipper_dump Tests/ClipperDump.cpp Source/dsp/Od808Stage.cpp Source/dsp/Sd1Stage.cpp)

@@ -118,6 +118,11 @@ public:
     /** Click-free Full Amp <-> Preamp Out fade. */
     static constexpr float preampOutFadeSeconds = 0.025f;
 
+    /** Rev3 test hook: run every solved cascade every sample (Rev2.x "always
+        warm" behaviour) so switching tests can compare against independently
+        warmed endpoint processors. Off in the plugin: only audible cascades run. */
+    bool keepAllCascadesWarm = false;
+
 private:
     void migrateToPerAmp (juce::ValueTree& tree);
     void updateParameters();
