@@ -41,7 +41,7 @@ public:
             if (v.behavioural) // Rev2.4 reference curve (tests / tools only)
                 s = -shape::triode (s * st.gain, st.bias, st.posHardness, st.negHardness);
             else
-                s = (float) (tube[(size_t) i].process ((double) s * map[(size_t) i].inScale, ch) * map[(size_t) i].outScale);
+                s = (float) (tube[(size_t) i].process (shelfEq[(size_t) i].process ((double) s, ch) * map[(size_t) i].inScale, ch) * map[(size_t) i].outScale);
             s = stageLP[(size_t) i].process (s, ch);
 
             if (i == v.gainPotAfterStage)
@@ -59,6 +59,7 @@ private:
     OnePole inputTight, postLP, dcBlock;
     std::array<TriodeStage, ChannelVoicing::maxStages> tube;
     std::array<triode::StageMap, ChannelVoicing::maxStages> map {};
+    std::array<ShelfEq, ChannelVoicing::maxStages> shelfEq {};
     std::array<OnePole, ChannelVoicing::maxStages> stageHP, stageLP;
 
     float potTarget = 0.5f, potGain = 0.5f, potSmoothCoef = 0.001f;

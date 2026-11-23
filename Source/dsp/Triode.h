@@ -228,7 +228,7 @@ public:
 
         // predictor: linear extrapolation of the last two solutions
         auto u = 2.0 * s.u - s.u1, w = 2.0 * s.w - s.w1;
-        if (w < 0.0) w = 0.0;
+        if (w < 0.5 * s.w) w = 0.5 * s.w;
         double ip = 0, ig = 0, k = s.k;
         int it = 0;
         for (; it < 50; ++it)
@@ -245,9 +245,16 @@ public:
             const auto det = j11 * j22 - j12 * j21;
             auto du = (r1 * j22 - r2 * j12) / det;
             auto dw = (j11 * r2 - j21 * r1) / det;
-            du = std::clamp (du, -2.0, 2.0);
+            // step limiting: only where the grid conducts (exponential/power-law
+            // region) is a long step risky; from deep cut-off, jump straight to
+            // the conduction knee instead of crawling there 2 V at a time
+            {
+                const auto un = u - du;
+                if (un > u + 2.0) du = u - std::max (u + 2.0, std::min (un, 0.5));
+                else if (un < u - 2.0 && u > 0.5) du = u - std::max (un, std::min (u - 2.0, 0.5));
+            }
             dw = std::clamp (dw, -100.0, 100.0);
-            if (w - dw < 0.0) dw = w;
+            if (w - dw < 0.0) dw = 0.5 * w;           // approach w = 0 by halving (plate law is degenerate there)
             u -= du; w -= dw;
             if (std::abs (du) < 1.0e-6 && std::abs (dw) < 1.0e-4)
             {
@@ -301,6 +308,27 @@ public:
         return (up - dn) / 2.0e-3;
     }
 
+    /** Small-signal cathode-bypass shelf of this stage, rad/s: the stage gain
+        rises from the degenerated value below wz = 1/(Rk Ck) to the bypassed
+        value above wp = wz (1 + (mu+1) Rk / (Ra + rp)). wz = wp = 0 when the
+        cathode is unbypassed (no shelf: the gain is degenerated everywhere). */
+    struct Shelf { double wz = 0, wp = 0; };
+    /** Fraction (in dB) of the cathode-bypass bass loss that ShelfEq gives back.
+        0 = the bare circuit (Rev3 WIP: 40 Hz 7-10 dB under Rev2.4), 1 = fully
+        cancelled (40 Hz 2-5 dB over Rev2.4 once the stages saturate). 0.5 puts
+        the driven 40/80/100 Hz response within ~1 dB of Rev2.4 on Red v2 and the
+        5150 (juicyboi_bassprobe, docs/triode.md "Low end"). */
+    static constexpr double kShelfCompensation = 0.5;
+    Shelf cathodeShelf() const noexcept
+    {
+        if (p.ck <= 0.0 || p.rk <= 0.0) return {};
+        double gm, gp;
+        triode::plateCurrent (t, op.vg - op.vk, op.vp - op.vk, gm, gp);
+        const auto rp = 1.0 / gp, mu = gm * rp;
+        const auto wz = 1.0 / (p.rk * p.ck);
+        return { wz, wz * std::pow (1.0 + (mu + 1.0) * p.rk / (p.ra + rp), kShelfCompensation) };
+    }
+
 private:
     struct State { double u = 0, w = 0, u1 = 0, w1 = 0, k = 0, ick = 0, vc = 0, ic = 0; };
     triode::StageParts p;
@@ -309,5 +337,39 @@ private:
     double fs = 192000.0, rc = 0, gck = 0, gkt = 1, gb = 1, gn = 1, rth = 1;
     std::array<State, kMaxChannels> st {};
     int lastIt = 0;
+};
+
+/** Rev3 voicing EQ: first-order low shelf (s + wp) / (s + wz), unity at high
+    frequencies, wp/wz at DC. Placed before a solved stage it cancels that
+    stage's small-signal cathode-bypass shelf, so the voiced coupling high-
+    passes (Rev2.x) keep owning the cascade's low end while the stage keeps its
+    nonlinear cathode dynamics. docs/triode.md, "Low end". */
+class ShelfEq
+{
+public:
+    void setup (double wz, double wp, double fs) noexcept
+    {
+        on = wz > 0.0 && wp > wz;
+        if (! on) return;
+        // bilinear transform with the zero/pole prewarped
+        const auto k = 2.0 * fs;
+        const auto pz = 2.0 * fs * std::tan (wz / k), pp = 2.0 * fs * std::tan (wp / k);
+        const auto a0 = k + pz;
+        b0 = (k + pp) / a0; b1 = (pp - k) / a0; a1 = (pz - k) / a0;
+        reset();
+    }
+    void reset() noexcept { for (auto& z : x1) z = 0.0; for (auto& z : y1) z = 0.0; }
+    inline double process (double x, int ch) noexcept
+    {
+        if (! on) return x;
+        const auto c = (size_t) ch;
+        const auto y = b0 * x + b1 * x1[c] - a1 * y1[c];
+        x1[c] = x; y1[c] = y;
+        return y;
+    }
+private:
+    bool on = false;
+    double b0 = 1, b1 = 0, a1 = 0;
+    std::array<double, kMaxChannels> x1 {}, y1 {};
 };
 } // namespace jb::dsp

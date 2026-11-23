@@ -168,8 +168,8 @@ inline ChannelVoicing redV1()
     v.inputTightHpHz = 95.0;
     v.postLpHz = 7800.0;
     v.makeup = 0.58f;
-    v.triodeMakeup = 2.48f; // Rev3: +7.9 dB restores the Rev2.4 cascade level at Gain 7-10
-    v.triodeDrive = { 1.087f, 0.592f, 1.681f, 2.82f }; // Rev3 drive staging (juicyboi_triode_tune red1 search)
+    v.triodeMakeup = 1.690f; // Rev3: +4.6 dB restores the Rev2.4 cascade level (mean over Gain 3-10)
+    v.triodeDrive = { 0.997f, 0.42f, 1.419f, 2.0f }; // Rev3 drive staging (juicyboi_triode_tune red1 search)
     v.recoveryDrive = 2.0f; // Red: Rectifier FX-loop recovery / PI stand-in (Rev2.2)
 
     v.tmb = redTmb();
@@ -207,8 +207,8 @@ inline ChannelVoicing redV2()
     v.inputTightHpHz = 65.0;
     v.postLpHz = 7400.0;
     v.makeup = 0.49f; // ~-1.5 dB vs v1: rough level-match so the A/B is about tone, not loudness
-    v.triodeMakeup = 2.0f;  // Rev3: +6 dB restores the Rev2.4 cascade level at Gain 7-10
-    v.triodeDrive = { 2.82f, 0.42f, 1.54f, 2.0f }; // Rev3 drive staging (juicyboi_triode_tune red2 search)
+    v.triodeMakeup = 1.629f; // Rev3: +4.2 dB restores the Rev2.4 cascade level (mean over Gain 3-10)
+    v.triodeDrive = { 2.82f, 0.42f, 0.916f, 1.539f }; // Rev3 drive staging (juicyboi_triode_tune red2 search)
     v.recoveryDrive = 2.0f; // Red: Rectifier FX-loop recovery / PI stand-in (Rev2.2)
     v.speakerLoad = rectoSpeakerLoad(); // Rev2.3: power-amp / 4x12 low-end interaction
 
@@ -238,8 +238,8 @@ inline ChannelVoicing orange()
     v.inputTightHpHz = 55.0;
     v.postLpHz = 6400.0;
     v.makeup = 0.68f;
-    v.triodeMakeup = 1.44f; // Rev3: +3.2 dB restores the Rev2.4 cascade level at Gain 7-10
-    v.triodeDrive = { 1.09f, 0.42f, 2.18f, 0.844f }; // Rev3 drive staging (juicyboi_triode_tune orange search)
+    v.triodeMakeup = 1.597f; // Rev3: +4.1 dB restores the Rev2.4 cascade level (mean over Gain 3-10)
+    v.triodeDrive = { 0.708f, 0.499f, 1.688f, 2.003f }; // Rev3 drive staging (juicyboi_triode_tune orange search)
 
     v.tmb = orangeTmb();
     v.presenceHz = 2200.0;

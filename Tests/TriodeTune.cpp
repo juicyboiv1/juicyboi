@@ -21,6 +21,12 @@ namespace
 {
 constexpr double fs = 192000.0, f0 = 110.0;
 struct M { double lvl, thd, n, hf, eo; };
+// even/odd balance weight in the cost (env TUNE_EO_WEIGHT, default 0.25)
+// compression weight (env TUNE_SS_WEIGHT, default 1): small-signal level (0.002 FS)
+// re the saturated level must match Rev2.4, or the solved cascade sustains the
+// decaying tail of a palm mute louder (looser chugs)
+static double ssWeight() { static const double w = std::getenv ("TUNE_SS_WEIGHT") ? std::atof (std::getenv ("TUNE_SS_WEIGHT")) : 1.0; return w; }
+static double eoWeight() { static const double w = std::getenv ("TUNE_EO_WEIGHT") ? std::atof (std::getenv ("TUNE_EO_WEIGHT")) : 0.25; return w; }
 
 M analyse (const std::vector<float>& y)
 {
@@ -92,6 +98,8 @@ M run (Voice v, bool behavioural, const std::vector<double>& drive, double gain,
 }
 
 const double gains[] { 3, 5, 7, 10 }, amps[] { 0.05, 0.25 };
+const double ssGains[] { 5, 10 };
+constexpr double ssAmp = 0.002;
 
 double cost (const Voice& v, const std::vector<M>& ref, const std::vector<double>& d, bool print)
 {
@@ -107,14 +115,21 @@ double cost (const Voice& v, const std::vector<M>& ref, const std::vector<double
         const auto& m = ms[j];
         const auto& r = ref[j++];
         const auto dl = m.lvl - r.lvl - meanDl;
-        c += 0.5 * dl * dl * (g >= 7 ? 1.0 : g >= 5 ? 0.5 : 0.25);
-        const auto e = (m.thd - r.thd) * (m.thd - r.thd) + 0.25 * (m.eo - r.eo) * (m.eo - r.eo)
+        c += 3.0 * dl * dl * (g >= 7 ? 1.0 : g >= 5 ? 0.5 : 0.25);
+        const auto e = (m.thd - r.thd) * (m.thd - r.thd) + eoWeight() * (m.eo - r.eo) * (m.eo - r.eo)
                      + 0.1 * (std::max (m.hf, -60.0) - std::max (r.hf, -60.0)) * (std::max (m.hf, -60.0) - std::max (r.hf, -60.0))
                      + 0.25 * (m.n - r.n) * (m.n - r.n);
         c += e * (g >= 7 ? 1.0 : g >= 5 ? 0.5 : 0.25); // the hi-gain settings matter most
         if (print)
             std::printf ("%-7s g%-4g a%-5g | rev2.4 lvl %6.1f thd %6.1f n %3.0f hf %6.1f e-o %5.1f | rev3 lvl %6.1f thd %6.1f n %3.0f hf %6.1f e-o %5.1f\n",
                          v.name.c_str(), g, a, r.lvl, r.thd, r.n, r.hf, r.eo, m.lvl, m.thd, m.n, m.hf, m.eo);
+    }
+    for (size_t k = 0; k < 2; ++k)
+    {
+        const auto m = run (v, false, d, ssGains[k], ssAmp);
+        const auto dl = m.lvl - ref[ms.size() + k].lvl - meanDl;
+        c += ssWeight() * dl * dl;
+        if (print) std::printf ("%-7s g%-4g small-signal (%.3f FS) level re saturated vs Rev2.4: %+.1f dB\n", v.name.c_str(), ssGains[k], ssAmp, dl);
     }
     return c;
 }
@@ -132,6 +147,7 @@ int main (int argc, char** argv)
     if (! search) for (int i = 2; i < argc && (size_t) (i - 2) < ns; ++i) d[(size_t) (i - 2)] = std::atof (argv[i]);
     std::vector<M> ref;
     for (auto g : gains) for (auto a : amps) ref.push_back (run (v, true, d, g, a));
+    for (auto g : ssGains) ref.push_back (run (v, true, d, g, ssAmp));
     if (search)
     {
         auto best = cost (v, ref, d, false);
