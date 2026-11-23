@@ -468,6 +468,7 @@ void Pedalboard::syncPreampOutDim()
     const bool pre = proc.apvts.getRawParameterValue (pid::preampOut)->load() > 0.5f;
     const auto a = pre ? 0.45f : 1.0f;
     cab.setAlpha (a);
+    cab.setEnabled (! pre);
     for (int amp = 0; amp < 2; ++amp)
         for (auto* c : sets[(size_t) amp]->cabControls())
         {

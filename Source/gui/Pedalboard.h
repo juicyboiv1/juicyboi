@@ -86,7 +86,7 @@ public:
     /** Which amp's controls are showing (tests). */
     int getShownAmp() const noexcept { return shownAmp; }
     /** Follow preamp_model now instead of on the next timer tick (tests / screenshots). */
-    void syncAmpNow() { showAmp (activeAmp()); }
+    void syncAmpNow() { showAmp (activeAmp()); syncPreampOutDim(); }
 private:
 
     struct Front final : juce::Component, juce::TooltipClient
