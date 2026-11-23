@@ -12,11 +12,14 @@
   (`rev2.3-state-{0..3}.bin`). It checks:
   - the Rectifier renders bit-identically to what Rev2.3 rendered from them
     (`rev2.3-migration-rect.f32`);
-  - the v3→v4 migration copies boost/EQ/cab/gate/input into the 5150 set and
+  - the v3→v4 migration copies boost/EQ/cab/gate into the 5150 set and
     maps Gain→Lead Pre, Bass/Mid/Treble→Low/Mid/High, Master→Post;
   - there is no re-migration on re-save;
-  - each amp's settings have zero effect on the other amp's audio;
-  - switching amps keeps both sets.
+  - each amp's settings (except the shared `input_trim` calibration) have
+    zero effect on the other amp's audio; `m5150_input_trim` is unused;
+  - switching amps keeps both sets;
+  - a session where the 5150 had a different Input uses the shared
+    (Rectifier) `input_trim`.
 - `Amp5150Test.cpp` checks:
   - the Pre Gain networks (time-domain vs analytic nodal magnitude, < 0.1 dB);
   - the Lead bright cap;
@@ -24,8 +27,9 @@
   - a click-free Bright/Crunch switch;
   - that the 4x12 bump grows with Resonance;
   - the Post taper.
-- `EditorTest`: the 5150 faceplate (no Master; RHY/LEAD, Bright/Crunch,
-  per-channel Pre/Post, its own Input) and the per-amp pedalboard.
+- `EditorTest`: the 5150 faceplate (no Master or Input; RHY/LEAD, Bright/Crunch,
+  per-channel Pre/Post) and the per-amp pedalboard, plus the shared Input Cal
+  trim on the drawer front.
 - Capture code was removed again. Do not regenerate fixtures from later
   feature code to bless a failure.
 
@@ -119,7 +123,7 @@ session with Boost on.
 `EditorTest.cpp` paints the editor offscreen, with no native window. It checks:
 - the revision plate reads Rev2 / Rev2 · 5150 and the plugin name is `juicyboi Rev2`
 - every parameter has a bound control with the same component ID, plus the IR A/B slots
-- every head knob has a creme caption below it on both faceplates, with none above, and every head knob has a tooltip (Input/Master keep their dB equivalents)
+- every head knob has a creme caption below it on both faceplates, with none above, and every head knob has a tooltip (Master and the drawer Input Cal keep their dB equivalents)
 - the Model toggle sets `preamp_model` and swaps the faceplates; Rectifier-only controls are hidden on 5150 and their values are kept
 - Red Voice is disabled on Orange
 - the drawer opens and closes with a fixed aspect ratio, and scaling works

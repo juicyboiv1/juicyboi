@@ -117,9 +117,12 @@ int editorValidation()
         check ((juce::String (what) + ": every head knob keeps its hover tooltip").toRawUTF8(), tipsOk);
     };
     ed->getHead().syncModelNow();
-    checkCaptions ("Rectifier", { "INPUT", "GAIN", "BASS", "MID", "TREBLE", "PRESENCE", "MASTER" });
+    checkCaptions ("Rectifier", { "GAIN", "BASS", "MID", "TREBLE", "PRESENCE", "MASTER" });
     if (auto* in = dynamic_cast<juce::Slider*> (findById (root, "input_trim")))
-        check ("Input tooltip keeps the dB equivalent", in->getTooltip().contains ("= 0.0 dB"));
+        check ("Input Cal tooltip keeps the dB equivalent", in->getTooltip().contains ("= 0.0 dB"));
+    check ("Input Cal lives on the drawer, not on the Rectifier faceplate; 5150 Input slot is hidden",
+           showing (findById (root, "input_trim")) && findById (ed->getHead(), "input_trim") == nullptr
+               && findById (root, "m5150_input_trim") != nullptr && ! showing (findById (root, "m5150_input_trim")));
     if (auto* ma = dynamic_cast<juce::Slider*> (findById (root, "master")))
         check ("Master tooltip keeps the dB equivalent", ma->getTooltip().contains ("-6.0 dB"));
 
@@ -136,19 +139,20 @@ int editorValidation()
     check ("Model toggle sets preamp_model = 5150", getParam (p, "preamp_model") > 0.5f);
     check ("faceplate fade starts from Rectifier", ed->getHead().getFaceplateMix() < 0.5f);
     ed->getHead().syncModelNow();
-    checkCaptions ("5150", { "INPUT", "RHY PRE/R PRE", "LEAD PRE/L PRE", "LOW", "MID", "HIGH", "RHY POST/R POST", "LEAD POST/L POST",
+    checkCaptions ("5150", { "RHY PRE/R PRE", "LEAD PRE/L PRE", "LOW", "MID", "HIGH", "RHY POST/R POST", "LEAD POST/L POST",
                              "RESONANCE/RESO", "PRESENCE/PRES" });
     check ("5150 faceplate: 5150 Presence/Resonance shown, Rectifier-only hidden",
            showing (findById (root, "lead_presence")) && showing (findById (root, "lead_resonance"))
                && ! showing (findById (root, "channel")) && ! showing (findById (root, "red_voice")) && ! showing (findById (root, "pre_presence")));
-    {   // Rev2.4 faceplate: no Master; channel select, Bright/Crunch, per-channel Pre/Post, its own Input
+    {   // 5150 faceplate: no Master, no Input (shared Input Cal stays on the drawer)
         bool all5150 = true;
-        for (auto* id : { "m5150_input_trim", "m5150_channel", "m5150_bright", "m5150_crunch", "m5150_rhythm_pre", "m5150_lead_pre",
+        for (auto* id : { "m5150_channel", "m5150_bright", "m5150_crunch", "m5150_rhythm_pre", "m5150_lead_pre",
                           "m5150_low", "m5150_mid", "m5150_high", "m5150_rhythm_post", "m5150_lead_post" })
             all5150 = all5150 && showing (findById (root, id));
-        check ("5150 faceplate: own Input, RHY/LEAD, Bright, Crunch, Pre/Post per channel; no Master",
+        check ("5150 faceplate: RHY/LEAD, Bright, Crunch, Pre/Post per channel; no Master or Input knob",
                all5150 && ! showing (findById (root, "master")) && ! showing (findById (root, "pre_gain"))
-                   && ! showing (findById (root, "input_trim")));
+                   && ! showing (findById (root, "m5150_input_trim")) && showing (findById (root, "input_trim"))
+                   && findById (ed->getHead(), "input_trim") == nullptr);
         check ("Bright/Crunch dimmed/disabled on Lead", ! findById (root, "m5150_bright")->isEnabled() && ! findById (root, "m5150_crunch")->isEnabled());
         setParam (p, "m5150_channel", 0.0f);
         ed->getHead().syncModelNow();
@@ -173,6 +177,7 @@ int editorValidation()
     ed->setDrawerOpen (false);
     check ("drawer closed hides pedals and shrinks the window",
            ! showing (findById (root, "od_drive")) && ed->getHeight() < openH && ! p.editorDrawerOpen);
+    check ("Input Cal stays visible when the drawer is closed", showing (findById (root, "input_trim")));
     check ("closed aspect = 1100 x closed design height",
            std::abs ((double) ed->getWidth() / ed->getHeight() - 1100.0 / JuicyboiAudioProcessorEditor::closedHeight) < 0.01);
     ed->setDrawerOpen (true);

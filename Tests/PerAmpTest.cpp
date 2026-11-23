@@ -133,7 +133,8 @@ int perAmpValidation()
     {
         auto changeRect = [] (P& p)
         {
-            for (auto* id : { "input_trim", "pre_gain", "pre_bass", "pre_mid", "pre_treble", "pre_presence", "master" }) set (p, id, 9.0f);
+            // input_trim is the shared calibration (not a Rectifier-only knob)
+            for (auto* id : { "pre_gain", "pre_bass", "pre_mid", "pre_treble", "pre_presence", "master" }) set (p, id, 9.0f);
             set (p, "od_enable", 1.0f); set (p, "od_type", 1.0f); set (p, "eq_enable", 1.0f); set (p, "eq_100", 12.0f);
             set (p, "gate_enable", 1.0f); set (p, "gate_threshold", -20.0f); set (p, "cab_level", 9.0f); set (p, "channel", 1.0f);
         };
@@ -162,6 +163,38 @@ int perAmpValidation()
         check ("switching amps keeps each amp's knobs, boost and EQ",
                near (get (p, "pre_gain"), 3.0f) && get (p, "od_enable") > 0.5f && near (get (p, "eq_800"), 4.0f)
                    && near (get (p, "m5150_lead_pre"), 8.0f) && get (p, "m5150_od_enable") < 0.5f && near (get (p, "m5150_eq_800"), -6.0f));
+    }
+
+    // 5) shared input calibration (input_trim); m5150_input_trim is unused
+    {
+        auto withTrim = [] (int model, float shared, float unused5150)
+        {
+            P p;
+            set (p, "preamp_model", (float) model);
+            set (p, "input_trim", shared);
+            set (p, "m5150_input_trim", unused5150);
+            return render (p);
+        };
+        check ("m5150_input_trim does not touch the Rectifier's audio",
+               maxDiff (withTrim (0, 5.6f, 2.0f), withTrim (0, 5.6f, 9.0f)) == 0.0f);
+        check ("m5150_input_trim does not touch the 5150's audio",
+               maxDiff (withTrim (1, 5.6f, 2.0f), withTrim (1, 5.6f, 9.0f)) == 0.0f);
+        check ("input_trim is shared: it changes the 5150's audio",
+               maxDiff (withTrim (1, 5.6f, 5.6f), withTrim (1, 2.0f, 5.6f)) > 1.0e-4f);
+        check ("input_trim is shared: it changes the Rectifier's audio",
+               maxDiff (withTrim (0, 5.6f, 5.6f), withTrim (0, 2.0f, 5.6f)) > 1.0e-4f);
+
+        // A Rev2.4 session that had a different 5150 Input now uses the shared
+        // (Rectifier / legacy input_trim) value.
+        P diverged;
+        set (diverged, "input_trim", 5.6f);
+        set (diverged, "m5150_input_trim", 2.0f);
+        juce::MemoryBlock v4; diverged.getStateInformation (v4);
+        P loaded; loaded.setStateInformation (v4.getData(), (int) v4.getSize());
+        set (loaded, "preamp_model", 1.0f);
+        P expected; set (expected, "preamp_model", 1.0f); set (expected, "input_trim", 5.6f); set (expected, "m5150_input_trim", 9.0f);
+        check ("v4 session with a different 5150 Input uses the shared (Rectifier) input_trim",
+               near (get (loaded, "input_trim"), 5.6f) && maxDiff (render (loaded), render (expected)) == 0.0f);
     }
     return failures;
 }

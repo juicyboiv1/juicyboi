@@ -7,13 +7,21 @@ Each amp has its own complete set of settings, and switching amps
 
 | | Rectifier set | 5150 set |
 |---|---|---|
-| amp knobs | input_trim, pre_gain, pre_bass, pre_mid, pre_treble, pre_presence, master, channel (Red/Orange), red_voice (V1/V2) | m5150_input_trim, m5150_channel (Rhythm/Lead), m5150_bright, m5150_crunch, m5150_rhythm_pre, m5150_lead_pre, m5150_low, m5150_mid, m5150_high, m5150_rhythm_post, m5150_lead_post, lead_resonance, lead_presence |
+| amp knobs | pre_gain, pre_bass, pre_mid, pre_treble, pre_presence, master, channel (Red/Orange), red_voice (V1/V2) | m5150_channel (Rhythm/Lead), m5150_bright, m5150_crunch, m5150_rhythm_pre, m5150_lead_pre, m5150_low, m5150_mid, m5150_high, m5150_rhythm_post, m5150_lead_post, lead_resonance, lead_presence |
 | boost | od_enable, od_type (OD-808/SD-1), od_drive, od_tone, od_level | m5150_od_* |
 | post EQ | eq_enable, eq_100 … eq_6k4, eq_level | m5150_eq_* |
 | cab | cab_enable, cab_mic_blend, cab_level, IR A/B files (state properties ir_a / ir_b) | m5150_cab_*, m5150_ir_a / m5150_ir_b |
 | gate | gate_enable, gate_threshold, gate_hold, gate_release | m5150_gate_* |
 
-Global: `preamp_model` (which amp) and `bypass`.
+Global: `preamp_model` (which amp), `bypass`, and `input_trim` (shared input
+calibration for both amps; 0–10, 5 = 0 dB). This is an interface-level trim
+(set once for the Scarlett, or any other DI), not a faceplate gain knob. It
+lives in a small setup plate on the pedalboard drawer front, labelled
+**INPUT CAL**.
+
+`m5150_input_trim` stays in the parameter layout (same ID, index and range)
+so host automation indices stay stable, but it is unused and hidden. Lanes
+recorded on it no longer change the sound.
 
 **The Rectifier modes share one set.** Red v1, Red v2 and Orange are channels
 and voicings of one amp: on the real amp they share the boost in front, the
@@ -21,11 +29,11 @@ pedals and the cab. Red v1/v2 is also an A/B tool, which only works if
 everything else stays the same. The 5150 is a different amp, so it gets its
 own set.
 
-Every amp gets its own input copy, boost, EQ, cab convolver and gate (keyed
-from the dry input). The two amps can never affect each other's audio
-(`PerAmpTest`, both directions bit-identical). During the 30 ms model
-crossfade both chains run. The inaudible amp's convolver is skipped and reset
-before reuse.
+Each amp has its own boost, EQ, cab convolver and gate (keyed from the dry
+input after the shared calibration). Aside from `input_trim`, the two amps
+can never affect each other's audio (`PerAmpTest`, both directions
+bit-identical). During the 30 ms model crossfade both chains run. The
+inaudible amp's convolver is skipped and reset before reuse.
 
 ## Parameter IDs and automation compatibility
 
@@ -36,19 +44,23 @@ before reuse.
   ID/code/name stay the same (com.juicyboi.juicyboi-rev2, Jcb2, "juicyboi
   Rev2"), so Rev2.4 replaces Rev2 in place.
 - **Behaviour change for old automation:** lanes recorded on
-  `pre_gain`, `od_*`, `eq_*`, `cab_*`, `gate_*`, `input_trim` or `master`
+  `pre_gain`, `od_*`, `eq_*`, `cab_*`, `gate_*` or `master`
   while the 5150 was active now move the Rectifier. To automate the 5150,
   re-record on the "5150 …" parameters.
   `lead_presence` / `lead_resonance` already belonged to the 5150 and still
-  do.
+  do. `input_trim` is once again a shared calibration (as it was before
+  Rev2.4): automating it moves both amps. Lanes recorded on
+  `m5150_input_trim` in Rev2.4 no longer have any effect.
 
 ## Migration (state v3 → v4)
 
 This runs once, when a session saved by Rev2.3 or older loads
 (`migrateToPerAmp`, after the v1/v2 dB→knob conversions):
 
-1. Every per-amp slot value (input, boost, EQ, cab, gate, IR paths) is copied
-   into the 5150 set. The legacy IDs keep it for the Rectifier.
+1. Every per-amp slot value (boost, EQ, cab, gate, IR paths, and unused
+   `m5150_input_trim`) is copied into the 5150 set. The legacy IDs keep it
+   for the Rectifier. The shared calibration `input_trim` already holds the
+   Rectifier / legacy input level, so old sessions keep that level.
 2. The old 5150 was the Lead channel on the shared knobs, so the mapping is:
    channel = Lead; Lead Pre = Gain; Low/Mid/High = Bass/Mid/Treble.
 3. The 5150 has no Master. Lead Post and Rhythm Post are set to the value
@@ -65,3 +77,17 @@ error 0). Old 5150 sessions keep all their boost/EQ/gate/cab settings. They
 sound like the new 5150 engine, which is intentional and not identical to
 Rev2.3. Because Post now drives the power section, a session that had a very
 high or low Master will compress more or less than before.
+
+## Shared input calibration (after Rev2.4)
+
+A real Rectifier or 5150 has no Input knob. `input_trim` is now one shared
+input calibration for both amps, still with the same ID, index and 0–10
+law. Old sessions keep the level the Rectifier (or the pre-Rev2.4 shared
+knob) was using.
+
+**Rev2.4 sessions where the 5150 had a different Input** now use the shared
+value (`input_trim`, i.e. the Rectifier's old Input). The unused
+`m5150_input_trim` value is left as saved but is not heard. The Rectifier
+path at default and at migrated settings is bit-identical to Rev2.4
+(`PerAmpTest` vs `rev2.3-migration-rect.f32`, `legacyRegression` vs
+`rect-rev2.3.f32`, `ResonanceTest` section 7 vs `lead-rev2.3.f32`).

@@ -20,7 +20,8 @@ Rev2.4 rebuilds the 5150 as Rhythm (Bright/Crunch) + Lead channels:
 - Post Gain driving a power-section stage;
 - a 4x12 load on which Resonance acts ([docs/5150.md](docs/5150.md));
 - a separate full set of settings for each amp (knobs, boost, EQ, cab, gate),
-  recalled when you switch amps ([docs/per-amp-state.md](docs/per-amp-state.md)).
+  recalled when you switch amps ([docs/per-amp-state.md](docs/per-amp-state.md));
+- a shared **Input Cal** trim (not on either faceplate) for the interface level.
 
 The Rectifier renders bit-identically to Rev2.3.
 Descriptive product names belong to their respective owners; no affiliation is implied.
@@ -103,14 +104,21 @@ Buses: mono→stereo (default, guitar DI), mono→mono, stereo→stereo.
 Latency: the oversampler's FIR latency (61 samples at 48 kHz), reported to the host.
 The dry/bypass path uses the same delay.
 
-## Input, Master, Boost Level & Cab Level (amp-style 0–10)
+## Input Cal, Master, Boost Level & Cab Level (amp-style 0–10)
 
 All four level knobs read **0.0–10.0** like an amp (one decimal); hover a knob to see the
 equivalent dB. The sound for a given dB level is unchanged — only the scale moved.
 
-- **Input** — linear in dB, **4.8 dB per number**: `dB = −24 + 4.8 × knob`.
-  **5 = unity (0 dB)**, the default. Above 5 hits the first stage harder (more
-  saturation/compression), below 5 cleans it up.
+- **Input Cal** (`input_trim`) — linear in dB, **4.8 dB per number**:
+  `dB = −24 + 4.8 × knob`. **5 = unity (0 dB)**, the default. This is a
+  **shared interface-level calibration** used by both amps, not a preamp
+  gain knob (a real Rectifier or 5150 has no Input control). Set it once
+  for your interface (e.g. a Scarlett 4i4). It lives in a small **INPUT CAL**
+  plate on the left of the pedalboard drawer front, always visible. Above 5
+  hits the first stage harder (more saturation/compression); below 5 cleans
+  it up. `m5150_input_trim` is kept in the parameter layout (stable host
+  index) but is unused and hidden. A Rev2.4 session where the 5150 had a
+  different Input now uses this shared value (the Rectifier's old Input).
 - **Master** — smooth audio taper with a hard mute at 0:
   `t = knob / 10`, `dB = −60 + (9224 t − 2352 t² − 320 t³) / 91` for knob > 0,
   **knob 0 = silence**. Monotonic, ~10 dB per number at the bottom down to ~4 dB
@@ -178,25 +186,27 @@ The aspect ratio is fixed, so everything stays crisp at any size.
 **Head.** Black tolex with chrome corner caps and a blonde basketweave grille.
 The **juicyboi** badge appears on the grille and nowhere else. The black control
 panel has a small *Rev2* plate (the plate shows the build revision; the GUI design is the Rev1 amp head). Each knob has a small creme caption **below** it,
-and nothing above the knobs. Hover any knob for a tooltip with its name and value. Input, Master, Boost Level and Cab Level
+and nothing above the knobs. Hover any knob for a tooltip with its name and value. Input Cal, Master, Boost Level and Cab Level
 tooltips also show the equivalent dB. A value bubble shows while you drag.
 Double-click a knob to reset it to its default. The toggles carry small position
 marks.
 
 | Faceplate | Toggles (left → right) | Knobs (left → right) |
 |-----------|------------------------|----------------------|
-| **Rectifier** (blonde grille, *Rev2* plate) | Standby (ON / STBY = `bypass`), Model (RECT / 5150), Channel (RED / ORNG), Voice (V1 / V2, dimmed on Orange) | Input, Gain, Bass, Mid, Treble, Presence, Master |
-| **5150** (all-black, dark grille, *Rev2 · 5150* plate) | Standby, Model, Rhythm/Lead marking (Lead lit) | Input, Gain, Low, Mid, High, 5150 Presence, 5150 Resonance, Master |
+| **Rectifier** (blonde grille, *Rev2* plate) | Standby (ON / STBY = `bypass`), Model (RECT / 5150), Channel (RED / ORNG), Voice (V1 / V2, dimmed on Orange) | Gain, Bass, Mid, Treble, Presence, Master |
+| **5150** (all-black, dark grille, *Rev2 · 5150* plate) | Standby, Model, Channel (RHY / LEAD), Bright and Crunch (Rhythm only, dimmed on Lead) | Rhy Pre, Lead Pre, Low, Mid, High, Rhy Post, Lead Post, Resonance, Presence |
 
 The **Model** toggle is the `preamp_model` parameter, so this is still one
 plugin. Flipping it fades between the faceplates in about 200 ms, and the knobs
 move to their new positions during the fade. Controls that belong only to the
-other model are hidden, but their saved values are kept. The 5150-inspired model
-is Lead-only, so the Rhythm/Lead marking is an indicator, not a switch.
+other model are hidden, but their saved values are kept. Neither faceplate has
+an Input knob; the shared Input Cal trim sits on the drawer front.
 
 **Pedalboard drawer.** Click the wooden drawer front (or its handle) to open or
 close it. The window grows or shrinks to match, and the open/closed state and
-window width are remembered while the plugin stays loaded.
+window width are remembered while the plugin stays loaded. A small **INPUT CAL**
+setup trim on the left of the drawer front is always visible (drawer open or
+closed); it is the shared `input_trim` calibration described above.
 - **Boost**: green stompbox with Drive, Tone and Level, an OD/SD mini toggle
   (`od_type`), a footswitch for `od_enable`, and an LED.
 - **7-band EQ**: creme pedal with all 7 faders (100, 200, 400, 800, 1.6k, 3.2k
@@ -380,7 +390,7 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 
 | ID             | Name        | Range            | Default |
 |----------------|-------------|------------------|---------|
-| `input_trim`   | Input       | 0 … 10 (5 = 0 dB, 4.8 dB/number) | 5 (= 0 dB) |
+| `input_trim`   | Input Cal   | 0 … 10 (5 = 0 dB, 4.8 dB/number); shared by both amps | 5 (= 0 dB) |
 | `od_enable`    | Boost On    | bool             | off     |
 | `od_type`      | Boost Type  | OD-808 / SD-1    | OD-808  |
 | `od_drive`     | Boost Drive | 0 … 10           | 2       |
@@ -420,7 +430,7 @@ Source/
   gui/Rev1Style.h/.cpp     palette, LookAndFeel (chrome/pedal knobs, faders, tooltips),
                            ParamSlider / ToggleSwitch / Footswitch parameter controls
   gui/AmpHead.h/.cpp       amp head, Rectifier/5150 faceplates + fade, cached static art
-  gui/Pedalboard.h/.cpp    drawer: Boost, 7-band EQ, Gate pedals, Cab panel, IR slots
+  gui/Pedalboard.h/.cpp    drawer: Boost, 7-band EQ, Gate pedals, Cab panel, IR slots, Input Cal
   Parameters.h/.cpp        parameter IDs + layout
   dsp/
     Filters.h              OnePole (RC-style 6 dB/oct) + RBJ Biquad, per-channel state
