@@ -61,8 +61,8 @@ private:
     Cab side panel. Closed = only the wooden drawer front shows; click it to open/close.
     Rev2.4: there is one control set per amp (docs/per-amp-state.md); the set of the amp
     selected by `preamp_model` is shown, the other is hidden but stays bound.
-    A small Input Cal trim on the drawer front is the shared interface-level
-    calibration (input_trim), used by both amps and not shown on either head. */
+    A small Input Cal trim and a Full Amp / Preamp Out toggle sit on the
+    drawer front (shared by both amps, always visible). */
 class Pedalboard final : public juce::Component, private juce::Timer
 {
 public:
@@ -118,6 +118,7 @@ private:
         ParamSlider cabBlend, cabLevel;
         std::array<std::unique_ptr<IRDropZone>, 2> irZones;
         std::vector<juce::Component*> all();
+        std::vector<juce::Component*> cabControls();
     };
     std::array<std::unique_ptr<AmpControls>, 2> sets;
     int shownAmp = -1;
@@ -130,6 +131,10 @@ private:
     juce::Label inputCalLabel;
     // Hidden: keeps a bound control for unused m5150_input_trim (stable host index).
     ParamSlider unused5150Input;
+    ToggleSwitch preampOut;
+    juce::Label preampOutLabel;
+
+    void syncPreampOutDim();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Pedalboard)
 };

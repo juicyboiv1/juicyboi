@@ -148,7 +148,7 @@ String IRDropZone::getTooltip()
 
 void IRDropZone::mouseUp (const MouseEvent& e)
 {
-    if (! e.mouseWasClicked()) return;
+    if (! isEnabled() || ! e.mouseWasClicked()) return;
     chooser = std::make_unique<FileChooser> ("Load " + dsp::CabSim::slotName (slot), File(), "*.wav;*.aif;*.aiff;*.flac");
     chooser->launchAsync (FileBrowserComponent::openMode | FileBrowserComponent::canSelectFiles,
                           [safe = Component::SafePointer<IRDropZone> (this)] (const FileChooser& fc)
@@ -163,6 +163,7 @@ void IRDropZone::mouseUp (const MouseEvent& e)
 
 bool IRDropZone::isInterestedInFileDrag (const StringArray& files)
 {
+    if (! isEnabled()) return false;
     for (auto& f : files)
         if (File (f).hasFileExtension ("wav;aif;aiff;flac"))
             return true;
@@ -172,6 +173,7 @@ bool IRDropZone::isInterestedInFileDrag (const StringArray& files)
 void IRDropZone::filesDropped (const StringArray& files, int, int)
 {
     hovering = false;
+    if (! isEnabled()) { repaint(); return; }
     for (auto& f : files)
         if (File (f).hasFileExtension ("wav;aif;aiff;flac"))
         {
@@ -246,6 +248,13 @@ std::vector<Component*> Pedalboard::AmpControls::all()
     return v;
 }
 
+std::vector<Component*> Pedalboard::AmpControls::cabControls()
+{
+    std::vector<Component*> v { &cabOn, &cabBlend, &cabLevel };
+    for (auto& z : irZones) v.push_back (z.get());
+    return v;
+}
+
 Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
     : proc (p),
       boost (Pedal::Kind::stomp, colours::boostGreen, colours::boostGreenD, colours::creme, "BOOST"),
@@ -259,7 +268,8 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
                            + " dB (shared by both amps; 5 = unity, 4.8 dB per number). "
                              "Set once for your interface level - this is not a preamp gain knob.";
                 }),
-      unused5150Input (p.apvts, jb::params::ampId (1, jb::params::AmpSlot::inputTrim), ParamSlider::Style::pedalKnob)
+      unused5150Input (p.apvts, jb::params::ampId (1, jb::params::AmpSlot::inputTrim), ParamSlider::Style::pedalKnob),
+      preampOut (p.apvts, pid::preampOut, "PRE", "FULL", true, true)
 {
     for (auto* pd : { &boost, &eq, &gate, &cab })
         addAndMakeVisible (*pd);
@@ -410,6 +420,20 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
     unused5150Input.setVisible (false);
     addChildComponent (unused5150Input);
 
+    preampOut.extraTip = "Full Amp is the complete plugin (cab, speaker load, 5150 Presence/Resonance). "
+                         "Preamp Out is for a real amp's effects return: preamp, boost, tone stack, post EQ and gate only.";
+    addAndMakeVisible (preampOut);
+    preampOutLabel.setText ("PREAMP OUT", dontSendNotification);
+    preampOutLabel.setFont (uiFont (8.5f));
+    preampOutLabel.setColour (Label::textColourId, colours::creme.withAlpha (0.9f));
+    preampOutLabel.setJustificationType (Justification::centredLeft);
+    preampOutLabel.setBorderSize ({});
+    preampOutLabel.setInterceptsMouseClicks (false, false);
+    preampOutLabel.setTooltip (preampOut.getTooltip());
+    addAndMakeVisible (preampOutLabel);
+    preampOut.onChange = [this] { syncPreampOutDim(); };
+    syncPreampOutDim();
+
     startTimerHz (30);
 }
 
@@ -433,9 +457,23 @@ Pedalboard::~Pedalboard() { stopTimer(); }
 void Pedalboard::timerCallback()
 {
     showAmp (activeAmp());
+    syncPreampOutDim();
     if (! open) return;
     for (auto* pd : { &boost, &eq, &gate, &cab })
         pd->pollLed();
+}
+
+void Pedalboard::syncPreampOutDim()
+{
+    const bool pre = proc.apvts.getRawParameterValue (pid::preampOut)->load() > 0.5f;
+    const auto a = pre ? 0.45f : 1.0f;
+    cab.setAlpha (a);
+    for (int amp = 0; amp < 2; ++amp)
+        for (auto* c : sets[(size_t) amp]->cabControls())
+        {
+            c->setEnabled (! pre);
+            c->setAlpha (a);
+        }
 }
 
 void Pedalboard::setOpen (bool o)
@@ -459,7 +497,9 @@ void Pedalboard::resized()
     // Small setup trim on the left of the drawer front (always visible).
     const auto fb = front.getBounds();
     inputCal.setBounds (Rectangle<int> (32, 32).withCentre ({ fb.getX() + 30, fb.getCentreY() }));
-    inputCalLabel.setBounds (fb.getX() + 50, fb.getY() + 8, 100, fb.getHeight() - 16);
+    inputCalLabel.setBounds (fb.getX() + 50, fb.getY() + 8, 72, fb.getHeight() - 16);
+    preampOutLabel.setBounds (fb.getX() + 124, fb.getY() + 8, 78, fb.getHeight() - 16);
+    preampOut.setBounds (Rectangle<int> (116, 44).withCentre ({ fb.getX() + 256, fb.getCentreY() }));
     unused5150Input.setBounds ({});
 }
 
@@ -515,7 +555,7 @@ void Pedalboard::Front::paint (Graphics& g)
 
     // Recessed setup plate on the left (Input Cal knob sits on top of it).
     {
-        const auto plate = Rectangle<float> (10.0f, 8.0f, 142.0f, b.getHeight() - 16.0f);
+        const auto plate = Rectangle<float> (10.0f, 8.0f, 318.0f, b.getHeight() - 16.0f);
         g.setColour (Colours::black.withAlpha (0.4f));
         g.fillRoundedRectangle (plate.translated (0.0f, 1.5f), 5.0f);
         g.setColour (Colour (0xff24150c));

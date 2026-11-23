@@ -145,6 +145,9 @@ void AmpHead::timerCallback()
     // keep the Rhythm-only switch dimming in step with automation of the channel
     const bool rhythmNow = ! channel5.isOne();
     if (rhythmNow != bright.isEnabled()) updateFaceplate();
+    // 5150 Presence/Resonance dim when Preamp Out is engaged (power-amp NFB is bypassed)
+    const bool preampOut = proc.apvts.getRawParameterValue (pid::preampOut)->load() > 0.5f;
+    if (preampOut == leadPresence.isEnabled()) updateFaceplate();
 }
 
 void AmpHead::updateFaceplate()
@@ -186,6 +189,14 @@ void AmpHead::updateFaceplate()
     rhythmPost.setAlpha (a * (rhythm ? 1.0f : 0.6f));
     leadPre.setAlpha (a * (rhythm ? 0.6f : 1.0f));
     leadPost.setAlpha (a * (rhythm ? 0.6f : 1.0f));
+    const bool preampOut = proc.apvts.getRawParameterValue (pid::preampOut)->load() > 0.5f;
+    leadResonance.setEnabled (! preampOut);
+    leadPresence.setEnabled (! preampOut);
+    if (preampOut)
+    {
+        leadResonance.setAlpha (a * 0.45f);
+        leadPresence.setAlpha (a * 0.45f);
+    }
     syncKnobLabels();
 }
 
