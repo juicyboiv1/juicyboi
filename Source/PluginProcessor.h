@@ -21,9 +21,10 @@
 
 /** juicyboi — heavy-riff preamp. Two amps, each with its OWN full settings set
     (Rev2.4, docs/per-amp-state.md); `preamp_model` picks the one you hear:
-      Rectifier: Input -> [4x: Boost -> Red v1|v2 / Orange cascade -> TMB ->
+      Shared input calibration (input_trim) then:
+      Rectifier: [4x: Boost -> Red v1|v2 / Orange cascade -> TMB ->
                  recovery -> (Red v2) 4x12 load] -> EQ -> Cab -> Gate -> Master
-      5150:      Input -> [4x: Boost -> Rhythm|Lead cascade (Pre Gain networks)
+      5150:      [4x: Boost -> Rhythm|Lead cascade (Pre Gain networks)
                  -> shared TMB -> Post Gain -> power section] -> EQ ->
                  Presence/Resonance + 4x12 load -> Cab -> Gate   (no Master)
     The two amp outputs crossfade (30 ms) after their gates, then the global
@@ -66,8 +67,9 @@ public:
 
     juce::AudioProcessorValueTreeState apvts;
 
-    /** Root state property: 4 = per-amp settings (Rev2.4); 3 = Input/Master/Boost
-        Level/Cab Level are 0–10 knobs; 2 = only Input/Master; absent = 1 = all four in dB. */
+    /** Root state property: 4 = per-amp settings (Rev2.4; input_trim is the
+        shared input calibration); 3 = Input/Master/Boost Level/Cab Level are
+        0–10 knobs; 2 = only Input/Master; absent = 1 = all four in dB. */
     static constexpr const char* stateVersionKey = "jb_state_version";
 
     //== Cab IR slots (message thread) =========================================
@@ -183,14 +185,13 @@ private:
     jb::dsp::ChannelVoicing voicingA, voicingAv1, voicingB;
 
     juce::SmoothedValue<float> modelMix; // base-rate, after both amps' gates (Rev2.4)
-    juce::SmoothedValue<float> inputGain, masterGain, bypassMix; // base rate
+    juce::SmoothedValue<float> inputGain, masterGain, bypassMix; // base rate (inputGain = shared cal)
     juce::SmoothedValue<float> odMix, odTypeMix, channelMix, redVoiceMix; // oversampled rate
-    juce::SmoothedValue<float> inputGain5; // base rate
     juce::SmoothedValue<float> odMix5, odTypeMix5, chMix5, postLead5, postRhythm5; // oversampled rate
 
     juce::dsp::DelayLine<float, juce::dsp::DelayLineInterpolationTypes::None> dryDelay { 8192 };
     juce::AudioBuffer<float> dryBuffer, leadBuffer;
-    juce::AudioBuffer<float> keyBuffer, keyBuffer5; // mono gate keys: post-trim, pre-gain (per amp)
+    juce::AudioBuffer<float> keyBuffer, keyBuffer5; // mono gate keys: post shared-cal, pre-gain (per amp)
 
     int maxChunk = 512;
     int lastChannel = -1;

@@ -87,13 +87,15 @@ const char* ampIrKey (int amp, int slot)
     return amp == 0 ? legacy[s] : prefixed().irKeys[(size_t) s].c_str();
 }
 
-/** The per-amp slot parameters (boost, post EQ, cab, gate, input) for one amp. */
+/** The per-amp slot parameters (boost, post EQ, cab, gate) for one amp.
+    AmpSlot::inputTrim is still appended for amp 1 so m5150_input_trim keeps its
+    host index; it is unused (both amps use the shared input_trim calibration). */
 static void addAmpSlots (AudioProcessorValueTreeState::ParameterLayout& layout, int amp)
 {
     const String pre = amp == 0 ? String() : String ("5150 ");
     auto pid = [amp] (AmpSlot s) { return ampId (amp, s); };
 
-    layout.add (levelKnob (pid (AmpSlot::inputTrim), pre + "Input", taper::inputDefaultKnob));
+    layout.add (levelKnob (pid (AmpSlot::inputTrim), pre + "Input (unused)", taper::inputDefaultKnob));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { pid (AmpSlot::odEnable), versionHint }, pre + "Boost On", false));
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { pid (AmpSlot::odType), versionHint }, pre + "Boost Type",
                                                         StringArray { "OD-808", "SD-1" }, 0));
@@ -124,8 +126,9 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
 {
     AudioProcessorValueTreeState::ParameterLayout layout;
 
-    // Input: 0–10, 5 = unity (0 dB), 4.8 dB per number. See LevelTaper.h.
-    layout.add (levelKnob (id::inputTrim, "Input", taper::inputDefaultKnob));
+    // Shared input calibration (both amps): 0–10, 5 = unity (0 dB), 4.8 dB per
+    // number. Not a faceplate gain knob; set once for the interface level.
+    layout.add (levelKnob (id::inputTrim, "Input Cal", taper::inputDefaultKnob));
 
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::odEnable, versionHint }, "Boost On", false));
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::odType, versionHint }, "Boost Type",
@@ -186,8 +189,9 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (knob (id::leadResonance, "5150 Resonance", 0.0f));
 
     // Rev2.4 (appended): the 5150 faceplate, then the 5150's own copy of every
-    // per-amp slot (boost, post EQ, cab, gate, input). The legacy IDs above stay
-    // the Rectifier's set; their indices and defaults are unchanged.
+    // per-amp slot (boost, post EQ, cab, gate, and unused m5150_input_trim).
+    // The legacy IDs above stay the Rectifier's set (input_trim is the shared
+    // calibration); their indices and defaults are unchanged.
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::m5150Channel, versionHint }, "5150 Channel",
                                                         StringArray { "Rhythm", "Lead" }, 1));
     layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::m5150Bright, versionHint }, "5150 Rhythm Bright", false));

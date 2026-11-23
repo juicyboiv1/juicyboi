@@ -136,7 +136,6 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     odTypeMix .reset (osRate, 0.02);
     channelMix.reset (osRate, 0.02);
     redVoiceMix.reset (osRate, 0.03);
-    inputGain5.reset (sampleRate, 0.02);
     odMix5    .reset (osRate, 0.015);
     odTypeMix5.reset (osRate, 0.02);
     chMix5    .reset (osRate, 0.02);
@@ -153,7 +152,6 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     redVoiceMix.setCurrentAndTargetValue (pRedVoice->load() > 0.5f ? 1.0f : 0.0f);
     {
         using S = params::AmpSlot;
-        inputGain5.setCurrentAndTargetValue (taper::inputKnobToGain (p5 (S::inputTrim)));
         odMix5    .setCurrentAndTargetValue (p5 (S::odEnable) > 0.5f ? 1.0f : 0.0f);
         odTypeMix5.setCurrentAndTargetValue (p5 (S::odType) > 0.5f ? 1.0f : 0.0f);
         chMix5    .setCurrentAndTargetValue (p5Channel->load() > 0.5f ? 1.0f : 0.0f);
@@ -251,7 +249,6 @@ void JuicyboiAudioProcessor::updateParameters()
     // Rev2.4: the 5150's own set (docs/per-amp-state.md)
     {
         using S = params::AmpSlot;
-        inputGain5.setTargetValue (taper::inputKnobToGain (p5 (S::inputTrim)));
         odMix5    .setTargetValue (p5 (S::odEnable) > 0.5f ? 1.0f : 0.0f);
         odTypeMix5.setTargetValue (p5 (S::odType) > 0.5f ? 1.0f : 0.0f);
         const auto d5 = p5 (S::odDrive) / 10.0f, t5 = p5 (S::odTone) / 10.0f;
@@ -338,23 +335,17 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         }
     }
 
-    // 1) Input trim. Rev2.4: the 5150 gets its own copy of the raw input and
-    //    its own Input knob; the Rectifier path below is byte-for-byte Rev2.3.
-    for (int ch = 0; ch < numProc; ++ch)
-        leadBuffer.copyFrom (ch, 0, buffer, ch, start, len);
-
+    // 1) Shared input calibration (input_trim). The Rectifier's in-place
+    //    multiply is unchanged from Rev2.4; the 5150 then hears the same
+    //    trimmed guitar (m5150_input_trim is unused / hidden).
     for (int i = 0; i < len; ++i)
     {
         const auto g = inputGain.getNextValue();
         for (int ch = 0; ch < numProc; ++ch)
             buffer.getWritePointer (ch, start)[i] *= g;
     }
-    for (int i = 0; i < len; ++i)
-    {
-        const auto g = inputGain5.getNextValue();
-        for (int ch = 0; ch < numProc; ++ch)
-            leadBuffer.getWritePointer (ch)[i] *= g;
-    }
+    for (int ch = 0; ch < numProc; ++ch)
+        leadBuffer.copyFrom (ch, 0, buffer, ch, start, len);
 
     // 1b) Gate keys: clean post-trim guitar (mono sum), captured before any
     //     gain stage so the detector follows picking, not preamp hiss.
@@ -652,8 +643,10 @@ void JuicyboiAudioProcessor::migrateToPerAmp (juce::ValueTree& tree)
         child.setProperty ("value", v, nullptr);
     };
 
-    // Every per-amp slot (Input, Boost, post EQ, Cab, Gate): the old value goes
-    // into the 5150's set too; the legacy IDs remain the Rectifier's set.
+    // Every per-amp slot (boost, post EQ, cab, gate, and unused m5150_input_trim):
+    // the old value goes into the 5150's set too; the legacy IDs remain the
+    // Rectifier's set. input_trim is the shared calibration and already holds
+    // the Rectifier / legacy input level, so old sessions keep that level.
     for (int s = 0; s < params::numAmpSlots; ++s)
         setValue (params::ampId (1, (params::AmpSlot) s), valueOf (params::ampId (0, (params::AmpSlot) s)));
 

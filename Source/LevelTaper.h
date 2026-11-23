@@ -5,7 +5,8 @@
 
 /** Amp-style 0–10 scales for the Input and Master knobs (since state version 2).
 
-    Input  (input_trim): linear in dB, 4.8 dB per number.
+    Input Cal (input_trim): linear in dB, 4.8 dB per number. Shared by both
+    amps as an interface-level calibration (not a per-amp faceplate knob).
         dB = -24 + 4.8 * x            0 = -24 dB, 5 = 0 dB (unity), 10 = +24 dB
 
     Master (master): smooth audio taper with a hard mute at 0.
@@ -32,7 +33,8 @@ namespace jb::taper
 // 1 = Input/Master/Boost Level/Cab Level stored in dB
 // 2 = Input/Master are 0–10 knobs; Boost Level/Cab Level still dB
 // 3 = all four are 0–10 knobs
-// 4 = Rev2.4 per-amp settings (the 5150 set is copied from the legacy IDs on load)
+// 4 = Rev2.4 per-amp settings (the 5150 set is copied from the legacy IDs on load).
+//     input_trim is the shared input calibration; m5150_input_trim is unused.
 inline constexpr int stateVersion = 4; // Rev2.4: per-amp settings (5150 set migrated from the legacy IDs)
 
 inline constexpr float inputDefaultKnob  = 5.0f; // 0 dB  (old default)
