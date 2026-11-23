@@ -557,9 +557,13 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
             for (int ch = 0; ch < numProc; ++ch)
             {
                 auto& r = buffer.getWritePointer (ch, start)[i];
-                r += po * (preampBuffer.getReadPointer (ch)[i] * preampOutGain - r);
                 auto& l = leadBuffer.getWritePointer (ch)[i];
-                l += po * (preampBuffer5.getReadPointer (ch)[i] * preampOutGain - l);
+                const auto rPre = preampBuffer.getReadPointer (ch)[i] * preampOutGain;
+                const auto lPre = preampBuffer5.getReadPointer (ch)[i] * preampOutGain;
+                // Exact assign at the endpoints: r += 1*(pre-r) is not bit-identical
+                // to r = pre (rounding), and would leak Presence/cab by 1 ULP.
+                if (po >= 1.0f)      { r = rPre; l = lPre; }
+                else if (po > 0.0f)  { r += po * (rPre - r); l += po * (lPre - l); }
             }
         }
     }
