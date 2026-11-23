@@ -307,7 +307,7 @@ struct Voicing5150
     // that restores the Rev2.4 cascade output at Pre 7-10
     std::array<float, 6> triodeDrive       { 2.82f, 3.987f, 2.583f, 3.686f, 2.577f, 1.092f };   // Lead
     std::array<float, 6> rhythmTriodeDrive { 2.366f, 0.42f, 2.816f, 0.598f, 3.076f, 0.842f }; // Rhythm
-    float triodeLevelLead = 1.757f, triodeLevelRhythm = 1.657f;
+    float triodeLevelLead = 1.612f, triodeLevelRhythm = 1.298f;
     bool behavioural = false;    // tests/tools only: Rev2.4 static curves (A/B reference)
     double outLpHz = 12000.0;    // power-section / OT bandwidth stand-in (not a preamp part)
     float  outGain = 0.72f;

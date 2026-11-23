@@ -314,11 +314,11 @@ public:
         cathode is unbypassed (no shelf: the gain is degenerated everywhere). */
     struct Shelf { double wz = 0, wp = 0; };
     /** Fraction (in dB) of the cathode-bypass bass loss that ShelfEq gives back.
-        0 = the bare circuit (Rev3 WIP: 40 Hz 7-10 dB under Rev2.4), 1 = fully
-        cancelled (40 Hz 2-5 dB over Rev2.4 once the stages saturate). 0.5 puts
-        the driven 40/80/100 Hz response within ~1 dB of Rev2.4 on Red v2 and the
-        5150 (juicyboi_bassprobe, docs/triode.md "Low end"). */
-    static constexpr double kShelfCompensation = 0.5;
+        0 = the bare circuit (40 Hz 7-10 dB under Rev2.4), 1 = fully cancelled
+        (40 Hz 2-5 dB over Rev2.4 once the stages saturate, looser palm mutes).
+        0.8 keeps the driven 40/80/100 Hz response of Rev2.4 (juicyboi_bassprobe,
+        docs/triode.md "Low end"). */
+    static constexpr double kShelfCompensation = 0.8;
     Shelf cathodeShelf() const noexcept
     {
         if (p.ck <= 0.0 || p.rk <= 0.0) return {};
