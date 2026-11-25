@@ -97,7 +97,8 @@ first). Diode RS (0.57 Ω; under 1 mV at these currents). The 1N916/1S2473 use
 the 1N914 model. The input buffer's source impedance and the tone-stage load on
 the clipper are not modelled. 1.0 digital = 1 V at the pedal input. The stages
 after the clipper (Tone blend, Level, output HP) are the Rev2.1 behavioural ones,
-now smoothed; solving the active tone stage is a next step.
+now smoothed. **Rev3.1:** the post-clip network (post LP, active tone stage, Level pot,
+output buffer) is now solved too, see [pedal-tone.md](pedal-tone.md).
 
 ## 4. Validation against ngspice
 

@@ -31,6 +31,13 @@ coupling-cap bias shift / blocking), validated against ngspice to < 0.03 % RMS
 of swing ([docs/triode.md](docs/triode.md)). Bass at 40/80/100 Hz stays within
 ~1 dB of Rev2.4. Rev3 is a new plugin (`juicyboi Rev3`, `Jcb3`) that replaces Rev2;
 Rev2.4 is the git tag `rev2.4`. Next step: power-supply sag.
+
+**Rev3.1 (v3.1.0)** makes both Boost pedals fully component-level: the post-clip
+LP, active tone stage, Level pot and output buffer of the OD-808 (TS-808 values,
+808 output network) and SD-1 (Boutique-mod values) are solved exactly and
+validated against ngspice (≤ 0.08 dB to 10 kHz) ([docs/pedal-tone.md](docs/pedal-tone.md)).
+Same plugin/app identity as Rev3 (`juicyboi Rev3`, `Jcb3`, `juicyboi Rev3.app`), so
+it installs over Rev3 and state carries over. Boost off is bit-identical to Rev3.
 Descriptive product names belong to their respective owners; no affiliation is implied.
 
 ## Build
@@ -65,8 +72,8 @@ bundled AAX SDK; you can point at a separate Avid tree with
 | AAX | `build/juicyboi_artefacts/Release/AAX/juicyboi Rev3.aaxplugin` |
 | Standalone | `build/juicyboi_artefacts/Release/Standalone/juicyboi Rev3.app` |
 
-The Standalone app carries the version (`juicyboi Rev3.app` for 3.0, `juicyboi
-Rev3.1.app` for 3.1; the patch level is not included). Rev3 has its own identity
+The Standalone app is named after the major revision only: every 3.x is
+`juicyboi Rev3.app` (Rev3.1 installs over Rev3; the version is in the bundle info). Rev3 has its own identity
 (`juicyboi Rev3`, code `Jcb3`, bundle/AAX ID `com.juicyboi.juicyboi-rev3`, LV2
 `urn:juicyboi:juicyboi-rev3`) and replaces Rev2 as the baseline: remove the old
 `juicyboi Rev2` / `juicyboi` bundles when installing. Rev2 sessions do not load
@@ -327,11 +334,17 @@ documented topology principles — not a product clone (no commercial branding).
 
 - **OD-808** (default): TS-808 clipping stage solved per sample (4.7k/0.047µF
   gain leg, 51k + 500kA Drive, 51 pF, 1N914 pair, 4558-class op-amp) — symmetric
-  mid-hump boost into high gain.
+  mid-hump boost into high gain. Rev3.1: R7/C5 post LP, active tone stage
+  (20k G-taper Tone, 220 Ω/0.22 µF, 1k feedback, 10k bias), 100k Level and the
+  2SC1815 follower with the 808 output network (100 Ω / 10 µF / 10 kΩ) are solved too.
 - **SD-1**: SD-1 clipping stage solved per sample with the Boutique Overdrive
   mod values (1k/0.22µF leg, 10k + 500kA Drive, no feedback cap) and the stock
-  asymmetric diodes (2 one way, 1 the other); 1 kHz post LP, C6 removed.
-- Values, sources, assumptions and ngspice validation: [docs/diode-clippers.md](docs/diode-clippers.md).
+  asymmetric diodes (2 one way, 1 the other). Rev3.1: 1k/0.15 µF post LP, 5k linear
+  Tone with 470 Ω/0.15 µF, 1k feedback, C6 removed, 22 µF coupling, 100kA Level, follower.
+- Level 0 dB (default) = the real pedal with its Level pot fully up. Into a
+  high-gain amp, Level −6 to −12 dB keeps more dynamics ([docs/pedal-tone.md](docs/pedal-tone.md) §6).
+- Values, sources, assumptions and ngspice validation: [docs/diode-clippers.md](docs/diode-clippers.md) (clippers),
+  [docs/pedal-tone.md](docs/pedal-tone.md) (tone/level/output).
 - Switching Type crossfades both circuits (no clicks); Drive/Tone/Level are smoothed per sample.
 - Tip: when A/B'ing Type, match perceived loudness with **Boost Level** (SD-1
   can hit a bit hotter at the same Drive).
