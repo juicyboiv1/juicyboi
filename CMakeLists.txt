@@ -154,6 +154,15 @@ if(JUICYBOI_BUILD_TESTS)
         $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
     target_link_libraries(juicyboi_dynamics PRIVATE juicyboi juce::juce_recommended_config_flags)
 
+    # Rev3.1 OD-808 compression / clarity probe (stock + measured-only mods): juicyboi_boostprobe
+    juce_add_console_app(juicyboi_boostprobe PRODUCT_NAME "juicyboi_boostprobe")
+    target_sources(juicyboi_boostprobe PRIVATE Tests/BoostProbe.cpp)
+    target_include_directories(juicyboi_boostprobe PRIVATE Source
+        $<TARGET_PROPERTY:juicyboi,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(juicyboi_boostprobe PRIVATE
+        $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
+    target_link_libraries(juicyboi_boostprobe PRIVATE juicyboi juce::juce_recommended_config_flags)
+
     # Rev3 drive-staging probe (plain C++): juicyboi_triode_tune <voice> [trims|search]
     add_executable(juicyboi_triode_tune Tests/TriodeTune.cpp Source/dsp/PreampCascade.cpp)
     target_include_directories(juicyboi_triode_tune PRIVATE Source)
