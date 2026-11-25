@@ -1,0 +1,48 @@
+* juicyboi Rev3.1 — OD-808 (TS-808 values) post-clip network: R7/C5 LP, active tone stage,
+* Level pot, 2SC1815 emitter follower and output network (validation netlist, AC).
+* Values: TS-808 schematic (S. Cerutti drawing) + ElectroSmash TS808 analysis/BOM.
+* Vr (4.5 V, decoupled by 47-100 uF) is an ideal source = AC ground. The clipper op-amp output
+* drives "clip" (ideal source, as in the model). Tone op-amp: single-pole G-C-R
+* (gbw/a0 params; plot_pedaltone.py runs ideal 1e13/1e9 and the 4558's 3 MHz/1e5).
+* plot_pedaltone.py rewrites the .param line and the wrdata file name.
+.param tau=0.5 lev=0.25119 gbw=1e13 a0=1e9
+Vcc vcc 0 DC 9
+Vr  vr  0 DC 4.5
+Vin clip 0 DC 0 AC 1
+* post-clip LP R7/C5 and (+) bias R9
+R7  clip a 1k
+C5  a 0 0.22u
+R9  a vr 10k
+* Tone 20k strung (+) a .. w .. n (-); wiper R8/C6 to ground
+RTA a w {max(tau*20k,1m)}
+RTN w n {max((1-tau)*20k,1m)}
+R8  w x 220
+C6  x 0 0.22u
+* tone op-amp (single pole) + feedback R10
+Gt  0 vt a n 1
+Ct  vt 0 {1/(2*3.14159265358979*gbw)}
+Rt  vt 0 {a0}
+Et  y 0 vt 0 1
+R10 y n 1k
+* R11 / C7 into Level 100k (cold lug to Vr), bypass-JFET bias 510k at the wiper
+R11 y p 1k
+C7  p q 1u
+RLU q wv {max((1-lev)*100k,1m)}
+RLL wv vr {max(lev*100k,1m)}
+RD  wv vr 510k
+* C8 / R13 into the emitter follower (R14 10k), output R15 100 / C9 10u / R16 10k, amp input 1M
+C8  wv b 0.1u
+R13 b vr 510k
+Q2  vcc b e QNPN
+R14 e 0 10k
+R15 e o1 100
+C9  o1 out 10u
+R16 out 0 10k
+RL  out 0 1meg
+.model QNPN NPN(IS=1e-14 BF=300 VAF=100 CJE=8p CJC=3p RB=50)
+.ac dec 48 10 40k
+.control
+run
+wrdata od808-post.txt vdb(y) vdb(out)
+.endc
+.end

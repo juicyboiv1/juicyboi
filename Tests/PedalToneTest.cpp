@@ -97,7 +97,7 @@ int pedalToneValidation()
     // 2) vs ngspice (tone stage with ideal op-amp; whole post network with a real BJT follower)
     {
         const auto ref = loadRef();
-        double wTone = 0.0, wPost = 0.0;
+        double wTone = 0.0, wPost = 0.0, wTone10 = 0.0, wPost10 = 0.0;
         for (const auto& r : ref)
         {
             if (r.f < 20.0 || r.f > 20000.0) continue;
@@ -110,11 +110,12 @@ int pedalToneValidation()
             const auto p = isOd ? db (od, r.f, true) : db (sd, r.f, true);
             wTone = std::max (wTone, std::abs (t - r.tone_db));
             wPost = std::max (wPost, std::abs (p - r.post_db));
+            if (r.f <= 10000.0) { wTone10 = std::max (wTone10, std::abs (t - r.tone_db)); wPost10 = std::max (wPost10, std::abs (p - r.post_db)); }
         }
-        std::printf ("pedal tone vs ngspice (%zu points, 20 Hz-20 kHz): tone stage worst %.3f dB, whole post network worst %.3f dB\n",
-                     ref.size(), wTone, wPost);
-        check ("tone stage within 0.25 dB of ngspice, post network within 0.5 dB (20 Hz-20 kHz)",
-               ref.size() >= 100 && wTone < 0.25 && wPost < 0.5);
+        std::printf ("pedal tone vs ngspice (%zu points): to 10 kHz tone %.3f / post %.3f dB; to 20 kHz tone %.3f / post %.3f dB (bilinear warping)\n",
+                     ref.size(), wTone10, wPost10, wTone, wPost);
+        check ("tone stage and post network within 0.1 dB of ngspice to 10 kHz, 0.35 dB to 20 kHz",
+               ref.size() >= 100 && wTone10 < 0.1 && wPost10 < 0.1 && wTone < 0.35 && wPost < 0.35);
     }
 
     // 3) process() implements the coefficients: measured 1 kHz / 100 Hz gain of the post stage
