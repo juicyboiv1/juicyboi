@@ -85,7 +85,7 @@ std::vector<double> decimate4 (const std::vector<double>& x)
 
 struct Amp { const char* name; int model; };
 
-std::vector<double> amp (const Amp& a, const std::vector<double>& in, bool pluginOd = false, float drive = 0.2f)
+std::vector<double> amp (const Amp& a, const std::vector<double>& in, bool pluginOd = false, float drive = 0.2f, float levelKnob = 20.0f / 3.0f)
 {
     std::unique_ptr<juce::AudioProcessor> p (createPluginFilter());
     const int bs = 512;
@@ -98,6 +98,7 @@ std::vector<double> amp (const Amp& a, const std::vector<double>& in, bool plugi
     const char* odD = a.model == 1 ? "m5150_od_drive" : "od_drive";
     setParam (*p, odE, pluginOd ? 1.0f : 0.0f);
     setParam (*p, odD, 10.0f * drive);
+    setParam (*p, a.model == 1 ? "m5150_od_level" : "od_level", levelKnob);
     p->prepareToPlay (sr, bs);
     std::vector<double> out; juce::AudioBuffer<float> buf (2, bs); juce::MidiBuffer midi; size_t t = 0;
     while (out.size() < in.size())
@@ -173,6 +174,26 @@ int main()
                 const auto lo = rmsDb (run (lo05), (size_t) (0.3 * sr)), hi = rmsDb (run (lo5), (size_t) (0.3 * sr));
                 std::printf ("%-10s %-30s %6.0f %17.1f dB %16.1f\n", am.name, v.name, 10 * d, hi - lo, imdDb (run (two), sr, a));
             }
+    }
+
+    // C) quieter playing (0.01 -> 0.1 V, the range of a decaying note) vs Boost Level
+    const Fn q1 = [] (double t) { return 0.01 * std::sin (twoPi * 110.0 * t); };
+    const Fn q10 = [] (double t) { return 0.1 * std::sin (twoPi * 110.0 * t); };
+    const Fn twoQ = [] (double t) { return 0.05 * std::sin (twoPi * 82.5 * t) + 0.05 * std::sin (twoPi * 123.75 * t); };
+    std::printf ("\nC) plugin OD-808 into the amp: 110 Hz 0.01 -> 0.1 V and 2-tone 0.05 V each, vs Drive / Level\n");
+    std::printf ("%-10s %-24s %20s %16s\n", "amp", "front end", "dOut for +20 dB in", "2-tone IMD [dB]");
+    for (const auto& am : amps)
+    {
+        struct S { const char* name; bool on; float drive, level; };
+        const S ss[] = { { "no boost", false, 0.2f, 20.0f / 3.0f }, { "Drive 2, Level 0 dB", true, 0.2f, 20.0f / 3.0f },
+                         { "Drive 0, Level 0 dB", true, 0.0f, 20.0f / 3.0f }, { "Drive 2, Level -6 dB", true, 0.2f, 5.0f },
+                         { "Drive 2, Level -12 dB", true, 0.2f, 10.0f / 3.0f }, { "Drive 5, Level 0 dB", true, 0.5f, 20.0f / 3.0f } };
+        for (const auto& c : ss)
+        {
+            const auto lo = rmsDb (amp (am, sampled (q1), c.on, c.drive, c.level), (size_t) (0.3 * sr));
+            const auto hi = rmsDb (amp (am, sampled (q10), c.on, c.drive, c.level), (size_t) (0.3 * sr));
+            std::printf ("%-10s %-24s %17.1f dB %16.1f\n", am.name, c.name, hi - lo, imdDb (amp (am, sampled (twoQ), c.on, c.drive, c.level), sr, a));
+        }
     }
     return 0;
 }
