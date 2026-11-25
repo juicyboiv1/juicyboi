@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(JUICYBOI VERSION 3.0.0 LANGUAGES C CXX)
+project(JUICYBOI VERSION 3.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -51,14 +51,12 @@ juce_add_plugin(juicyboi
     NEEDS_WEB_BROWSER FALSE
     NEEDS_CURL FALSE)
 
-# The Standalone app carries the version ("juicyboi Rev3.app" for 3.0, "juicyboi
-# Rev3.1.app" for 3.1, ...) so builds are easy to tell apart. Within Rev3 the
-# plugin name and IDs stay "juicyboi Rev3" / Jcb3, so each 3.x replaces the last.
-if(PROJECT_VERSION_MINOR EQUAL 0)
-    set(JUICYBOI_APP_NAME "juicyboi Rev${PROJECT_VERSION_MAJOR}")
-else()
-    set(JUICYBOI_APP_NAME "juicyboi Rev${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}")
-endif()
+# The Standalone app is named after the major revision only ("juicyboi Rev3.app"
+# for every 3.x): Rev3.1 (component-level Boost tone/level, docs/pedal-tone.md)
+# keeps the plugin name, code Jcb3, bundle ID and app name, so it installs over
+# Rev3 and its saved state carries over. The version number (3.1.0) is in the
+# bundle's CFBundleShortVersionString / VST3 version.
+set(JUICYBOI_APP_NAME "juicyboi Rev${PROJECT_VERSION_MAJOR}")
 if(TARGET juicyboi_Standalone)
     set_target_properties(juicyboi_Standalone PROPERTIES
         OUTPUT_NAME "${JUICYBOI_APP_NAME}"
@@ -115,7 +113,7 @@ target_link_libraries(juicyboi
 option(JUICYBOI_BUILD_TESTS "Build the headless smoke test" ON)
 if(JUICYBOI_BUILD_TESTS)
     juce_add_console_app(juicyboi_smoketest PRODUCT_NAME "juicyboi_smoketest")
-    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp Tests/SpeakerLoadTest.cpp Tests/Amp5150Test.cpp Tests/PerAmpTest.cpp Tests/PreampOutTest.cpp Tests/TriodeTest.cpp)
+    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp Tests/SpeakerLoadTest.cpp Tests/Amp5150Test.cpp Tests/PerAmpTest.cpp Tests/PreampOutTest.cpp Tests/TriodeTest.cpp Tests/PedalToneTest.cpp)
     # Reuse the plugin's JUCE module objects/includes/defines rather than
     # compiling the modules a second time.
     target_include_directories(juicyboi_smoketest PRIVATE Source
@@ -163,6 +161,11 @@ if(JUICYBOI_BUILD_TESTS)
     # Rev2.2 clipper dump (plain C++, no JUCE): tools/clippers/plot_clippers.py
     add_executable(juicyboi_clipper_dump Tests/ClipperDump.cpp Source/dsp/Od808Stage.cpp Source/dsp/Sd1Stage.cpp)
     target_include_directories(juicyboi_clipper_dump PRIVATE Source)
+
+    # Rev3.1 Boost renders for tools/pedaltone/compare_rev3.py (plain C++, no JUCE)
+    add_executable(juicyboi_pedal_compare Tests/PedalCompare.cpp Source/dsp/Od808Stage.cpp Source/dsp/Sd1Stage.cpp)
+    target_compile_definitions(juicyboi_pedal_compare PRIVATE PEDAL_RESP=1)
+    target_include_directories(juicyboi_pedal_compare PRIVATE Source)
 
     # Rev3 triode stage dump (plain C++, no JUCE): tools/triode/plot_triode.py
     add_executable(juicyboi_triode_dump Tests/TriodeDump.cpp)

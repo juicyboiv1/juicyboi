@@ -2,6 +2,7 @@
 
 #include "DiodeClipper.h"
 #include "Filters.h"
+#include "PedalTone.h"
 
 namespace jb::dsp
 {
@@ -21,9 +22,13 @@ namespace jb::dsp
       R7=1k + C4=0.15uF        post-clip LP (1.06 kHz)          [mod]
       C5=0.15uF                tone LP cap                       [mod]
       C6                       removed                           [mod]
+      Tone 5k linear [mod], R8=470 + C5 wiper to ground, R9=1k feedback [mod]
+      C7=22uF [mod], R10 jumper [mod], Level 100kA [mod], JFET bias 1M
+      R14=1k [mod] + C8=22uF [mod] into the 2SC732 follower (1M bias, 10k emitter)
+      R16=1k, C10=22uF [mod], 100k pulldown
 
-    The op-amp clipping stage is SOLVED per sample (see OpAmpDiodeClipper);
-    tone/level after it are the Rev2.1 behavioural stages, smoothed per sample.
+    The op-amp clipping stage is SOLVED per sample (see OpAmpDiodeClipper).
+    Rev3.1: everything after it is the exact linear circuit (PedalPostStage).
     Original modelling of the published topology, not a product clone. */
 class Sd1Stage
 {
@@ -39,6 +44,28 @@ public:
         return c;
     }
 
+    static PedalToneComponents toneComponents() noexcept
+    {
+        PedalToneComponents t;
+        t.rPost = 1.0e3;  t.cPost = 0.15e-6;         // R7, C4 [mod]
+        t.rBias = 0.0;                               // none on the SD-1
+        t.rPot = 5.0e3;   t.taper = PedalToneComponents::Taper::linear; // Tone 5k linear [mod]
+        t.rWiper = 470.0; t.cWiper = 0.15e-6;        // R8 (stock), C5 [mod]
+        t.rFb = 1.0e3;                               // R9 [mod]; C6 removed [mod]
+        return t;
+    }
+
+    static PedalOutputComponents outputComponents() noexcept
+    {
+        PedalOutputComponents o;
+        o.rSeries = 0.0;    o.cCoupling = 22e-6;     // R10 jumper, C7 [mod]
+        o.rLevel = 100e3;   o.rDrain = 1.0e6;        // Level 100kA [mod], JFET bias 1M
+        o.rSeries2 = 1.0e3; o.cBase = 22e-6;         // R14, C8 [mod]
+        o.rBase = 1.0e6;    o.rEmitter = 10e3;       // base bias 1M, emitter 10k
+        o.rOut = 1.0e3;     o.cOut = 22e-6;  o.rPulldown = 100e3; // R16, C10 [mod], 100k
+        return o;
+    }
+
     void prepare (double sampleRate);
     void reset();
 
@@ -48,8 +75,7 @@ public:
     inline void beginFrame() noexcept
     {
         clipper.beginFrame();
-        toneTreble += smooth * (toneTarget - toneTreble);
-        level      += smooth * (levelTarget - level);
+        post.beginFrame();
     }
 
     inline float processClipper (float x, int ch) noexcept
@@ -59,36 +85,22 @@ public:
 
     inline float process (float x, int ch) noexcept
     {
-        const auto clipped = processClipper (x, ch);
-
-        // Post-clip LP (R7/C4), then tone LP with treble restore (C6 removed)
-        const auto filtered = postLP.process (clipped, ch);
-        const auto lp = toneLP.process (filtered, ch);
-        const auto toned = lp + toneTreble * (filtered - lp);
-
-        return outputHP.process (toned * level * makeup, ch);
+        return post.process (processClipper (x, ch), ch);
     }
 
     const OpAmpDiodeClipper& getClipper() const noexcept { return clipper; }
+    PedalPostStage& getPost() noexcept { return post; }
 
-    /** Fixed output trim (not part of the circuit). See docs/diode-clippers.md. */
-    static constexpr float makeup = 1.0f;
+    /** Fixed output makeup (not part of the circuit). See docs/pedal-tone.md. */
+    static constexpr double makeup = 3.8637; // +11.74 dB
 
 private:
     double fs = 44100.0;
 
-    OnePole inputHP, postLP, toneLP, outputHP;
+    OnePole inputHP;
     OpAmpDiodeClipper clipper;
+    PedalPostStage post;
 
-    float toneTreble = 0.5f, toneTarget = 0.5f;
-    float level = 1.0f, levelTarget = 1.0f;
-    float smooth = 1.0f;
-
-    static constexpr double inputHpHz   = 1.0 / (2.0 * kPi * 100e3 * 0.055e-6); // C2/R4
-    static constexpr double rPost       = 1.0e3;    // R7
-    static constexpr double cPost       = 0.15e-6;  // C4
-    static constexpr double rToneSeries = 1.0e3;    // Rev2.1 tone model
-    static constexpr double cTone       = 0.15e-6;  // C5
-    static constexpr double outputHpHz  = 8.0;      // Rev2.1 (not re-sourced)
+    static constexpr double inputHpHz = 1.0 / (2.0 * kPi * 100e3 * 0.055e-6); // C2/R4
 };
 } // namespace jb::dsp

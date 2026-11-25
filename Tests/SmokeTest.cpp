@@ -23,6 +23,7 @@ int levelTaperValidation();
 int editorValidation();
 int toneStackValidation();
 int clipperValidation();
+int pedalToneValidation();
 int speakerLoadValidation();
 int amp5150Validation();
 int perAmpValidation();
@@ -39,7 +40,7 @@ int main()
     p->prepareToPlay (sr, bs);
     std::printf ("latency: %d samples\n", p->getLatencySamples());
 
-    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation() + levelTaperValidation() + editorValidation() + toneStackValidation() + clipperValidation() + speakerLoadValidation() + amp5150Validation() + perAmpValidation() + preampOutValidation() + triodeValidation();
+    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation() + levelTaperValidation() + editorValidation() + toneStackValidation() + clipperValidation() + speakerLoadValidation() + amp5150Validation() + perAmpValidation() + preampOutValidation() + triodeValidation() + pedalToneValidation();
     juce::MidiBuffer midi;
 
     {
