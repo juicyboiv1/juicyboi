@@ -229,7 +229,11 @@ int resonanceValidation()
         check ("Lead Resonance has zero effect on Rectifier", leak < 1e-9f);
     }
 
-    // 7) Whole-processor nulls. lead-rev3.f32 was captured ONCE from the Rev3 build
+    // 7) Whole-processor nulls. Rev3.1: lead-rev3.1.f32 was captured ONCE from the
+    //    Rev3.1 build (component-level Boost tone/level) and every configuration must
+    //    null against it; the Boost-off configurations (0, 3) must also null exactly
+    //    against lead-rev3.f32, and the boosted ones (1, 2, 4) stay within 1 dB of Rev3.
+    //    lead-rev3.f32 was captured ONCE from the Rev3 build
     //    (solved triode stages) with the same 5 configurations as the original
     //    62a1239 capture; every configuration must null against it. Rev3 changes
     //    the audio of every configuration on purpose, so lead-rev2.4.f32 (5150,
@@ -241,29 +245,42 @@ int resonanceValidation()
         for (int c = 0; c < leadfixture::numConfigs; ++c) { const auto r = leadfixture::render (c); all.insert (all.end(), r.begin(), r.end()); }
         const juce::File fx (juce::String (JUICYBOI_TEST_DIR) + "/lead-rev3.f32");
         auto open = [] (const char* name) { return juce::File (juce::String (JUICYBOI_TEST_DIR) + "/" + name).createInputStream(); };
+        const juce::File fx31 (juce::String (JUICYBOI_TEST_DIR) + "/lead-rev3.1.f32");
+        if (std::getenv ("JB_CAPTURE_REV31") != nullptr && ! fx31.existsAsFile())
+        {
+            juce::FileOutputStream os (fx31);
+            for (auto v : all) os.writeFloat (v);
+        }
+        auto r31 = open ("lead-rev3.1.f32");
+        bool rev3Ok = r31 != nullptr && r31->getTotalLength() == (juce::int64) (all.size() * sizeof (float));
         auto r3 = open ("lead-rev3.f32"), r23 = open ("lead-rev2.3.f32"), r24 = open ("lead-rev2.4.f32");
         const auto bytes = (juce::int64) (all.size() * sizeof (float));
         bool nullOk = r3 != nullptr && r3->getTotalLength() == bytes;
         bool levelOk = r23 != nullptr && r24 != nullptr && r23->getTotalLength() == bytes && r24->getTotalLength() == bytes;
         for (int c = 0; nullOk && levelOk && c < leadfixture::numConfigs; ++c)
         {
-            float e3 = 0.0f; bool fin = true; double a = 0, b = 0;
+            float e3 = 0.0f, e31 = 0.0f; bool fin = true; double a = 0, b = 0, a3 = 0, b3 = 0;
             for (size_t i = 0; i < perConfig; ++i)
             {
                 const auto f = all[(size_t) c * perConfig + i];
                 const auto x3 = r3->readFloat(), x23 = r23->readFloat(), x24 = r24->readFloat();
+                const auto x31 = rev3Ok ? r31->readFloat() : 0.0f;
+                e31 = std::max (e31, std::abs (f - x31));
+                if (i >= perConfig / 2) { a3 += (double) f * f; b3 += (double) x3 * x3; }
                 const auto ref = c < 3 ? x24 : x23;
                 fin = fin && std::isfinite (f);
                 e3 = std::max (e3, std::abs (f - x3));
                 if (i >= perConfig / 2) { a += (double) f * f; b += (double) ref * ref; }
             }
             const auto d = 10.0 * std::log10 (a / b);
-            std::printf ("fixture config %d (%s): null vs Rev3 %.9g, level vs Rev2.4 %+.2f dB\n", c,
-                         c < 3 ? "5150" : (c == 3 ? "Red v2" : "Orange"), (double) e3, d);
-            nullOk = nullOk && fin && e3 < 2.0e-6f;
+            const auto d3 = 10.0 * std::log10 (a3 / b3);
+            const bool boosted = c == 1 || c == 2 || c == 4;
+            std::printf ("fixture config %d (%s%s): null vs Rev3.1 %.9g, vs Rev3 %.9g (%+.2f dB), level vs Rev2.4 %+.2f dB\n", c,
+                         c < 3 ? "5150" : (c == 3 ? "Red v2" : "Orange"), boosted ? ", boost" : "", (double) e31, (double) e3, d3, d);
+            nullOk = nullOk && fin && e31 < 2.0e-6f && (boosted ? std::abs (d3) < 1.0 : ! (e3 > 0.0f));
             levelOk = levelOk && std::abs (d) < 1.5;
         }
-        check ("all configurations null vs the Rev3 fixture", nullOk);
+        check ("all configurations null vs Rev3.1; Boost-off ones bit-identical to Rev3, boosted within 1 dB of Rev3", nullOk && rev3Ok);
         check ("every configuration within 1.5 dB of Rev2.4", levelOk);
     }
 

@@ -1,3 +1,7 @@
+// Rev3.1: rect-rev3.1.f32 was captured ONCE from the Rev3.1 build (component-level
+// Boost tone/level) and every configuration must null against it. Boost-off
+// configurations must ALSO null against rect-rev3.f32 (the amp path is unchanged),
+// and boosted ones stay within 1 dB of Rev3.
 // Rectifier regression fixture rect-rev3.f32: captured ONCE from the Rev3 build
 // (solved triode stages; same render as the original 348fc68 capture). Rev3
 // deliberately changes the audio, so the Rev2.x fixtures are level references:
@@ -47,20 +51,45 @@ int legacyRegression()
                 result.insert (result.end(), buffer.getReadPointer (0), buffer.getReadPointer (0) + 256);
             }
         }
-    auto in = file.createInputStream();
-    float error = 0.0f; bool finite = in != nullptr && in->getTotalLength() == (juce::int64) (result.size() * sizeof (float));
-    for (size_t i = 0; finite && i < result.size(); ++i)
-    {
-        const auto reference = in->readFloat();
-        finite = finite && std::isfinite (result[i]) && std::isfinite (reference);
-        error = std::max (error, std::abs (result[i] - reference));
-    }
-    std::printf ("Rectifier Rev3 fixture null: %zu samples, max error %.9g %s\n",
-                 result.size(), (double) error, finite && error < 2.0e-6f ? "ok" : "FAIL");
-
     const char* names[] = { "Red v1", "Red v2", "Orange" };
     const char* boosts[] = { "Boost off", "OD-808", "SD-1" };
     const size_t per = 32 * 256;
+    juce::File file31 (juce::String (JUICYBOI_TEST_DIR) + "/rect-rev3.1.f32");
+    if (std::getenv ("JB_CAPTURE_REV31") != nullptr && ! file31.existsAsFile())
+    {
+        juce::FileOutputStream os (file31);
+        for (auto v : result) os.writeFloat (v);
+    }
+    auto in = file31.createInputStream();
+    auto in3 = file.createInputStream();
+    float error = 0.0f, errorOff = 0.0f;
+    bool finite = in != nullptr && in3 != nullptr && in->getTotalLength() == (juce::int64) (result.size() * sizeof (float))
+                  && in3->getTotalLength() == in->getTotalLength();
+    bool rev3LevelOk = finite;
+    for (size_t c = 0; finite && c < 9; ++c)
+    {
+        double a = 0, b = 0;
+        for (size_t i = 0; i < per; ++i)
+        {
+            const auto y = result[c * per + i];
+            const auto r31 = in->readFloat(), r3 = in3->readFloat();
+            finite = finite && std::isfinite (y) && std::isfinite (r31);
+            error = std::max (error, std::abs (y - r31));
+            if (c % 3 == 0) errorOff = std::max (errorOff, std::abs (y - r3));
+            if (i >= per / 2) { a += (double) y * y; b += (double) r3 * r3; }
+        }
+        if (c % 3 != 0)
+        {
+            const auto d = 10.0 * std::log10 (a / b);
+            std::printf ("Rev3.1 vs Rev3 level: %-6s %-9s %+.2f dB\n", names[c / 3], boosts[c % 3], d);
+            rev3LevelOk = rev3LevelOk && std::abs (d) < 1.0;
+        }
+    }
+    std::printf ("Rectifier Rev3.1 fixture null: %zu samples, max error %.9g %s\n",
+                 result.size(), (double) error, finite && error < 2.0e-6f ? "ok" : "FAIL");
+    std::printf ("Rectifier Boost-off vs Rev3 fixture (bit-identical): max error %.9g %s\n",
+                 (double) errorOff, finite && ! (errorOff > 0.0f) ? "ok" : "FAIL");
+    std::printf ("Rectifier boosted configs within 1 dB of Rev3: %s\n", rev3LevelOk ? "ok" : "FAIL");
 
     // Level vs Rev2.4 (rect-rev2.3.f32: the Rectifier was bit-identical in Rev2.4)
     bool levelOk = true;
@@ -82,5 +111,5 @@ int legacyRegression()
         }
     }
     std::printf ("Rev3 level within 1.5 dB of Rev2.4 for every Rectifier voice/boost: %s\n", levelOk ? "ok" : "FAIL");
-    return finite && error < 2.0e-6f && levelOk ? 0 : 1;
+    return finite && error < 2.0e-6f && ! (errorOff > 0.0f) && rev3LevelOk && levelOk ? 0 : 1;
 }

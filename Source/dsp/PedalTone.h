@@ -11,7 +11,7 @@
 //
 // 1) Post-clip LP + active tone stage (ideal op-amp: v- = v+, no input current)
 //
-//   clip out -- Rpost --+-- A ------------------(+)\
+//   clip out -- Rpost --+-- A ------------------(+)|
 //                       |   |                       >---+-- Y
 //                     Cpost Rbias (0 = absent)  +-(-)/  |
 //                       |   |                   |       |
@@ -95,56 +95,78 @@ struct PedalOutputComponents
     double rLoad     = 1.0e6;   // amp input
 };
 
-/** Exact s-domain biquad -> bilinear (trapezoidal) z-domain, TDF-II in double. */
+/** Exact s-domain biquad H(s) = (n0 + n1 s + n2 s^2) / (d0 + d1 s + d2 s^2), discretised
+    with trapezoidal integration (= bilinear transform, K = 2 fs, no prewarp).
+    Second-order sections run as a trapezoidal state-variable filter (Simper's
+    TPT SVF: the states are the two integrator "capacitor" currents), which stays
+    well-behaved while the pot-dependent coefficients change every sample; a
+    first-order section (n2 = d2 = 0) runs as a TPT one-pole. Both are exactly
+    the bilinear transform of H(s) for fixed coefficients. */
 class SBiquad
 {
 public:
-    /** H(s) = (n0 + n1 s + n2 s^2) / (d0 + d1 s + d2 s^2), K = 2 fs. */
     inline void set (double n0, double n1, double n2, double d0, double d1, double d2, double K) noexcept
     {
-        if (n2 == 0.0 && d2 == 0.0) // first order: avoid the (1 + z^-1) pole/zero pair at Nyquist
+        an0 = n0; an1 = n1; an2 = n2; ad0 = d0; ad1 = d1; ad2 = d2; kk = K;
+        firstOrder = ! (std::abs (d2) > 0.0);
+        if (firstOrder)
         {
-            const auto inv1 = 1.0 / (d0 + d1 * K);
-            b0 = (n0 + n1 * K) * inv1; b1 = (n0 - n1 * K) * inv1; b2 = 0.0;
-            a1 = (d0 - d1 * K) * inv1; a2 = 0.0;
+            // (n0 + n1 s) / (d0 + d1 s) = n1/d1 + (n0 - n1 d0/d1) / d1 * 1/(s + w),  w = d0/d1
+            const auto w = d0 / d1;
+            g = w / K;
+            G1 = g / (1.0 + g);
+            cHp = n1 / d1;                               // direct (high-pass) part
+            cLp = (n0 / d1 - cHp * w) / w;               // times the unity-DC LP w/(s+w)
             return;
         }
-        const auto K2 = K * K;
-        const auto a0 = d0 + d1 * K + d2 * K2;
-        const auto inv = 1.0 / a0;
-        b0 = (n0 + n1 * K + n2 * K2) * inv;
-        b1 = (2.0 * n0 - 2.0 * n2 * K2) * inv;
-        b2 = (n0 - n1 * K + n2 * K2) * inv;
-        a1 = (2.0 * d0 - 2.0 * d2 * K2) * inv;
-        a2 = (d0 - d1 * K + d2 * K2) * inv;
+        const auto w2 = d0 / d2, w = std::sqrt (w2);
+        g = w / K;
+        k = d1 / (d2 * w);                               // 1/Q
+        a1 = 1.0 / (1.0 + g * (g + k));
+        a2 = g * a1;
+        a3 = g * a2;
+        mHp = n2 / d2;
+        mBp = n1 / (d2 * w);
+        mLp = n0 / (d2 * w2);
     }
 
-    void reset() noexcept { z1.fill (0.0); z2.fill (0.0); }
+    void reset() noexcept { ic1.fill (0.0); ic2.fill (0.0); }
 
     inline double process (double x, int ch) noexcept
     {
-        auto& s1 = z1[(size_t) ch];
-        auto& s2 = z2[(size_t) ch];
-        const auto y = b0 * x + s1;
-        s1 = b1 * x - a1 * y + s2;
-        s2 = b2 * x - a2 * y;
-        return y;
+        auto& s1 = ic1[(size_t) ch];
+        if (firstOrder)
+        {
+            const auto v = G1 * (x - s1);
+            const auto lp = v + s1;
+            s1 = lp + v;
+            return cHp * x + cLp * lp;
+        }
+        auto& s2 = ic2[(size_t) ch];
+        const auto v3 = x - s2;
+        const auto v1 = a1 * s1 + a2 * v3;
+        const auto v2 = s2 + a2 * s1 + a3 * v3;
+        s1 = 2.0 * v1 - s1;
+        s2 = 2.0 * v2 - s2;
+        const auto hp = x - k * v1 - v2;
+        return mHp * hp + mBp * v1 + mLp * v2;
     }
 
-    /** Digital response at f (Hz) for sample rate fs: what process() implements. */
+    /** Digital response at f (Hz) for sample rate fs: H(s) at s = K (1 - z^-1) / (1 + z^-1). */
     template <typename Complex>
     Complex response (double f, double fs) const
     {
         const auto w = 2.0 * kPi * f / fs;
-        const Complex z1i (std::cos (w), -std::sin (w));   // z^-1
-        const auto z2i = z1i * z1i;
-        return (b0 + b1 * z1i + b2 * z2i) / (1.0 + a1 * z1i + a2 * z2i);
+        const Complex zi (std::cos (w), -std::sin (w));
+        const Complex s = kk * (1.0 - zi) / (1.0 + zi);
+        return (an0 + an1 * s + an2 * s * s) / (ad0 + ad1 * s + ad2 * s * s);
     }
 
-    double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
-
 private:
-    std::array<double, kMaxChannels> z1 {}, z2 {};
+    double an0 = 1, an1 = 0, an2 = 0, ad0 = 1, ad1 = 0, ad2 = 0, kk = 1;
+    bool firstOrder = true;
+    double g = 0, G1 = 0, cHp = 0, cLp = 1, k = 1, a1 = 1, a2 = 0, a3 = 0, mHp = 0, mBp = 0, mLp = 1;
+    std::array<double, kMaxChannels> ic1 {}, ic2 {};
 };
 
 class PedalPostStage

@@ -208,13 +208,20 @@ int clipperValidation()
             }
             od.beginFrame(); sd.beginFrame();
             const auto tailA = od.process (0.0f, 0), tailB = sd.process (0.0f, 1);
-            ok = ok && std::abs (tailA) < 1e-6f && std::abs (tailB) < 1e-6f;
+            const auto coreA = od.processClipper (0.0f, 0), coreB = sd.processClipper (0.0f, 1);
+            // Rev3.1: the clipper core must be silent; the whole stage now has the real
+            // output coupling caps (SD-1 mod: 22 uF), which recover over seconds from the
+            // DC shift of an 8 V asymmetric clip, so its tail is only bounded here.
+            ok = ok && std::abs (coreA) < 1e-6f && std::abs (coreB) < 1e-6f
+                    && std::abs (tailA) < 0.1f && std::abs (tailB) < 0.1f;
         }
         std::printf ("stability: worst Newton iterations %d (44.1/48/96/192 kHz hosts at 4x)\n", worstIt);
-        check ("clippers finite, bounded, no denormals, silent tail, Newton <= 12 iterations at all rates", ok && worstIt <= 12);
+        check ("clippers finite, bounded, no denormals, silent core tail, Newton <= 12 iterations at all rates", ok && worstIt <= 12);
     }
 
-    // 5) Knob jumps: Drive 0->10 and Level jumps are smoothed (no step in the output)
+    // 5) Knob jumps: Drive 0->10 and Level jumps are smoothed (no step in the output).
+    //    Rev3.1: a discontinuity shows in the first samples, so the window is 8 samples;
+    //    over 64 the SD-1 (gain 11 -> 511) legitimately grows as the smoothed Drive rises.
     {
         auto run = [] (auto& st, int what) -> double
         {
@@ -233,7 +240,7 @@ int clipperValidation()
                 const auto y = st.process ((float) (0.05 * std::sin (2.0 * jb::dsp::kPi * 220.0 * (double) i / fs)), 0);
                 const auto d = std::abs (y - prev); prev = y;
                 if (i > (long) (0.3 * fs) && i < (long) (0.5 * fs)) steady = std::max (steady, (double) d);
-                if (i >= (long) (0.5 * fs) && i < (long) (0.5 * fs) + 64) around = std::max (around, (double) d);
+                if (i >= (long) (0.5 * fs) && i < (long) (0.5 * fs) + 8) around = std::max (around, (double) d);
             }
             return around / steady;
         };
