@@ -62,8 +62,8 @@ Artifacts (Linux):
 | LV2        | `build/juicyboi_artefacts/Release/LV2/juicyboi Rev3.lv2` |
 
 The build also makes AU on macOS, and AAX on macOS/Windows (JUCE 9 ships a
-bundled AAX SDK; you can point at a separate Avid tree with
-`juce_set_aax_sdk_path` before `juce_add_plugin` if needed). No VST2.
+bundled AAX SDK; `-DJUICYBOI_AAX_SDK=/path` uses a separate Avid tree,
+`-DJUICYBOI_AAX=OFF` skips AAX; see [docs/aax.md](docs/aax.md)). No VST2.
 
 | Format (macOS) | Path |
 |----------------|------|

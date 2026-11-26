@@ -14,13 +14,41 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/PatchJuceStandaloneMonoInputs.cmake)
 add_subdirectory(${JUCE_DIR} ${CMAKE_BINARY_DIR}/JUCE)
 
 # Linux: VST3 + Standalone (+ LV2). macOS: AU. macOS/Windows: AAX (Pro Tools).
-# AAX uses the SDK bundled with JUCE 9 under juce_audio_plugin_client/AAX/SDK
-# (override with juce_set_aax_sdk_path if you have a separate Avid SDK tree).
+#
+# AAX needs no separate download: JUCE 8/9 bundle the Avid AAX SDK (2.9 in JUCE
+# 9.0.5, 2.10 in 9.0.6) under juce_audio_plugin_client/AAX/SDK and compile its
+# library as part of the plugin. The result is an UNSIGNED .aaxplugin; PACE
+# signing (wraptool) is a separate post-build step (docs/aax.md).
+#   -DJUICYBOI_AAX=OFF            leave AAX out of a macOS/Windows build
+#   -DJUICYBOI_AAX_SDK=/path/sdk  use your own Avid AAX SDK tree (the folder with
+#                                 Interfaces/ and Libs/) instead of JUCE's copy
+option(JUICYBOI_AAX "Build the AAX (Pro Tools) format on macOS/Windows" ON)
+set(JUICYBOI_AAX_SDK "" CACHE PATH
+    "Optional: root of a separate Avid AAX SDK (default: the SDK bundled with JUCE)")
+
+if(JUICYBOI_AAX_SDK AND (APPLE OR WIN32))
+    if(NOT JUICYBOI_AAX)
+        message(WARNING "JUICYBOI_AAX_SDK is set but JUICYBOI_AAX=OFF; ignoring the SDK path")
+    else()
+        get_filename_component(_jb_aax_sdk "${JUICYBOI_AAX_SDK}" ABSOLUTE)
+        if(NOT EXISTS "${_jb_aax_sdk}/Interfaces/AAX.h" OR NOT EXISTS "${_jb_aax_sdk}/Libs/AAXLibrary/source")
+            message(FATAL_ERROR
+                "JUICYBOI_AAX_SDK='${JUICYBOI_AAX_SDK}' is not an AAX SDK root. "
+                "It must contain Interfaces/AAX.h and Libs/AAXLibrary/source "
+                "(pass the folder that holds Interfaces, Libs and Utilities).")
+        endif()
+        juce_set_aax_sdk_path("${_jb_aax_sdk}")
+        message(STATUS "juicyboi: AAX SDK = ${_jb_aax_sdk}")
+    endif()
+elseif(JUICYBOI_AAX AND (APPLE OR WIN32))
+    message(STATUS "juicyboi: AAX SDK = bundled with JUCE")
+endif()
+
 set(JUICYBOI_FORMATS VST3 Standalone LV2)
 if(APPLE)
     list(APPEND JUICYBOI_FORMATS AU)
 endif()
-if(APPLE OR WIN32)
+if(JUICYBOI_AAX AND (APPLE OR WIN32))
     list(APPEND JUICYBOI_FORMATS AAX)
 endif()
 
@@ -46,7 +74,9 @@ juce_add_plugin(juicyboi
     EDITOR_WANTS_KEYBOARD_FOCUS FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE
     VST3_CATEGORIES Fx Distortion
-    AAX_CATEGORY Effect
+    # Pro Tools plug-in menu folder: Harmonic = distortion/saturation (amp sims).
+    # AAX manufacturer ID = PLUGIN_MANUFACTURER_CODE, AAX product ID = PLUGIN_CODE.
+    AAX_CATEGORY Harmonic
     LV2URI "urn:juicyboi:juicyboi-rev3"
     NEEDS_WEB_BROWSER FALSE
     NEEDS_CURL FALSE)
