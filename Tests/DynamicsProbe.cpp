@@ -13,6 +13,7 @@
 //           change (cleanup with guitar volume / picking strength).
 //   cpu   : processBlock cost per 256-sample block (mono in, stereo out,
 //           one amp active) on a guitar-like signal, mean of 20 s rendered.
+#include <cstdlib>
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "Parameters.h"
@@ -46,6 +47,16 @@ std::unique_ptr<juce::AudioProcessor> make (const Cfg& c, int bs)
     std::unique_ptr<juce::AudioProcessor> p (createPluginFilter());
     p->setPlayConfigDetails (1, 2, sr, bs);
     setParam (*p, jb::params::id::preampModel, (float) c.model);
+    if (std::getenv ("JB_CPU_TUNER") != nullptr) // Rev3.2: tuner on (audio-thread cost: decimate/push + mute)
+        setParam (*p, "tuner_on", 1.0f);
+    if (std::getenv ("JB_CPU_EQ") != nullptr) // CPU check with both graphic EQs on (Rev3.2 comparison)
+        for (auto* pre : { "", "m5150_" })
+        {
+            setParam (*p, (juce::String (pre) + "eq_enable").toRawUTF8(), 1.0f);
+            setParam (*p, (juce::String (pre) + "eq_100").toRawUTF8(), -2.0f);
+            setParam (*p, (juce::String (pre) + "eq_800").toRawUTF8(), 3.0f);
+            setParam (*p, (juce::String (pre) + "eq_6k4").toRawUTF8(), -3.0f);
+        }
     if (c.model == 1)
     {
         setParam (*p, jb::params::id::m5150Channel, (float) c.channel);

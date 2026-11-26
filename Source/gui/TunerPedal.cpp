@@ -196,7 +196,7 @@ void TunerPedal::paintDisplay (Graphics& g, Rectangle<float> r)
     }
     // centre needle bar below the fan (the in-tune marker)
     {
-        const auto needle = Rectangle<float> (3.0f, 26.0f).withCentre ({ meter.getCentreX(), meter.getBottom() + 18.0f });
+        const auto needle = Rectangle<float> (3.0f, 14.0f).withCentre ({ meter.getCentreX(), meter.getBottom() + 12.0f });
         g.setColour (inTune ? tunerInTune : tunerUnlit.brighter (0.25f));
         g.fillRoundedRectangle (needle, 1.0f);
     }
@@ -212,7 +212,7 @@ void TunerPedal::paintDisplay (Graphics& g, Rectangle<float> r)
     }
     // big note name (segment glyph) + sharp sign + octave
     {
-        const auto glyph = Rectangle<float> (44.0f, 64.0f).withCentre ({ r.getCentreX() - 6.0f, r.getBottom() - 46.0f });
+        const auto glyph = Rectangle<float> (40.0f, 58.0f).withCentre ({ r.getCentreX() - 6.0f, r.getBottom() - 44.0f });
         const String name = live ? String (jb::dsp::Tuner::noteName (d.midiNote)) : String ("-");
         drawSegmentNote (g, live ? (char) name[0] : (shownOn ? '-' : ' '), glyph, inTune ? tunerInTune : noteWhite);
         const bool sharp = live && name.length() > 1;
