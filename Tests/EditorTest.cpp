@@ -223,5 +223,50 @@ int editorValidation()
         q.getStateInformation (after);
         check ("opening/closing the editor leaves session state identical", before == after);
     }
+
+    // 9. Pedal LEDs (Cory's Apple-Silicon MacBook bug, docs/led-repaint.md): the LED must follow
+    //    the parameter with no audio running and no help from the OS's dirty-rect merging.
+    {
+        JuicyboiAudioProcessor q;
+        std::unique_ptr<juce::AudioProcessorEditor> base2 (q.createEditor());
+        auto* e = dynamic_cast<JuicyboiAudioProcessorEditor*> (base2.get());
+        e->setSize (1100, JuicyboiAudioProcessorEditor::openHeight);
+        auto& drawer = e->getDrawer();
+        auto& tp = drawer.getTunerPedal();
+        auto& gp = drawer.getGatePedal();
+        auto sample = [] (juce::Component& c, juce::Point<float> centre, float r)
+        {
+            const auto area = juce::Rectangle<int> (3, 3).withCentre ((centre + juce::Point<float> (0.0f, r * 0.5f)).roundToInt());
+            return c.createComponentSnapshot (area, false, 1.0f).getPixelAt (1, 1);
+        };
+        auto lit = [] (juce::Colour c) { return std::max ({ c.getRed(), c.getGreen(), c.getBlue() }) > 150; };
+
+        // tuner LED: dark until engaged, red while engaged, dark again when released
+        const auto tc = tp.ledCentre();
+        check ("tuner LED is dark when the tuner is off", ! lit (sample (tp, tc, 5.0f)) && ! tp.isLedLit());
+        setParam (q, "tuner_on", 1.0f);
+        tp.refreshNow();
+        const auto onPix = sample (tp, tc, 5.0f);
+        check ("tuner LED lights red as soon as the tuner is engaged", tp.isLedLit() && lit (onPix) && onPix.getRed() > onPix.getGreen());
+        setParam (q, "tuner_on", 0.0f);
+        tp.refreshNow();
+        check ("tuner LED goes dark again when the tuner is released", ! tp.isLedLit() && ! lit (sample (tp, tc, 5.0f)));
+        check ("tuner LED glow lies inside the pedal (whole-pedal repaint covers it)",
+               tp.getLocalBounds().toFloat().contains (tp.ledFootprint()));
+
+        // gate LED: lit whenever enabled (no audio has run), green while open; dark when off
+        const auto gc = gp.ledCentre;
+        check ("gate LED is dark with the gate off", ! lit (sample (gp, gc, 6.0f)));
+        setParam (q, "gate_enable", 1.0f);
+        drawer.pollLedsNow();
+        const auto gOn = sample (gp, gc, 6.0f);
+        check ("gate LED lights green when the gate is on (open, audio not running)", lit (gOn) && gOn.getGreen() > gOn.getRed());
+        check ("gate pollLed notices the change (shown amount 1)", gp.getShownLed() > 0.99f);
+        check ("LED repaint area is the whole pedal and contains the LED glow",
+               gp.ledRepaintArea() == gp.getLocalBounds() && gp.getLocalBounds().toFloat().contains (gp.ledFootprint()));
+        setParam (q, "gate_enable", 0.0f);
+        drawer.pollLedsNow();
+        check ("gate LED goes dark when the gate is switched off", ! lit (sample (gp, gc, 6.0f)) && gp.getShownLed() < 0.01f);
+    }
     return failures;
 }

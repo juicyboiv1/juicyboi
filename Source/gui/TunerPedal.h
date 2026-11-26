@@ -30,6 +30,12 @@ public:
     static constexpr int numSegments = 21;
     static constexpr double inTuneCents = 2.0;
 
+    static constexpr float ledRadius = 5.0f;
+    /** Mute LED position / glow footprint in this pedal's coordinates; lit only while the tuner is on (tests). */
+    juce::Point<float> ledCentre() const noexcept;
+    juce::Rectangle<float> ledFootprint() const noexcept;
+    bool isLedLit() const noexcept { return shownOn; }
+
     Footswitch& getFootswitch() noexcept { return footswitch; }
     ParamSlider& getReferenceKnob() noexcept { return refKnob; }
 

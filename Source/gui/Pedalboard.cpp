@@ -68,8 +68,19 @@ void Pedal::pollLed()
     if (std::abs (a - shownLed) > 0.02f || c != shownColour)
     {
         shownLed = a; shownColour = c;
-        repaint (Rectangle<float> (40.0f, 40.0f).withCentre (ledCentre).toNearestInt());
+        // Whole pedal, not a small LED rectangle: how CoreGraphics merges/clips partial
+        // dirty rectangles differs between macOS versions and machines, and an LED that
+        // only repaints through its own tiny rectangle was the one thing that never
+        // lit on an Apple-Silicon MacBook (docs/led-repaint.md). A pedal is small and
+        // repaints only when its LED changes.
+        repaint (ledRepaintArea());
     }
+}
+
+Rectangle<float> Pedal::ledFootprint() const noexcept
+{
+    const auto r = (kind == Kind::stomp ? 6.0f : 4.5f) * 3.2f;   // glow radius in drawLed
+    return Rectangle<float> (2.0f * r, 2.0f * r).withCentre (ledCentre);
 }
 
 void Pedal::paint (Graphics& g)
@@ -385,13 +396,15 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
         gate.ledCentre = { 156.0f, switchY };
         gate.ledAmount = [this]
         {
-            const int a = activeAmp();
-            return (proc.isGateActive (a) && rawParam (proc, params::ampId (a, params::AmpSlot::gateEnable)) > 0.5f) ? 1.0f : 0.0f;
+            // lit whenever the gate is switched on (the parameter), independent of whether the
+            // audio callback has run yet; colour (below) shows open / closed
+            return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::gateEnable)) > 0.5f ? 1.0f : 0.0f;
         };
         gate.ledColour = [this]
         {
             // green = open, orange-red = closed (keyed from the dry input)
-            return colours::ledRed.interpolatedWith (colours::ledGreen, jlimit (0.0f, 1.0f, proc.getGateOpenAmount (activeAmp())));
+            const auto open = proc.getGateOpenAmount (activeAmp());
+            return colours::ledRed.interpolatedWith (colours::ledGreen, std::isfinite (open) ? jlimit (0.0f, 1.0f, open) : 1.0f);
         };
     }
     {
@@ -439,6 +452,12 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
     preampOut.onChange = [this] { syncPreampOutDim(); };
     syncPreampOutDim();
 
+    // Switching a pedal updates its LED straight away (the 30 Hz poll stays as the safety net).
+    for (auto& set : sets)
+        for (auto* sw : { &set->odSwitch, &set->eqSwitch, &set->gateSwitch })
+            sw->onChange = [this] { pollLedsNow(); };
+    for (auto& set : sets)
+        set->cabOn.onChange = [this] { pollLedsNow(); };
     startTimerHz (30);
 }
 
@@ -459,13 +478,18 @@ void Pedalboard::showAmp (int amp)
 
 Pedalboard::~Pedalboard() { stopTimer(); }
 
+void Pedalboard::pollLedsNow()
+{
+    for (auto* pd : { &boost, &eq, &gate, &cab })
+        pd->pollLed();
+}
+
 void Pedalboard::timerCallback()
 {
     showAmp (activeAmp());
     syncPreampOutDim();
     if (! open) return;
-    for (auto* pd : { &boost, &eq, &gate, &cab })
-        pd->pollLed();
+    pollLedsNow();
 }
 
 void Pedalboard::syncPreampOutDim()

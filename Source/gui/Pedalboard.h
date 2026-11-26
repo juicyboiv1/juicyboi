@@ -25,14 +25,24 @@ public:
     juce::Point<float> ledCentre;
     std::function<float()> ledAmount;            ///< 0 = off .. 1 = lit
     std::function<juce::Colour()> ledColour;
+    /** Re-read the LED state; if it changed, repaint the WHOLE pedal (see docs/led-repaint.md). */
     void pollLed();
+    /** Region invalidated when the LED changes: the whole pedal. */
+    juce::Rectangle<int> ledRepaintArea() const noexcept { return getLocalBounds(); }
+    /** The LED bezel + glow footprint in this pedal's coordinates (tests). */
+    juce::Rectangle<float> ledFootprint() const noexcept;
+    /** Forget what was last drawn so the next poll repaints (shown / resized). */
+    float getShownLed() const noexcept { return shownLed; }
+    void invalidateLed() noexcept { shownLed = -1.0f; shownColour = juce::Colour (0x00000000); }
+    void visibilityChanged() override { invalidateLed(); pollLed(); }
+    void parentHierarchyChanged() override { invalidateLed(); }
 
 private:
     Kind kind;
     juce::Colour body, bodyDark, text;
     juce::String title;
     float shownLed = -1.0f;
-    juce::Colour shownColour;
+    juce::Colour shownColour { 0x00000000 };
 };
 
 /** Drag-and-drop (or click-to-browse) IR target for one cab slot. */
@@ -107,6 +117,12 @@ private:
 
 public:
     TunerPedal& getTunerPedal() noexcept { return tuner; }
+    Pedal& getGatePedal() noexcept { return gate; }
+    Pedal& getBoostPedal() noexcept { return boost; }
+    Pedal& getEqPedal() noexcept { return eq; }
+    Pedal& getCabPedal() noexcept { return cab; }
+    /** Run the LED poll of every pedal now (normally a 30 Hz timer, plus footswitch changes). */
+    void pollLedsNow();
 private:
 
     struct AmpControls

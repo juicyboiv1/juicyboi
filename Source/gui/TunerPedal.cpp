@@ -70,6 +70,7 @@ TunerPedal::TunerPedal (JuicyboiAudioProcessor& p, Component* popupParent)
 {
     setComponentID ("tunerPedal");
     addAndMakeVisible (footswitch);
+    footswitch.onChange = [this] { timerCallback(); };   // LED follows the switch immediately
     refKnob.setPopupDisplayEnabled (true, false, popupParent);
     refKnob.setDoubleClickReturnValue (true, 440.0);
     addAndMakeVisible (refKnob);
@@ -92,6 +93,16 @@ void TunerPedal::resized()
     footswitch.setBounds (Rectangle<int> (52, 52).withCentre ({ b.getWidth() / 2, 238 }));
 }
 
+juce::Rectangle<float> TunerPedal::ledFootprint() const noexcept
+{
+    return Rectangle<float> (ledRadius * 6.4f, ledRadius * 6.4f).withCentre (ledCentre());
+}
+
+juce::Point<float> TunerPedal::ledCentre() const noexcept
+{
+    return { (float) getWidth() - 2.0f - 20.0f, 238.0f };   // b = bounds reduced by 2
+}
+
 void TunerPedal::timerCallback()
 {
     const auto on = proc.apvts.getRawParameterValue (jb::params::id::tunerOn)->load() > 0.5f;
@@ -99,9 +110,14 @@ void TunerPedal::timerCallback()
     if (on != shownOn || d.hasPitch != shown.hasPitch || d.midiNote != shown.midiNote
         || std::abs (d.cents - shown.cents) > 0.2)
     {
+        const bool onChanged = on != shownOn;
         shown = d;
         shownOn = on;
-        repaint (displayArea.expanded (4.0f).toNearestInt());
+        // The mute LED lives outside the display window, so an on/off change repaints the
+        // whole pedal (a display-only rectangle left the LED stale on machines whose
+        // CoreGraphics honours exact dirty rectangles; docs/led-repaint.md).
+        if (onChanged) repaint();
+        else           repaint (displayArea.expanded (4.0f).toNearestInt());
     }
 }
 
@@ -151,7 +167,7 @@ void TunerPedal::paint (Graphics& g)
             drawChromeScrew (g, { x, y }, 2.2f);
 
     // mute LED next to the switch (red while the output is muted)
-    drawLed (g, { b.getRight() - 20.0f, 238.0f }, 5.0f, colours::ledRed, shownOn ? 1.0f : 0.0f);
+    drawLed (g, ledCentre(), ledRadius, colours::ledRed, shownOn ? 1.0f : 0.0f);
 }
 
 void TunerPedal::paintDisplay (Graphics& g, Rectangle<float> r)
