@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (Rev3)
+# juicyboi — heavy-riff preamp (Rev3, v3.2.0)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -101,18 +101,21 @@ To install the VST3 on Linux, copy the bundle to `~/.vst3/`.
 ## Signal chain
 
 ```
+Tuner tap (raw input, folded to mono; analysis on a background thread)
 Input trim
   └─► [ 4x oversampled ]
         Boost (OD-808 | SD-1, solved op-amp diode clippers) ── type + on/off crossfades (~15–20 ms)
           ├─► Rectifier Red v1/v2 / Orange ─► passive TMB (RF-1F parts, Red/Orange set) + presence ─► recovery stage (Red)
           │                                  ─► Red v2 only: power-amp / 4x12 load bump (Rev2.3, linear)
           └─► 5150-inspired Lead (6 stages) ─► passive TMB (5150 sheet-3 parts) ─► recovery stage
-  └─► Graphic EQ (per model) ─► 5150: Lead Presence ─► Lead Resonance   (base rate)
+        GEQ-7 graphic EQ (per model, solved circuit, Rev3.2: inside the 4x region)
+  └─► 5150: Lead Presence ─► Lead Resonance   (base rate)
   └─► Preamp Model crossfade (30 ms; after respective EQ / Presence paths)
   └─► Cab IR sim (optional; IR A / IR B blend)   (base rate)
   └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
   └─► Master
   └─► Bypass crossfade against latency-aligned dry signal
+  └─► Tuner mute (10 ms fade while the tuner is on; untouched when off)
 ```
 
 Buses: mono→stereo (default, guitar DI), mono→mono, stereo→stereo.
@@ -349,22 +352,38 @@ documented topology principles — not a product clone (no commercial branding).
 - Tip: when A/B'ing Type, match perceived loudness with **Boost Level** (SD-1
   can hit a bit hotter at the same Drive).
 
-## Graphic EQ section
+## Graphic EQ section (GEQ-7, Rev3.2)
 
-Original 7-band graphic EQ in the spirit of classic octave-spaced pedal EQs
-used to "carve after the drive" — not a clone of any commercial unit.
-Sits **post-ToneStack / pre-Cab**, so cuts and boosts shape what hits the IR.
+A component-level model of the classic 7-band gyrator pedal EQ (GE-7-style
+circuit, published part values, op-amp bandwidth and output follower included).
+In the UI it is the "juicyboi GEQ-7"; there is no affiliation. It sits
+**post-ToneStack / pre-Cab**, so cuts and boosts shape what hits the IR. Full
+details: [docs/graphic-eq.md](docs/graphic-eq.md).
 
-- Bands **100 / 200 / 400 / 800 / 1.6k / 3.2k / 6.4k Hz**, ±15 dB each
-  (default 0). 100–3.2k are peaking biquads (Q 1.3, ~1 octave, overlapping
-  like a gyrator EQ); **6.4k is a high shelf** (fizz / air control).
-- **Level** ±15 dB (default 0) after the bands.
-- **On** (`eq_enable`, default off). Off = 10 ms fade, then true bypass (no filtering).
-- Faders: double-click resets to 0 dB. Band moves are slewed per block (no zipper).
+- **Bands.** 100 / 200 / 400 / 800 / 1.6k / 3.2k / 6.4k Hz, ±15 on the slider
+  (default 0). The 6.4k band is the circuit's shelf-like top leg.
+- **Slider scale.** The slider is dB-calibrated: ±15 is the end of the wiper
+  travel, and in between the band peak is (value/15) × that band's maximum
+  (about ±13.7 to ±15.9 dB; ±12.2 dB for 6.4k). The bands are broad and
+  interact like the hardware. With every slider at 0 the circuit loses about
+  0.5 dB, as the pedal does.
+- **Level.** ±15 on the slider (about ±14.9 dB at the ends).
+- **On** (`eq_enable`, default off). Off = 10 ms fade, then true bypass.
+- **Faders.** Double-click resets to 0. Wiper moves are smoothed per sample, so
+  they don't zipper.
 
-Metal starting point: 100 −2, 200 −3, 400 −4, 800 +3, 1.6k +4, 3.2k +1, 6.4k −3 —
-tighter low end, mid push for thickness into the cab, less fizz. Big boosts add
-level: trim **EQ Level** (or **Master**) to keep the output out of the red.
+Metal starting point: 100 −2, 200 −3, 400 −4, 800 +3, 1.6k +4, 3.2k +1, 6.4k −3.
+This gives a tighter low end, a mid push for thickness into the cab, and less
+fizz. Big boosts add level: trim **EQ Level** (or **Master**) to keep the output
+out of the red.
+
+## Tuner pedal (Rev3.2)
+
+First on the pedalboard. Press the footswitch to tune: the output mutes with a
+10 ms fade, and the display shows the note with a 21-segment cents fan. The
+segments turn bright green within ±2 cents. The CAL knob sets the reference A
+(436–445 Hz, double-click = 440). Off, the signal is untouched. See
+[docs/tuner.md](docs/tuner.md).
 
 ## Cab (IR) section
 
@@ -446,6 +465,8 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `master`       | Master      | 0 … 10 audio taper (0 = mute, 7.5 = 0 dB, 10 = +12 dB) | 6.5 (= −6 dB) |
 | `bypass`       | Bypass      | bool (host bypass param) | off |
 | `preamp_out`   | Preamp Out  | Full Amp / Preamp Out (appended; default Full Amp) | Full Amp |
+| `tuner_on`     | Tuner       | bool (on = output muted; appended Rev3.2) | off |
+| `tuner_ref`    | Tuner Reference A | 436 … 445 Hz (appended Rev3.2) | 440 Hz |
 
 All parameter IDs use version hint 1.
 
