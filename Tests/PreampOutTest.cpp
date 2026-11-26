@@ -66,10 +66,13 @@ int preampOutValidation()
 
     {
         P p;
-        auto* last = p.getParameters().getLast();
+        // Rev3.2 appends tuner_on, tuner_ref after it
+        const auto& ps = p.getParameters();
         auto* po = dynamic_cast<juce::AudioProcessorParameterWithID*> (p.apvts.getParameter ("preamp_out"));
-        check ("preamp_out is appended last, default Full Amp, gain is unity",
-               po != nullptr && last == po && get (p, "preamp_out") < 0.5f
+        const auto idx = ps.indexOf (po);
+        auto idAt = [&] (int i) { auto* w = dynamic_cast<juce::AudioProcessorParameterWithID*> (ps[i]); return w != nullptr ? w->paramID : juce::String(); };
+        check ("preamp_out appended after Rev3.0 params (then tuner_on, tuner_ref), default Full Amp, gain is unity",
+               po != nullptr && idx == ps.size() - 3 && idAt (idx + 1) == "tuner_on" && idAt (idx + 2) == "tuner_ref" && get (p, "preamp_out") < 0.5f
                    && P::preampOutGain == 1.0f);
     }
 

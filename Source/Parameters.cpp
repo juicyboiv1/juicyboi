@@ -210,6 +210,14 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
     layout.add (std::make_unique<AudioParameterChoice> (ParameterID { id::preampOut, versionHint }, "Preamp Out",
                                                         StringArray { "Full Amp", "Preamp Out" }, 0));
 
+    // Rev3.2 (appended): tuner pedal. Defaults (off, A = 440 Hz) leave every
+    // earlier session untouched (off = bit-identical audio path).
+    layout.add (std::make_unique<AudioParameterBool> (ParameterID { id::tunerOn, versionHint }, "Tuner", false));
+    layout.add (std::make_unique<AudioParameterFloat> (ParameterID { id::tunerRef, versionHint }, "Tuner Reference A",
+                                                       NormalisableRange<float> (436.0f, 445.0f, 1.0f), 440.0f,
+                                                       AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
+                                                           [] (float v, int) { return "A=" + String (roundToInt (v)) + " Hz"; })));
+
     return layout;
 }
 } // namespace jb::params

@@ -60,6 +60,9 @@ namespace id
     inline constexpr const char* m5150LeadPost    = "m5150_lead_post";
     // Appended after the 5150 slot set. 0 = Full Amp (default), 1 = Preamp Out.
     inline constexpr const char* preampOut        = "preamp_out";
+    // Rev3.2 (appended): tuner pedal, shared by both amps. On = output muted.
+    inline constexpr const char* tunerOn          = "tuner_on";
+    inline constexpr const char* tunerRef         = "tuner_ref";   // A4 reference, 436..445 Hz
 }
 
 /** Rev2.4 per-amp settings. Amp 0 = Rectifier (Red v1 / Red v2 / Orange share

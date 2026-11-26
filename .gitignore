@@ -14,3 +14,5 @@ DerivedData/
 
 # Never vendor full JUCE
 /JUCE/
+build-*/
+__pycache__/

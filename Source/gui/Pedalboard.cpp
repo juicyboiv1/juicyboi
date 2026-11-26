@@ -11,10 +11,13 @@ namespace pid = jb::params::id;
 namespace
 {
     constexpr float pedalTop = 36.0f, pedalH = 282.0f, switchY = 238.0f;
-    const Rectangle<int> boostArea { 56, (int) pedalTop, 230, (int) pedalH };
-    const Rectangle<int> eqArea    { 310, (int) pedalTop, 320, (int) pedalH };
-    const Rectangle<int> gateArea  { 654, (int) pedalTop, 220, (int) pedalH };
-    const Rectangle<int> cabArea   { 896, (int) pedalTop, 148, (int) pedalH };
+    // Rev3.2: Tuner first in the chain (left), then Boost, GEQ-7, Gate, Cab.
+    const Rectangle<int> tunerArea { 34, (int) pedalTop, 128, (int) pedalH };
+    const Rectangle<int> boostArea { 172, (int) pedalTop, 214, (int) pedalH };
+    const Rectangle<int> eqArea    { 396, (int) pedalTop, 304, (int) pedalH };
+    const Rectangle<int> gateArea  { 710, (int) pedalTop, 200, (int) pedalH };
+    const Rectangle<int> cabArea   { 920, (int) pedalTop, 148, (int) pedalH };
+    constexpr int eqPitch = 34, eqX0 = 12, eqLevelX = 264;
 
     void paintWood (Graphics& g, Rectangle<float> r, int seed, bool horizontal, float brightness = 0.0f)
     {
@@ -258,9 +261,10 @@ std::vector<Component*> Pedalboard::AmpControls::cabControls()
 Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
     : proc (p),
       boost (Pedal::Kind::stomp, colours::boostGreen, colours::boostGreenD, colours::creme, "BOOST"),
-      eq (Pedal::Kind::stomp, colours::eqCreme, colours::eqCremeD, colours::ink, "7-BAND EQ"),
+      eq (Pedal::Kind::stomp, colours::eqCreme, colours::eqCremeD, colours::ink, "juicyboi GEQ-7"),
       gate (Pedal::Kind::stomp, Colour (0xff2a2a2a), Colour (0xff121212), colours::creme, "GATE"),
       cab (Pedal::Kind::sidePanel, Colour (0xff1c1c1c), Colour (0xff0d0d0d), colours::creme, "CAB"),
+      tuner (p, popupParent),
       inputCal (p.apvts, pid::inputTrim, ParamSlider::Style::pedalKnob,
                 [] (double v)
                 {
@@ -273,6 +277,7 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
 {
     for (auto* pd : { &boost, &eq, &gate, &cab })
         addAndMakeVisible (*pd);
+    addAndMakeVisible (tuner);
 
     auto popup = [popupParent] (ParamSlider& s) { s.setPopupDisplayEnabled (true, false, popupParent); };
 
@@ -283,7 +288,7 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
 
         // --- Boost
         {
-            const float xs[] = { 42.0f, 115.0f, 188.0f };
+            const float xs[] = { 39.0f, 107.0f, 175.0f };
             ParamSlider* ks[] = { &c.odDrive, &c.odTone, &c.odLevel };
             for (int i = 0; i < 3; ++i)
             {
@@ -293,29 +298,29 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
             }
             c.odType.extraTip = "OD-808 = symmetric mid hump; SD-1 = asymmetric, open-top voicing.";
             boost.addChildComponent (c.odType);
-            c.odType.setBounds (Rectangle<int> (100, 30).withCentre ({ 115, 116 }));
+            c.odType.setBounds (Rectangle<int> (100, 30).withCentre ({ 107, 116 }));
             boost.addChildComponent (c.odSwitch);
-            c.odSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 115, (int) switchY }));
+            c.odSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 107, (int) switchY }));
         }
         // --- 7-band EQ (100 Hz .. 6.4 kHz) + Level
         {
             for (size_t b = 0; b < c.eqBands.size(); ++b)
             {
-                c.eqBands[b]->extraTip = "(double-click = 0 dB)";
+                c.eqBands[b]->extraTip = "(GEQ-7 slider, dB scale: +/-15 = slider end; double-click = 0 dB)";
                 popup (*c.eqBands[b]);
                 eq.addChildComponent (*c.eqBands[b]);
-                c.eqBands[b]->setBounds (14 + (int) b * 36, 14, 32, 136);
+                c.eqBands[b]->setBounds (eqX0 + (int) b * eqPitch, 14, 32, 136);
             }
-            c.eqLevel.extraTip = "(double-click = 0 dB)";
+            c.eqLevel.extraTip = "(GEQ-7 Level, dB scale, ends = +/-14.9 dB; double-click = 0 dB)";
             popup (c.eqLevel);
             eq.addChildComponent (c.eqLevel);
-            c.eqLevel.setBounds (276, 14, 32, 136);
+            c.eqLevel.setBounds (eqLevelX, 14, 32, 136);
             eq.addChildComponent (c.eqSwitch);
-            c.eqSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 160, (int) switchY }));
+            c.eqSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 152, (int) switchY }));
         }
         // --- Gate
         {
-            const float xs[] = { 40.0f, 110.0f, 180.0f };
+            const float xs[] = { 36.0f, 100.0f, 164.0f };
             ParamSlider* ks[] = { &c.gateThreshold, &c.gateHold, &c.gateRelease };
             for (int i = 0; i < 3; ++i)
             {
@@ -324,7 +329,7 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
                 ks[i]->setBounds (Rectangle<int> (60, 60).withCentre ({ (int) xs[i], 48 }));
             }
             gate.addChildComponent (c.gateSwitch);
-            c.gateSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 110, (int) switchY }));
+            c.gateSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 100, (int) switchY }));
         }
         // --- Cab side panel
         {
@@ -351,23 +356,23 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
 
     // captions, titles and LEDs are shared by both sets; the LEDs follow the shown amp
     {
-        const float xs[] = { 42.0f, 115.0f, 188.0f };
+        const float xs[] = { 39.0f, 107.0f, 175.0f };
         const char* caps[] = { "DRIVE", "TONE", "LEVEL" };
         for (int i = 0; i < 3; ++i)
             boost.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 11.0f });
-        boost.titleArea = { 0.0f, 140.0f, 230.0f, 40.0f };
+        boost.titleArea = { 0.0f, 140.0f, 214.0f, 40.0f };
         boost.titleSize = 32.0f;
-        boost.ledCentre = { 182.0f, switchY };
+        boost.ledCentre = { 169.0f, switchY };
         boost.ledAmount = [this] { return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::odEnable)) > 0.5f ? 1.0f : 0.0f; };
     }
     {
         const char* caps[] = { "100", "200", "400", "800", "1.6k", "3.2k", "6.4k" };
         for (int b = 0; b < 7; ++b)
-            eq.captions.push_back ({ Rectangle<float> ((float) (14 + b * 36) - 2.0f, 152.0f, 36.0f, 13.0f), caps[b], 10.0f });
-        eq.captions.push_back ({ Rectangle<float> (274.0f, 152.0f, 36.0f, 13.0f), "LEVEL", 9.0f });
-        eq.titleArea = { 0.0f, 172.0f, 320.0f, 32.0f };
-        eq.titleSize = 26.0f;
-        eq.ledCentre = { 228.0f, switchY };
+            eq.captions.push_back ({ Rectangle<float> ((float) (eqX0 + b * eqPitch) - 2.0f, 152.0f, 36.0f, 13.0f), caps[b], 10.0f });
+        eq.captions.push_back ({ Rectangle<float> ((float) eqLevelX - 2.0f, 152.0f, 36.0f, 13.0f), "LEVEL", 9.0f });
+        eq.titleArea = { 0.0f, 172.0f, 304.0f, 32.0f };
+        eq.titleSize = 24.0f;
+        eq.ledCentre = { 216.0f, switchY };
         eq.ledAmount = [this] { return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::eqEnable)) > 0.5f ? 1.0f : 0.0f; };
     }
     {
@@ -375,9 +380,9 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
         const char* caps[] = { "THRESH", "HOLD", "RELEASE" };
         for (int i = 0; i < 3; ++i)
             gate.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 11.0f });
-        gate.titleArea = { 0.0f, 140.0f, 220.0f, 40.0f };
+        gate.titleArea = { 0.0f, 140.0f, 200.0f, 40.0f };
         gate.titleSize = 32.0f;
-        gate.ledCentre = { 172.0f, switchY };
+        gate.ledCentre = { 156.0f, switchY };
         gate.ledAmount = [this]
         {
             const int a = activeAmp();
@@ -483,6 +488,7 @@ void Pedalboard::setOpen (bool o)
     front.open = o;
     for (auto* pd : { &boost, &eq, &gate, &cab })
         pd->setVisible (o);
+    tuner.setVisible (o);
     front.repaint();
     resized();
     repaint();
@@ -490,6 +496,7 @@ void Pedalboard::setOpen (bool o)
 
 void Pedalboard::resized()
 {
+    tuner.setBounds (tunerArea);
     boost.setBounds (boostArea);
     eq.setBounds (eqArea);
     gate.setBounds (gateArea);

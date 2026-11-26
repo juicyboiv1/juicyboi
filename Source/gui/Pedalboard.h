@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Rev1Style.h"
+#include "TunerPedal.h"
 #include <array>
 
 class JuicyboiAudioProcessor;
@@ -57,8 +58,8 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
 };
 
-/** The pedalboard drawer under the head: Boost, 7-band EQ and Gate stompboxes plus the
-    Cab side panel. Closed = only the wooden drawer front shows; click it to open/close.
+/** The pedalboard drawer under the head: Tuner (Rev3.2, shared), Boost, GEQ-7 and Gate
+    stompboxes plus the Cab side panel. Closed = only the wooden drawer front shows; click it to open/close.
     Rev2.4: there is one control set per amp (docs/per-amp-state.md); the set of the amp
     selected by `preamp_model` is shown, the other is hidden but stays bound.
     A small Input Cal trim and a Full Amp / Preamp Out toggle sit on the
@@ -93,7 +94,7 @@ private:
     {
         void paint (juce::Graphics&) override;
         void mouseUp (const juce::MouseEvent&) override { if (onClick) onClick(); }
-        juce::String getTooltip() override { return open ? "Close the pedalboard drawer" : "Open the pedalboard drawer (Boost, EQ, Gate, Cab)"; }
+        juce::String getTooltip() override { return open ? "Close the pedalboard drawer" : "Open the pedalboard drawer (Tuner, Boost, EQ, Gate, Cab)"; }
         std::function<void()> onClick;
         bool open = true;
     };
@@ -102,6 +103,11 @@ private:
     bool open = true;
 
     Pedal boost, eq, gate, cab;
+    TunerPedal tuner;   // shared by both amps (Rev3.2)
+
+public:
+    TunerPedal& getTunerPedal() noexcept { return tuner; }
+private:
 
     struct AmpControls
     {

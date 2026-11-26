@@ -79,13 +79,14 @@ int perAmpValidation()
         const juce::File f3 (juce::String (JUICYBOI_TEST_DIR) + "/rev3-migration-rect.f32");
         const auto per = (size_t) (blocks * bs);
         std::vector<float> all;
-        bool boosted[4] {};
+        bool boosted[4] {}, eqOn[4] {};
         for (int c = 0; c < 4; ++c)
         {
             auto mb = blob (c);
             P q; q.setStateInformation (mb.getData(), (int) mb.getSize());
             if (c == 3) set (q, "preamp_model", 0.0f);
             boosted[c] = get (q, "od_enable") > 0.5f;
+            eqOn[c] = get (q, "eq_enable") > 0.5f;
             const auto y = render (q);
             all.insert (all.end(), y.begin(), y.end());
         }
@@ -94,29 +95,39 @@ int perAmpValidation()
         const juce::File f31 (juce::String (JUICYBOI_TEST_DIR) + "/rev3.1-migration-rect.f32");
         if (std::getenv ("JB_CAPTURE_REV31") != nullptr && ! f31.existsAsFile())
             f31.replaceWithData (all.data(), all.size() * sizeof (float));
-        juce::MemoryBlock ref31;
+        juce::MemoryBlock ref31, ref32;
         f31.loadFileAsData (ref31);
+        // Rev3.2: rev3.2-migration-rect.f32 captured ONCE from the Rev3.2 build (GEQ-7
+        // circuit EQ); EQ-on states within 2 dB of Rev3.1 (the GE-7 bands are broad and
+        // the circuit loses ~0.5 dB flat, so a -2 dB 200 Hz cut in front of the Rectifier reads -1.5 dB), EQ-off ones still null vs Rev3.1.
+        const juce::File f32 (juce::String (JUICYBOI_TEST_DIR) + "/rev3.2-migration-rect.f32");
+        if (std::getenv ("JB_CAPTURE_REV32") != nullptr && ! f32.existsAsFile())
+            f32.replaceWithData (all.data(), all.size() * sizeof (float));
+        f32.loadFileAsData (ref32);
         f3.loadFileAsData (ref3);
-        bool ok = ref.getSize() == per * 4 * sizeof (float) && ref3.getSize() == ref.getSize() && ref31.getSize() == ref.getSize();
+        bool ok = ref.getSize() == per * 4 * sizeof (float) && ref3.getSize() == ref.getSize() && ref31.getSize() == ref.getSize() && ref32.getSize() == ref.getSize();
         for (int c = 0; ok && c < 4; ++c)
         {
             const auto* r = static_cast<const float*> (ref.getData()) + per * (size_t) c;
             const auto* r3 = static_cast<const float*> (ref3.getData()) + per * (size_t) c;
             const auto* r31 = static_cast<const float*> (ref31.getData()) + per * (size_t) c;
-            float e = 0.0f, e31 = 0.0f; double s = 0.0, a = 0.0, s3 = 0.0;
+            const auto* r32 = static_cast<const float*> (ref32.getData()) + per * (size_t) c;
+            float e = 0.0f, e31 = 0.0f, e32 = 0.0f; double s = 0.0, a = 0.0, s3 = 0.0, s31 = 0.0;
             for (size_t i = 0; i < per; ++i)
             {
                 const auto y = all[per * (size_t) c + i];
                 e = std::max (e, std::abs (y - r3[i]));
                 e31 = std::max (e31, std::abs (y - r31[i]));
-                if (i >= per / 2) { s += (double) r[i] * r[i]; a += (double) y * y; s3 += (double) r3[i] * r3[i]; }
+                e32 = std::max (e32, std::abs (y - r32[i]));
+                if (i >= per / 2) { s += (double) r[i] * r[i]; a += (double) y * y; s3 += (double) r3[i] * r3[i]; s31 += (double) r31[i] * r31[i]; }
             }
-            const auto d = 10.0 * std::log10 (a / s), d3 = 10.0 * std::log10 (a / s3);
-            std::printf ("per-amp: Rev2.3 state %d -> Rectifier (%s): null vs Rev3.1 %.9g, vs Rev3 %.9g (%+.2f dB), level vs Rev2.3 %+.2f dB\n",
-                         c, boosted[c] ? "boost on" : "boost off", (double) e31, (double) e, d3, d);
-            ok = ok && e31 < 2.0e-6f && (boosted[c] ? std::abs (d3) < 1.0 : ! (e > 0.0f)) && std::abs (d) < 1.5 && s > 0.5;
+            const auto d = 10.0 * std::log10 (a / s), d3 = 10.0 * std::log10 (a / s3), d31 = 10.0 * std::log10 (a / s31);
+            std::printf ("per-amp: Rev2.3 state %d -> Rectifier (%s, EQ %s): null vs Rev3.2 %.9g, vs Rev3.1 %.9g (%+.2f dB), vs Rev3 %.9g (%+.2f dB), level vs Rev2.3 %+.2f dB\n",
+                         c, boosted[c] ? "boost on" : "boost off", eqOn[c] ? "on" : "off", (double) e32, (double) e31, d31, (double) e, d3, d);
+            ok = ok && e32 < 2.0e-6f && (eqOn[c] ? std::abs (d31) < 2.0 : e31 < 2.0e-6f)
+                 && (boosted[c] ? (eqOn[c] || std::abs (d3) < 1.0) : (eqOn[c] || ! (e > 0.0f))) && std::abs (d) < (eqOn[c] ? 3.0 : 1.5) && s > 0.5;
         }
-        check ("Rev2.3 sessions load: Rectifier nulls vs Rev3.1 (Boost-off bit-identical to Rev3, boosted within 1 dB), within 1.5 dB of Rev2.3", ok);
+        check ("Rev2.3 sessions load: Rectifier nulls vs Rev3.2 (EQ-off null vs Rev3.1, EQ-on within 2 dB), within 1.5 dB of Rev2.3 (EQ-on 3 dB)", ok);
     }
 
     // 2) migration copies the old shared values into the 5150 set

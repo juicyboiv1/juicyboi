@@ -58,10 +58,47 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     p5RhythmPost = apvts.getRawParameterValue (params::id::m5150RhythmPost);
     p5LeadPost   = apvts.getRawParameterValue (params::id::m5150LeadPost);
     pPreampOut   = apvts.getRawParameterValue (params::id::preampOut);
+    pTunerOn     = apvts.getRawParameterValue (params::id::tunerOn);
+    pTunerRef    = apvts.getRawParameterValue (params::id::tunerRef);
 
     voicingA   = dsp::voicings::riffA();   // Red v2
     voicingAv1 = dsp::voicings::riffAv1(); // Red v1
     voicingB = dsp::voicings::riffB();
+
+    tuner.setEnabled (pTunerOn->load() > 0.5f);
+    tuner.setReference (pTunerRef->load());
+    tunerThread = std::make_unique<TunerThread> (tuner);
+    tunerThread->startThread (juce::Thread::Priority::low);
+}
+
+JuicyboiAudioProcessor::~JuicyboiAudioProcessor()
+{
+    stopTunerThread();
+}
+
+void JuicyboiAudioProcessor::stopTunerThread()
+{
+    if (tunerThread != nullptr)
+        tunerThread->stopThread (2000);
+}
+
+void JuicyboiAudioProcessor::TunerThread::run()
+{
+    // ~40 detections per second while the tuner is on; idle otherwise.
+    auto last = juce::Time::getMillisecondCounterHiRes();
+    bool wasOn = false;
+    while (! threadShouldExit())
+    {
+        const auto now = juce::Time::getMillisecondCounterHiRes();
+        const auto on = tuner.isEnabled();
+        if (on)
+            tuner.analyse ((now - last) * 0.001);
+        else if (wasOn)
+            tuner.resetDisplay();
+        wasOn = on;
+        last = now;
+        wait (on ? 25 : 100);
+    }
 }
 
 //==============================================================================
@@ -180,8 +217,11 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     sd15.snap();
     lead5.snap();    // 5150 Pre Gain networks / Rhythm switches: no fade-in on load
     rhythm5.snap();
-    leadGraphicEq.prepare (sampleRate, maxChunk);
-    graphicEq.prepare (sampleRate, maxChunk); // after params: snaps EQ to current settings (no fade-in on load)
+    // Rev3.2: the GEQ-7 circuit runs inside the 4x region (bilinear error < 0.1 dB).
+    leadGraphicEq.prepare (osRate, maxChunk * oversampler.getFactor());
+    graphicEq.prepare (osRate, maxChunk * oversampler.getFactor()); // after params: snaps EQ to current settings (no fade-in on load)
+    rectEqRunning = leadEqRunning = false;
+    tuner.prepare (sampleRate, maxChunk);
 }
 
 void JuicyboiAudioProcessor::releaseResources()
@@ -288,6 +328,9 @@ void JuicyboiAudioProcessor::updateParameters()
     const auto po = pPreampOut->load() > 0.5f ? 1.0f : 0.0f;
     preampOutMix  .setTargetValue (po);
     preampOutMixOs.setTargetValue (po);
+
+    tuner.setEnabled (pTunerOn->load() > 0.5f);
+    tuner.setReference (pTunerRef->load());
 }
 
 void JuicyboiAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -309,11 +352,36 @@ void JuicyboiAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juc
 
     updateParameters();
 
+    // Rev3.2 tuner: listens to the raw (folded) input, first in the chain.
+    if (tuner.wantsInput())
+    {
+        if (numProc == 1)
+            tuner.push (buffer.getReadPointer (0), numSamples);
+        else
+        {
+            float tmp[256];
+            for (int s0 = 0; s0 < numSamples; s0 += 256)
+            {
+                const auto n = juce::jmin (256, numSamples - s0);
+                for (int i = 0; i < n; ++i)
+                {
+                    float sum = 0.0f;
+                    for (int ch = 0; ch < numProc; ++ch) sum += buffer.getReadPointer (ch)[s0 + i];
+                    tmp[i] = sum / (float) numProc;
+                }
+                tuner.push (tmp, n);
+            }
+        }
+    }
+
     // Hosts may exceed the prepared block size: process in safe chunks.
     for (int start = 0; start < numSamples; start += maxChunk)
         processChunk (buffer, start, juce::jmin (maxChunk, numSamples - start), numProc);
 
     finaliseOutputs (buffer, mono);
+
+    // TU-3-style mute while the tuner is on (no-op, untouched buffer, when off).
+    tuner.applyMute (buffer.getArrayOfWritePointers(), juce::jmin (numOut, buffer.getNumChannels()), numSamples);
 }
 
 bool JuicyboiAudioProcessor::foldStandaloneInputsToMono (juce::AudioBuffer<float>& buffer) const
@@ -503,21 +571,33 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
                 l[i] = power5.process (leadTone.process (leadAmt >= 1.0f ? ld : (leadAmt <= 0.0f ? rhy : rhy + leadAmt * (ld - rhy)), ch), ch);
             }
         }
+
+        // 3b) GEQ-7 pedal, one per amp with its own settings (Rev2.4), at 4x
+        //     (Rev3.2 circuit model). An inaudible amp skips its EQ and restarts
+        //     it from rest when needed (its crossfade weight starts at 0).
+        {
+            float* rect[dsp::kMaxChannels] {}, *alt[dsp::kMaxChannels] {};
+            for (int ch = 0; ch < numProc; ++ch)
+            {
+                rect[ch] = up.getChannelPointer ((size_t) ch);
+                alt[ch] = leadUp.getChannelPointer ((size_t) ch);
+            }
+            if (rectAudible)
+            {
+                if (! rectEqRunning) graphicEq.reset();
+                graphicEq.process (rect, numProc, n);
+            }
+            if (amp5Audible)
+            {
+                if (! leadEqRunning) leadGraphicEq.reset();
+                leadGraphicEq.process (alt, numProc, n);
+            }
+            rectEqRunning = rectAudible;
+            leadEqRunning = amp5Audible;
+        }
     });
 
-    // 3) Tone stacks + recovery run inside the oversampled region (step 2).
-
-    // 3b) Post EQ, one per amp with its own settings (Rev2.4).
-    {
-        float* rect[dsp::kMaxChannels] {}, *alt[dsp::kMaxChannels] {};
-        for (int ch = 0; ch < numProc; ++ch)
-        {
-            rect[ch] = buffer.getWritePointer (ch, start);
-            alt[ch] = leadBuffer.getWritePointer (ch);
-        }
-        graphicEq.process (rect, numProc, len);
-        leadGraphicEq.process (alt, numProc, len);
-    }
+    // 3) Tone stacks, recovery and the GEQ-7 run inside the oversampled region (step 2).
 
     // Preamp Out copies the post-EQ (pre-cab, and for the 5150 pre-Presence /
     // Resonance / speaker-load) signal so the fade can mix it back in. When

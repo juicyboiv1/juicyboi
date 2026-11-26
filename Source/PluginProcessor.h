@@ -18,14 +18,16 @@
 #include "dsp/OversampledNonlinear.h"
 #include "dsp/CabSim.h"
 #include "dsp/NoiseGate.h"
+#include "dsp/Tuner.h"
 
 /** juicyboi — heavy-riff preamp. Two amps, each with its OWN full settings set
     (Rev2.4, docs/per-amp-state.md); `preamp_model` picks the one you hear:
+      Tuner (Rev3.2, shared; listens to the input, mutes the output while on)
       Shared input calibration (input_trim) then:
       Rectifier: [4x: Boost -> Red v1|v2 / Orange cascade -> TMB ->
-                 recovery -> (Red v2) 4x12 load] -> EQ -> Cab -> Gate -> Master
+                 recovery -> (Red v2) 4x12 load -> GEQ-7] -> Cab -> Gate -> Master
       5150:      [4x: Boost -> Rhythm|Lead cascade (Pre Gain networks)
-                 -> shared TMB -> Post Gain -> power section] -> EQ ->
+                 -> shared TMB -> Post Gain -> power section -> GEQ-7] ->
                  Presence/Resonance + 4x12 load -> Cab -> Gate   (no Master)
     Preamp Out (global `preamp_out`) skips cab IR, Red v2 / 5150 speaker-load
     modelling, and 5150 Presence/Resonance (power-amp NFB). Preamp stages,
@@ -38,7 +40,7 @@ class JuicyboiAudioProcessor final : public juce::AudioProcessor
 {
 public:
     JuicyboiAudioProcessor();
-    ~JuicyboiAudioProcessor() override = default;
+    ~JuicyboiAudioProcessor() override;
 
     void prepareToPlay (double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -96,6 +98,12 @@ public:
 
     /** Graphic EQ is processing (on, or fading out). */
     bool  isEqActive (int amp = 0) const noexcept        { return (amp == 0 ? graphicEq : leadGraphicEq).isActive(); }
+
+    /** Rev3.2 tuner pedal (shared by both amps). The editor reads its display;
+        a background thread runs the pitch detection while it is on. */
+    jb::dsp::Tuner& getTuner() noexcept { return tuner; }
+    /** Tests: stop the background analysis thread (then call getTuner().analyse() directly). */
+    void stopTunerThread();
 
     /** The amp whose settings are shown/heard: 0 = Rectifier, 1 = 5150. */
     int activeAmp() const noexcept { return pPreampModel->load() > 0.5f ? 1 : 0; }
@@ -172,6 +180,8 @@ private:
     std::atomic<float>* p5RhythmPost = nullptr;
     std::atomic<float>* p5LeadPost = nullptr;
     std::atomic<float>* pPreampOut = nullptr; // 0 = Full Amp, 1 = Preamp Out
+    std::atomic<float>* pTunerOn = nullptr;   // Rev3.2
+    std::atomic<float>* pTunerRef = nullptr;
     float p5 (jb::params::AmpSlot s) const noexcept { return p5150[(size_t) s]->load(); }
     juce::AudioParameterBool* bypassParam = nullptr;
     int baseLatency = 0;
@@ -193,7 +203,16 @@ private:
     float recoveryRed = 0.0f, recoveryOrange = 0.0f;
     bool odRunning = false, sd1Running = false; // Boost stages processed last frame
     bool od5Running = false, sd15Running = false;
-    jb::dsp::GraphicEq graphicEq, leadGraphicEq; // Rectifier / 5150 post EQ
+    jb::dsp::GraphicEq graphicEq, leadGraphicEq; // Rectifier / 5150 GEQ-7 (Rev3.2: at 4x)
+    bool rectEqRunning = false, leadEqRunning = false;
+    jb::dsp::Tuner tuner;
+    struct TunerThread final : juce::Thread
+    {
+        explicit TunerThread (jb::dsp::Tuner& t) : juce::Thread ("juicyboi tuner"), tuner (t) {}
+        void run() override;
+        jb::dsp::Tuner& tuner;
+    };
+    std::unique_ptr<TunerThread> tunerThread;
     jb::dsp::LeadPresence leadPresence;
     jb::dsp::LeadResonance leadResonance;
     jb::dsp::CabSim cab, cab5;

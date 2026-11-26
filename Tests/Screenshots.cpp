@@ -2,6 +2,7 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cmath>
 #include <cstdio>
 
 int main (int argc, char** argv)
@@ -74,5 +75,50 @@ int main (int argc, char** argv)
     ed.getHead().syncModelNow();
     ed.getDrawer().syncAmpNow();
     shoot (ed, "rev2.4-rectifier-drawer-open");
+
+    // Rev3.2: tuner pedal (preview readings; the live display needs audio) and GEQ-7
+    auto shootPart = [&] (juce::Component& c, juce::Rectangle<int> area, const juce::String& name, float sc)
+    {
+        const auto img = c.createComponentSnapshot (area, true, sc);
+        const auto f = dir.getChildFile (name + ".png");
+        f.deleteFile();
+        juce::FileOutputStream os (f);
+        juce::PNGImageFormat png;
+        const bool ok = os.openedOk() && png.writeImageToStream (img, os);
+        std::printf ("%s %dx%d %s\n", f.getFullPathName().toRawUTF8(), img.getWidth(), img.getHeight(), ok ? "ok" : "FAIL");
+    };
+    auto& drawer = ed.getDrawer();
+    auto& tp = drawer.getTunerPedal();
+    const auto tb = tp.getBounds();
+    const auto eqRect = juce::Rectangle<int> (396, tb.getY(), 304, tb.getHeight()).expanded (6);
+    const auto tunerRect = tb.expanded (6);
+    auto reading = [] (int note, double cents)
+    {
+        jb::dsp::Tuner::Display d;
+        d.hasPitch = true; d.midiNote = note; d.cents = cents;
+        d.hz = 440.0 * std::pow (2.0, (note - 69 + cents / 100.0) / 12.0); d.rawHz = d.hz;
+        return d;
+    };
+
+    set (p, "tuner_on", 1.0f);
+    tp.previewDisplay = reading (40, 0.4);           // E2 in tune
+    tp.refreshNow();
+    shoot (ed, "rev3.2-editor-tuner-on");
+    shootPart (drawer, tunerRect, "rev3.2-tuner-E2-in-tune", 3.0f);
+    tp.previewDisplay = reading (45, -17.0);          // A2 flat
+    tp.refreshNow();
+    shootPart (drawer, tunerRect, "rev3.2-tuner-A2-flat", 3.0f);
+    tp.previewDisplay = reading (61, 31.0);           // C#4 sharp
+    tp.refreshNow();
+    shootPart (drawer, tunerRect, "rev3.2-tuner-Csharp4-sharp", 3.0f);
+    tp.previewDisplay = jb::dsp::Tuner::Display {};   // no signal
+    tp.refreshNow();
+    shootPart (drawer, tunerRect, "rev3.2-tuner-no-signal", 3.0f);
+    set (p, "tuner_on", 0.0f);
+    tp.previewDisplay.reset();
+    tp.refreshNow();
+    shootPart (drawer, tunerRect, "rev3.2-tuner-off", 3.0f);
+    shootPart (drawer, eqRect, "rev3.2-geq7", 3.0f);
+    shoot (ed, "rev3.2-editor-drawer-open");
     return 0;
 }
