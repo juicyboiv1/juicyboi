@@ -139,7 +139,7 @@ private:
         ParamSlider gateThreshold, gateHold, gateRelease;
         Footswitch gateSwitch;
         ToggleSwitch cabOn;
-        ParamSlider cabBlend, cabLevel;
+        ParamSlider cabBlend, cabLevel, cabHpf, cabLpf;
         std::array<std::unique_ptr<IRDropZone>, 2> irZones;
         std::vector<juce::Component*> all();
         std::vector<juce::Component*> cabControls();

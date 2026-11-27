@@ -39,6 +39,10 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pCabEnable  = apvts.getRawParameterValue (params::id::cabEnable);
     pCabBlend   = apvts.getRawParameterValue (params::id::cabMicBlend);
     pCabLevel   = apvts.getRawParameterValue (params::id::cabLevel);
+    pCabHpf     = apvts.getRawParameterValue (params::id::cabHpf);
+    pCabLpf     = apvts.getRawParameterValue (params::id::cabLpf);
+    p5CabHpf    = apvts.getRawParameterValue (params::ampCabHpfId (1));
+    p5CabLpf    = apvts.getRawParameterValue (params::ampCabLpfId (1));
     pGateEnable  = apvts.getRawParameterValue (params::id::gateEnable);
     pGateThresh  = apvts.getRawParameterValue (params::id::gateThreshold);
     pGateHold    = apvts.getRawParameterValue (params::id::gateHold);
@@ -293,7 +297,8 @@ void JuicyboiAudioProcessor::updateParameters()
         graphicEq.setParameters (pEqEnable->load() > 0.5f, eqDb, pEqLevel->load());
     }
 
-    cab.setParameters (pCabEnable->load() > 0.5f, pCabBlend->load(), taper::cabLevelKnobToGain (pCabLevel->load()));
+    cab.setParameters (pCabEnable->load() > 0.5f, pCabBlend->load(), taper::cabLevelKnobToGain (pCabLevel->load()),
+                       pCabHpf->load(), pCabLpf->load());
 
     gate.setParameters (pGateEnable->load() > 0.5f, pGateThresh->load(), pGateHold->load(), pGateRelease->load());
 
@@ -321,7 +326,8 @@ void JuicyboiAudioProcessor::updateParameters()
         for (size_t b = 0; b < eqDb.size(); ++b)
             eqDb[b] = p5 ((S) ((int) S::eq100 + (int) b));
         leadGraphicEq.setParameters (p5 (S::eqEnable) > 0.5f, eqDb, p5 (S::eqLevel));
-        cab5.setParameters (p5 (S::cabEnable) > 0.5f, p5 (S::cabMicBlend), taper::cabLevelKnobToGain (p5 (S::cabLevel)));
+        cab5.setParameters (p5 (S::cabEnable) > 0.5f, p5 (S::cabMicBlend), taper::cabLevelKnobToGain (p5 (S::cabLevel)),
+                            p5CabHpf->load(), p5CabLpf->load());
         gate5.setParameters (p5 (S::gateEnable) > 0.5f, p5 (S::gateThreshold), p5 (S::gateHold), p5 (S::gateRelease));
     }
 
@@ -629,7 +635,8 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
         }
     }
 
-    // 4) Cab IR sims, one per amp (no-op when that Cab is off). An amp that is
+    // 4) Cab IR sims (post-IR HPF/LPF on the wet path), one per amp (no-op when
+    //    that Cab is off). An amp that is
     //    fully faded out, or fully in Preamp Out, skips its convolution; it
     //    restarts clean when needed.
     {

@@ -245,7 +245,9 @@ Pedalboard::AmpControls::AmpControls (JuicyboiAudioProcessor& p, int amp)
       cabBlend (p.apvts, params::ampId (amp, params::AmpSlot::cabMicBlend), ParamSlider::Style::pedalKnob),
       cabLevel (p.apvts, params::ampId (amp, params::AmpSlot::cabLevel), ParamSlider::Style::pedalKnob, [] (double v)
                 { return "Cab Level " + String (v, 1) + " = " + String (taper::cabLevelKnobToDb (v), 1)
-                         + " dB (5 = unity, 4.8 dB per number)"; })
+                         + " dB (5 = unity, 4.8 dB per number)"; }),
+      cabHpf (p.apvts, params::ampCabHpfId (amp), ParamSlider::Style::pedalKnob),
+      cabLpf (p.apvts, params::ampCabLpfId (amp), ParamSlider::Style::pedalKnob)
 {
     for (size_t b = 0; b < eqBands.size(); ++b)
         eqBands[b] = std::make_unique<ParamSlider> (p.apvts, params::ampEqBandId (amp, (int) b), ParamSlider::Style::fader);
@@ -256,7 +258,8 @@ Pedalboard::AmpControls::AmpControls (JuicyboiAudioProcessor& p, int amp)
 std::vector<Component*> Pedalboard::AmpControls::all()
 {
     std::vector<Component*> v { &odDrive, &odTone, &odLevel, &odType, &odSwitch, &eqLevel, &eqSwitch,
-                                &gateThreshold, &gateHold, &gateRelease, &gateSwitch, &cabOn, &cabBlend, &cabLevel };
+                                &gateThreshold, &gateHold, &gateRelease, &gateSwitch, &cabOn, &cabBlend, &cabLevel,
+                                &cabHpf, &cabLpf };
     for (auto& b : eqBands) v.push_back (b.get());
     for (auto& z : irZones) v.push_back (z.get());
     return v;
@@ -264,7 +267,7 @@ std::vector<Component*> Pedalboard::AmpControls::all()
 
 std::vector<Component*> Pedalboard::AmpControls::cabControls()
 {
-    std::vector<Component*> v { &cabOn, &cabBlend, &cabLevel };
+    std::vector<Component*> v { &cabOn, &cabBlend, &cabLevel, &cabHpf, &cabLpf };
     for (auto& z : irZones) v.push_back (z.get());
     return v;
 }
@@ -342,25 +345,28 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
             gate.addChildComponent (c.gateSwitch);
             c.gateSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 100, (int) switchY }));
         }
-        // --- Cab side panel
+        // --- Cab side panel (Rev3.2.2: HPF / LPF under Blend / Level)
         {
-            c.cabOn.extraTip = "Off = hard bypass (e.g. into a real power amp / FX return). No IRs loaded = passthrough.";
+            c.cabOn.extraTip = "Off = hard bypass (e.g. into a real power amp / FX return). No IRs loaded = passthrough; HPF/LPF still apply when Cab is on.";
             cab.addChildComponent (c.cabOn);
-            c.cabOn.setBounds (Rectangle<int> (104, 28).withCentre ({ 74, 46 }));
+            c.cabOn.setBounds (Rectangle<int> (104, 24).withCentre ({ 74, 38 }));
             c.cabBlend.extraTip = "(left = IR A, right = IR B)";
+            c.cabHpf.extraTip = "(post-IR high-pass, 12 dB/oct; 20 Hz = off / bypass)";
+            c.cabLpf.extraTip = "(post-IR low-pass, 12 dB/oct; 20 kHz = off / bypass)";
             const float xs[] = { 40.0f, 108.0f };
-            ParamSlider* ks[] = { &c.cabBlend, &c.cabLevel };
-            for (int i = 0; i < 2; ++i)
+            const int ys[] = { 78, 144 };
+            ParamSlider* ks[] = { &c.cabBlend, &c.cabLevel, &c.cabHpf, &c.cabLpf };
+            for (int i = 0; i < 4; ++i)
             {
                 ks[i]->getProperties().set ("jbTick", colours::creme.toString());
                 popup (*ks[i]);
                 cab.addChildComponent (*ks[i]);
-                ks[i]->setBounds (Rectangle<int> (56, 56).withCentre ({ (int) xs[i], 96 }));
+                ks[i]->setBounds (Rectangle<int> (50, 50).withCentre ({ (int) xs[i % 2], ys[i / 2] }));
             }
             for (int s = 0; s < 2; ++s)
             {
                 cab.addChildComponent (*c.irZones[(size_t) s]);
-                c.irZones[(size_t) s]->setBounds (10, 146 + s * 42, 128, 36);
+                c.irZones[(size_t) s]->setBounds (10, 192 + s * 38, 128, 32);
             }
         }
     }
@@ -409,12 +415,13 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
     }
     {
         const float xs[] = { 40.0f, 108.0f };
-        const char* caps[] = { "BLEND", "LEVEL" };
-        for (int i = 0; i < 2; ++i)
-            cab.captions.push_back ({ Rectangle<float> (64.0f, 12.0f).withCentre ({ xs[i], 130.0f }), caps[i], 10.5f });
-        cab.titleArea = { 0.0f, 8.0f, 148.0f, 18.0f };
+        const char* caps[] = { "BLEND", "LEVEL", "HPF", "LPF" };
+        const float capY[] = { 108.0f, 174.0f };
+        for (int i = 0; i < 4; ++i)
+            cab.captions.push_back ({ Rectangle<float> (64.0f, 12.0f).withCentre ({ xs[i % 2], capY[i / 2] }), caps[i], 10.5f });
+        cab.titleArea = { 0.0f, 6.0f, 148.0f, 16.0f };
         cab.titleSize = 14.0f;
-        cab.ledCentre = { 126.0f, 17.0f };
+        cab.ledCentre = { 126.0f, 15.0f };
         cab.ledAmount = [this] { return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::cabEnable)) > 0.5f ? 1.0f : 0.0f; };
     }
     showAmp (activeAmp());

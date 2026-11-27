@@ -63,7 +63,16 @@ namespace id
     // Rev3.2 (appended): tuner pedal, shared by both amps. On = output muted.
     inline constexpr const char* tunerOn          = "tuner_on";
     inline constexpr const char* tunerRef         = "tuner_ref";   // A4 reference, 436..445 Hz
+    // Rev3.2.2 (appended, after the tuner): cab HPF / LPF, one pair per amp.
+    // Amp 0 uses the bare IDs; amp 1 uses the m5150_ prefix. Not in AmpSlot, so
+    // addAmpSlots (and every earlier host index) stays unchanged.
+    inline constexpr const char* cabHpf           = "cab_hpf";
+    inline constexpr const char* cabLpf           = "cab_lpf";
 }
+
+/** Parameter ID of the cab HPF or LPF for amp 0 (Rectifier) or 1 (5150). */
+const char* ampCabHpfId (int amp);
+const char* ampCabLpfId (int amp);
 
 /** Rev2.4 per-amp settings. Amp 0 = Rectifier (Red v1 / Red v2 / Orange share
     ONE set: they are channels/voicings of one amp; its legacy IDs are its set),

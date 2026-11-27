@@ -1,6 +1,7 @@
 #include "Parameters.h"
 #include "LevelTaper.h"
 #include <array>
+#include <cmath>
 #include <string>
 
 namespace jb::params
@@ -45,6 +46,29 @@ static std::unique_ptr<AudioParameterFloat> milliseconds (const char* pid, const
                                                       [] (float v, int) { return String (juce::roundToInt (v)) + " ms"; }));
 }
 
+/** Log-scaled frequency knob (Cab HPF / LPF). */
+static std::unique_ptr<AudioParameterFloat> freqHz (const char* pid, const String& name,
+                                                    float lo, float hi, float def)
+{
+    NormalisableRange<float> range (lo, hi,
+                                    [] (float start, float end, float t) { return start * std::pow (end / start, juce::jlimit (0.0f, 1.0f, t)); },
+                                    [] (float start, float end, float v) { return std::log (juce::jlimit (start, end, v) / start) / std::log (end / start); });
+    return std::make_unique<AudioParameterFloat> (ParameterID { pid, versionHint }, name, range, def,
+                                                  AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
+                                                      [] (float v, int)
+                                                      {
+                                                          if (v >= 1000.0f)
+                                                          {
+                                                              const auto k = v / 1000.0f;
+                                                              return (std::abs (k - std::round (k)) < 0.05f
+                                                                          ? String (juce::roundToInt (k))
+                                                                          : String (k, 1))
+                                                                   + " kHz";
+                                                          }
+                                                          return String (juce::roundToInt (v)) + " Hz";
+                                                      }));
+}
+
 namespace
 {
     const char* const legacySlotIds[numAmpSlots] = {
@@ -85,6 +109,18 @@ const char* ampIrKey (int amp, int slot)
     static const char* legacy[] = { "ir_a", "ir_b" };
     const auto s = jlimit (0, 1, slot);
     return amp == 0 ? legacy[s] : prefixed().irKeys[(size_t) s].c_str();
+}
+
+const char* ampCabHpfId (int amp)
+{
+    static const std::string p5 = std::string (amp5150Prefix) + id::cabHpf;
+    return amp == 0 ? id::cabHpf : p5.c_str();
+}
+
+const char* ampCabLpfId (int amp)
+{
+    static const std::string p5 = std::string (amp5150Prefix) + id::cabLpf;
+    return amp == 0 ? id::cabLpf : p5.c_str();
 }
 
 /** The per-amp slot parameters (boost, post EQ, cab, gate) for one amp.
@@ -217,6 +253,16 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
                                                        NormalisableRange<float> (436.0f, 445.0f, 1.0f), 440.0f,
                                                        AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
                                                            [] (float v, int) { return "A=" + String (roundToInt (v)) + " Hz"; })));
+
+    // Rev3.2.2 (appended after the tuner): cab HPF / LPF for each amp.
+    // Defaults (20 Hz / 20 kHz) are true bypass, so older sessions are unchanged
+    // and every earlier host index stays put. Ranges match CabSim::hpfMinHz..lpfMaxHz.
+    for (int amp = 0; amp < numAmps; ++amp)
+    {
+        const String pre = amp == 0 ? String() : String ("5150 ");
+        layout.add (freqHz (ampCabHpfId (amp), pre + "Cab HPF", 20.0f, 300.0f, 20.0f));
+        layout.add (freqHz (ampCabLpfId (amp), pre + "Cab LPF", 2000.0f, 20000.0f, 20000.0f));
+    }
 
     return layout;
 }

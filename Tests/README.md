@@ -159,3 +159,23 @@ session with Boost on.
   - Every configuration with the EQ off still nulls against Rev3.1.
 - **`SmokeTest` EQ checks** now compare against the analytic circuit response at
   the plugin's 4x rate.
+
+## Rev3.2.2
+
+- **`CabFilterTest.cpp`**
+  - Default HPF 20 Hz / LPF 20 kHz (and cab off) are bit-identical passthrough
+    at 44.1, 48, 96 and 192 kHz.
+  - HPF 80 Hz + LPF 5 kHz matches the analytic digital biquad to ≤ 0.08 dB;
+    cutoffs are within 0.4 dB of −3 dB.
+  - HPF 100 Hz matches at 44.1 / 96 / 192 kHz.
+  - Stereo match, quiet-tail decay, zipper-free cutoff jumps.
+  - Plugin path: identity at defaults, HPF engages, state round-trip, old
+    sessions restore the bypass ends.
+- **`EditorTest`** also checks that the HPF/LPF knobs and captions sit inside
+  the CAB panel for both amps without covering the knobs, and that the IR
+  drop zones remain under the filter row.
+- `juicyboi_screenshots` writes `rev3.2.2-cab-hpf-lpf*.png`, pedalboard /
+  editor shots, and `rev3.2.2-cab-filters-response.png`.
+- `JB_CPU_CABFILT=1 juicyboi_dynamics cpu` measures the cost with cab on and
+  both filters engaged (no IR loaded).
+

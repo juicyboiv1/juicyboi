@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (Rev3, v3.2.1)
+# juicyboi — heavy-riff preamp (Rev3, v3.2.2)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -111,7 +111,7 @@ Input trim
         GEQ-7 graphic EQ (per model, solved circuit, Rev3.2: inside the 4x region)
   └─► 5150: Lead Presence ─► Lead Resonance   (base rate)
   └─► Preamp Model crossfade (30 ms; after respective EQ / Presence paths)
-  └─► Cab IR sim (optional; IR A / IR B blend)   (base rate)
+  └─► Cab IR sim (optional; IR A / IR B blend, then HPF / LPF)   (base rate)
   └─► Gate VCA (optional) ◄── key: dry input, tapped right after Input trim
   └─► Master
   └─► Bypass crossfade against latency-aligned dry signal
@@ -238,7 +238,7 @@ gain, a sensible FX-return line level (see `docs/per-amp-state.md`).
   `eq_enable`, plus an LED.
 - **Gate**: Threshold, Hold and Release, with a footswitch for `gate_enable`.
   The LED is green when the gate is open and orange-red when it's closed.
-- **Cab** side panel: OFF/ON toggle (`cab_enable`), Blend and Level knobs, and
+- **Cab** side panel: OFF/ON toggle (`cab_enable`), Blend, Level, HPF and LPF knobs, and
   IR A / IR B slots. Drag an IR file onto a slot or click it to browse; **x**
   clears the slot.
 
@@ -394,8 +394,14 @@ Two-IR cabinet simulator after tone/presence, before Master.
 - **Two IR slots** (IR A, IR B), loaded by drag-and-drop onto the GUI
   (.wav/.aif/.aiff/.flac, mono or stereo); "x" clears a slot.
 - **IR Blend** 0 = 100% IR A, 1 = 100% IR B (linear wet crossfade). **Cab Level** 0–10 (5 = 0 dB, 4.8 dB per number; ±24 dB).
+- **HPF / LPF** (Rev3.2.2), dedicated to this section: 12 dB/oct Butterworth,
+  post-IR (after the A/B mix and Level, before the cab enable fade).
+  HPF 20–300 Hz (default 20 Hz = bypass), LPF 2–20 kHz (default 20 kHz = bypass),
+  log-scaled knobs. Cab off still skips the filters entirely. See
+  [docs/cab-filters.md](docs/cab-filters.md).
 - Empty slots: if one slot is empty, the loaded IR gets 100%;
-  if neither is loaded, the cab passes audio through unchanged.
+  if neither is loaded, the cab passes audio through unchanged (the HPF/LPF
+  still apply when they are not at their bypass ends).
 - IR paths are saved in plugin state (absolute paths) and reloaded if the files still exist.
 - Zero-latency convolution, so no extra latency is reported.
 
@@ -458,6 +464,8 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `cab_enable`   | Cab On      | bool             | off     |
 | `cab_mic_blend`| IR Blend    | 0 … 1            | 0.5     |
 | `cab_level`    | Cab Level   | 0 … 10 (5 = 0 dB, 4.8 dB/number) | 5 (= 0 dB) |
+| `cab_hpf`      | Cab HPF     | 20 … 300 Hz, log (appended Rev3.2.2; 20 Hz = bypass) | 20 Hz |
+| `cab_lpf`      | Cab LPF     | 2 … 20 kHz, log (appended Rev3.2.2; 20 kHz = bypass) | 20 kHz |
 | `gate_enable`  | Gate On     | bool             | off     |
 | `gate_threshold`| Gate Threshold | -80 … -20 dB (key envelope) | -60 dB |
 | `gate_hold`    | Gate Hold   | 0 … 500 ms       | 60 ms   |
@@ -479,7 +487,7 @@ Source/
   gui/Rev1Style.h/.cpp     palette, LookAndFeel (chrome/pedal knobs, faders, tooltips),
                            ParamSlider / ToggleSwitch / Footswitch parameter controls
   gui/AmpHead.h/.cpp       amp head, Rectifier/5150 faceplates + fade, cached static art
-  gui/Pedalboard.h/.cpp    drawer: Boost, 7-band EQ, Gate pedals, Cab panel, IR slots, Input Cal, Preamp Out
+  gui/Pedalboard.h/.cpp    drawer: Boost, 7-band EQ, Gate pedals, Cab panel (HPF/LPF), IR slots, Input Cal, Preamp Out
   Parameters.h/.cpp        parameter IDs + layout
   dsp/
     Filters.h              OnePole (RC-style 6 dB/oct) + RBJ Biquad, per-channel state
@@ -495,7 +503,7 @@ Source/
                            (smoothed knobs/parts), + Rectifier presence shelf
     GraphicEq.h/.cpp       7-band graphic EQ (6 peaks + 6.4k shelf) + Level, true bypass
     OversampledNonlinear.h juce::dsp::Oversampling wrapper (4x, FIR, integer latency)
-    CabSim.h/.cpp          dual-mic IR convolution (4 slots, blend, hard bypass)
+    CabSim.h/.cpp          dual-slot IR convolution (blend, hard bypass, post-IR HPF/LPF)
     NoiseGate.h/.cpp       key/sidechain gate (dry-input detector, VCA after cab)
 Tests/
   SmokeTest.cpp            headless run through every channel/boost-type/gain combo
@@ -511,6 +519,8 @@ tools/tonestack/
   tmb-red.cir / tmb-orange.cir / tmb-lead.cir   SPICE netlists (LTspice / ngspice), same parts
   plot_tonestack.py        digital vs analog (and ngspice) plots -> ../juicyboi-shots/tonestack-*.png
   Screenshots.cpp          juicyboi_screenshots <dir> [scale]: offscreen editor PNGs
+  CabFilterTest.cpp        cab HPF/LPF vs analytic biquad, bypass, state, sample rates
+docs/cab-filters.md        Rev3.2.2 cab HPF/LPF placement, ranges, bypass, tests
 ```
 
 ## DSP stage notes

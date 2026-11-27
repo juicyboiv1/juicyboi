@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(JUICYBOI VERSION 3.2.1 LANGUAGES C CXX)
+project(JUICYBOI VERSION 3.2.2 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -147,7 +147,7 @@ target_link_libraries(juicyboi
 option(JUICYBOI_BUILD_TESTS "Build the headless smoke test" ON)
 if(JUICYBOI_BUILD_TESTS)
     juce_add_console_app(juicyboi_smoketest PRODUCT_NAME "juicyboi_smoketest")
-    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp Tests/SpeakerLoadTest.cpp Tests/Amp5150Test.cpp Tests/PerAmpTest.cpp Tests/PreampOutTest.cpp Tests/TriodeTest.cpp Tests/PedalToneTest.cpp Tests/TunerTest.cpp Tests/GraphicEqTest.cpp)
+    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp Tests/SpeakerLoadTest.cpp Tests/Amp5150Test.cpp Tests/PerAmpTest.cpp Tests/PreampOutTest.cpp Tests/TriodeTest.cpp Tests/PedalToneTest.cpp Tests/TunerTest.cpp Tests/GraphicEqTest.cpp Tests/CabFilterTest.cpp)
     # Reuse the plugin's JUCE module objects/includes/defines rather than
     # compiling the modules a second time.
     target_include_directories(juicyboi_smoketest PRIVATE Source

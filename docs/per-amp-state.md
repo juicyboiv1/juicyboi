@@ -10,7 +10,7 @@ Each amp has its own complete set of settings, and switching amps
 | amp knobs | pre_gain, pre_bass, pre_mid, pre_treble, pre_presence, master, channel (Red/Orange), red_voice (V1/V2) | m5150_channel (Rhythm/Lead), m5150_bright, m5150_crunch, m5150_rhythm_pre, m5150_lead_pre, m5150_low, m5150_mid, m5150_high, m5150_rhythm_post, m5150_lead_post, lead_resonance, lead_presence |
 | boost | od_enable, od_type (OD-808/SD-1), od_drive, od_tone, od_level | m5150_od_* |
 | post EQ | eq_enable, eq_100 … eq_6k4, eq_level | m5150_eq_* |
-| cab | cab_enable, cab_mic_blend, cab_level, IR A/B files (state properties ir_a / ir_b) | m5150_cab_*, m5150_ir_a / m5150_ir_b |
+| cab | cab_enable, cab_mic_blend, cab_level, cab_hpf, cab_lpf (Rev3.2.2, appended), IR A/B files (state properties ir_a / ir_b) | m5150_cab_*, m5150_ir_a / m5150_ir_b |
 | gate | gate_enable, gate_threshold, gate_hold, gate_release | m5150_gate_* |
 
 Global: `preamp_model` (which amp), `bypass`, `input_trim` (shared input

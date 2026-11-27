@@ -73,6 +73,13 @@ std::unique_ptr<juce::AudioProcessor> make (const Cfg& c, int bs)
     setParam (*p, jb::params::id::eqEnable, 0.0f);
     setParam (*p, jb::params::id::gateEnable, 0.0f);
     setParam (*p, jb::params::id::odEnable, 0.0f);
+    if (std::getenv ("JB_CPU_CABFILT") != nullptr) // Rev3.2.2: cab on, HPF/LPF engaged (no IR)
+        for (auto* pre : { "", "m5150_" })
+        {
+            setParam (*p, (juce::String (pre) + "cab_enable").toRawUTF8(), 1.0f);
+            setParam (*p, (juce::String (pre) + "cab_hpf").toRawUTF8(), 80.0f);
+            setParam (*p, (juce::String (pre) + "cab_lpf").toRawUTF8(), 5000.0f);
+        }
     p->prepareToPlay (sr, bs);
     return p;
 }

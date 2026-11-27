@@ -312,5 +312,64 @@ int editorValidation()
                && dr.getBoostPedal().getTitle() == "BOOST" && jb::gui::TunerPedal::nameplateText() == "TUNE");
         check ("plugin name is unchanged (juicyboi Rev3)", p.getName() == "juicyboi Rev3");
     }
+    // Rev3.2.2: HPF / LPF knobs on the CAB panel, both amps, no clipped labels
+    {
+        auto& drawer = ed->getDrawer();
+        auto& cab = drawer.getCabPedal();
+        const auto cabBounds = cab.getLocalBounds();
+        juce::StringArray caps;
+        bool capsInside = true, capsClear = true;
+        for (auto& c : cab.captions)
+        {
+            caps.add (c.text);
+            capsInside = capsInside && cabBounds.toFloat().contains (c.area);
+        }
+        check ("CAB captions include BLEND LEVEL HPF LPF",
+               caps.contains ("BLEND") && caps.contains ("LEVEL") && caps.contains ("HPF") && caps.contains ("LPF"));
+        check ("CAB captions sit inside the panel", capsInside);
+
+        bool knobsOk = true;
+        for (auto* id : { "cab_hpf", "cab_lpf", "cab_mic_blend", "cab_level",
+                          "m5150_cab_hpf", "m5150_cab_lpf", "m5150_cab_mic_blend", "m5150_cab_level" })
+        {
+            auto* c = findById (root, id);
+            if (c == nullptr) { std::printf ("  missing %s\n", id); knobsOk = false; continue; }
+            const auto r = cab.getLocalArea (c, c->getLocalBounds());
+            if (! cabBounds.contains (r))
+            {
+                std::printf ("  %s bounds %d,%d %dx%d outside cab %d,%d %dx%d\n",
+                             id, r.getX(), r.getY(), r.getWidth(), r.getHeight(),
+                             cabBounds.getX(), cabBounds.getY(), cabBounds.getWidth(), cabBounds.getHeight());
+                knobsOk = false;
+            }
+            // captions must not cover the knob body (they sit just below)
+            for (auto& cap : cab.captions)
+                if (cap.area.reduced (2.0f, 1.0f).toNearestInt().intersects (r)
+                    && (cap.text == "HPF" || cap.text == "LPF" || cap.text == "BLEND" || cap.text == "LEVEL"))
+                {
+                    // A 1-2 px kiss at the bottom of the knob is ok; a real overlap is not.
+                    const auto hit = cap.area.toNearestInt().getIntersection (r);
+                    if (hit.getHeight() > 3)
+                    {
+                        std::printf ("  %s overlaps caption %s (%dx%d)\n",
+                                     id, cap.text.toRawUTF8(), hit.getWidth(), hit.getHeight());
+                        capsClear = false;
+                    }
+                }
+        }
+        check ("HPF/LPF (and Blend/Level) knobs sit inside the CAB panel, both amps", knobsOk);
+        check ("CAB captions do not cover the knobs", capsClear);
+
+        // IR drop zones stay inside the panel and below the LPF row
+        bool irsOk = true;
+        for (auto* id : { "ir_a", "ir_b", "m5150_ir_a", "m5150_ir_b" })
+        {
+            auto* c = findById (root, id);
+            if (c == nullptr) { irsOk = false; continue; }
+            const auto r = cab.getLocalArea (c, c->getLocalBounds());
+            irsOk = irsOk && cabBounds.contains (r) && r.getY() > 170;
+        }
+        check ("IR A/B drop zones remain inside the CAB panel under the filters", irsOk);
+    }
     return failures;
 }

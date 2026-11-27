@@ -25,10 +25,10 @@
       Tuner (Rev3.2, shared; listens to the input, mutes the output while on)
       Shared input calibration (input_trim) then:
       Rectifier: [4x: Boost -> Red v1|v2 / Orange cascade -> TMB ->
-                 recovery -> (Red v2) 4x12 load -> GEQ-7] -> Cab -> Gate -> Master
+                 recovery -> (Red v2) 4x12 load -> GEQ-7] -> Cab (IR + HPF/LPF) -> Gate -> Master
       5150:      [4x: Boost -> Rhythm|Lead cascade (Pre Gain networks)
                  -> shared TMB -> Post Gain -> power section -> GEQ-7] ->
-                 Presence/Resonance + 4x12 load -> Cab -> Gate   (no Master)
+                 Presence/Resonance + 4x12 load -> Cab (IR + HPF/LPF) -> Gate   (no Master)
     Preamp Out (global `preamp_out`) skips cab IR, Red v2 / 5150 speaker-load
     modelling, and 5150 Presence/Resonance (power-amp NFB). Preamp stages,
     tone stacks, boosts, post EQ, gate, Rectifier recovery, 5150 Post Gain /
@@ -163,6 +163,10 @@ private:
     std::atomic<float>* pCabEnable = nullptr;
     std::atomic<float>* pCabBlend  = nullptr;
     std::atomic<float>* pCabLevel  = nullptr;
+    std::atomic<float>* pCabHpf    = nullptr; // Rev3.2.2, appended
+    std::atomic<float>* pCabLpf    = nullptr;
+    std::atomic<float>* p5CabHpf   = nullptr;
+    std::atomic<float>* p5CabLpf   = nullptr;
     std::atomic<float>* pGateEnable  = nullptr;
     std::atomic<float>* pGateThresh  = nullptr;
     std::atomic<float>* pGateHold    = nullptr;
