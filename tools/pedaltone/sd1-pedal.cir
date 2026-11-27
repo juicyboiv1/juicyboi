@@ -1,0 +1,55 @@
+* juicyboi Rev3.1 — whole SD-1 topology (Boutique-mod values) Boost (validation netlist, transient):
+* sd1-clipper.cir (input coupling + clipping stage, 4558 single-pole op-amp) driving
+* sd1-post.cir (post LP, tone stage, Level, emitter follower, output network). Starts from the DC
+* operating point (= model at rest). 2SC1815-class BJT with junction caps (a cap-less BJT stalls the transient). plot_pedaltone.py rewrites the .param line and the wrdata file name.
+.param drive=0.5 amp=1 freq=1k tstop=30m tmax=0.65u tau=0.5 lev=0.25119 gbw=3e6 a0=1e5
+.param rdrive={500k*(pwr(10,2*drive)-1)/99 + 1m}
+Vin in 0 SIN(0 {amp} {freq})
+C2  in  inp 0.055u
+R4  inp 0   100k
+Gop 0  vi  inp inn 1
+Cop vi 0   5.3051648e-8
+Rop vi 0   1e5
+Eob clip 0  vi  0   1
+R6  inn n1  1k
+C3  n1  0   0.22u
+R5  clip nf  10k
+RVR nf  inn {rdrive}
+DA  clip m   D1N914
+DB  m   inn D1N914
+DC  inn clip D1N914
+Vcc vcc 0 DC 9
+Vr  vr  0 DC 4.5
+R7  clip a 1k
+C4  a vr 0.15u
+RTA a w {max(tau*5k,1m)}
+RTN w n {max((1-tau)*5k,1m)}
+C5  w x 0.15u
+R8  x 0 470
+Gt  0 vt a n 1
+Ct  vt 0 {1/(2*3.14159265358979*gbw)}
+Rt  vt 0 {a0}
+Et  y 0 vt 0 1
+R9  y n 1k
+C7  y q 22u
+RLU q wv {max((1-lev)*100k,1m)}
+RLL wv vr {max(lev*100k,1m)}
+RD  wv vr 1meg
+R14 wv w2 1k
+C8  w2 b 22u
+RB  b vr 1meg
+Q2  vcc b e QNPN
+RE  e 0 10k
+R16 e o1 1k
+C10 o1 out 22u
+RPD out 0 100k
+RL  out 0 1meg
+.model QNPN NPN(IS=1e-14 BF=300 VAF=100 CJE=8p CJC=3p RB=50)
+.model D1N914 D(IS=2.52n N=1.752)
+.options method=trap reltol=1e-6 abstol=1e-12 vntol=1e-8
+.tran {tmax} {tstop} 0 {tmax}
+.control
+run
+wrdata sd1-pedal.txt v(in) v(out) v(clip)
+.endc
+.end

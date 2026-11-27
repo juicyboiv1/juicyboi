@@ -13,6 +13,9 @@ namespace id
     inline constexpr const char* odDrive    = "od_drive";
     inline constexpr const char* odTone     = "od_tone";
     inline constexpr const char* odLevel    = "od_level";
+    inline constexpr const char* leadPresence = "lead_presence"; // 5150 closed-loop approximation, 0=reference
+    inline constexpr const char* leadResonance = "lead_resonance"; // 5150 NFB Resonance (VR8/C12), 0=reference
+    inline constexpr const char* preampModel = "preamp_model"; // 0 Rectifier, 1 5150-inspired Lead
     inline constexpr const char* channel    = "channel";
     inline constexpr const char* redVoice   = "red_voice"; // Red (Ch1) voicing: 0 = v1, 1 = v2
     inline constexpr const char* gain       = "pre_gain";
@@ -41,6 +44,64 @@ namespace id
     inline constexpr const char* gateHold      = "gate_hold";
     inline constexpr const char* gateRelease   = "gate_release";
 }
+
+// Rev2.4: the 5150 amp's own controls (appended; every legacy index unchanged).
+namespace id
+{
+    inline constexpr const char* m5150Channel     = "m5150_channel";      // 0 = Rhythm, 1 = Lead
+    inline constexpr const char* m5150Bright      = "m5150_bright";       // Rhythm Bright switch
+    inline constexpr const char* m5150Crunch      = "m5150_crunch";       // Rhythm Crunch switch
+    inline constexpr const char* m5150RhythmPre   = "m5150_rhythm_pre";
+    inline constexpr const char* m5150LeadPre     = "m5150_lead_pre";
+    inline constexpr const char* m5150Low         = "m5150_low";
+    inline constexpr const char* m5150Mid         = "m5150_mid";
+    inline constexpr const char* m5150High        = "m5150_high";
+    inline constexpr const char* m5150RhythmPost  = "m5150_rhythm_post";
+    inline constexpr const char* m5150LeadPost    = "m5150_lead_post";
+    // Appended after the 5150 slot set. 0 = Full Amp (default), 1 = Preamp Out.
+    inline constexpr const char* preampOut        = "preamp_out";
+    // Rev3.2 (appended): tuner pedal, shared by both amps. On = output muted.
+    inline constexpr const char* tunerOn          = "tuner_on";
+    inline constexpr const char* tunerRef         = "tuner_ref";   // A4 reference, 436..445 Hz
+    // Rev3.2.2 (appended, after the tuner): cab HPF / LPF, one pair per amp.
+    // Amp 0 uses the bare IDs; amp 1 uses the m5150_ prefix. Not in AmpSlot, so
+    // addAmpSlots (and every earlier host index) stays unchanged.
+    inline constexpr const char* cabHpf           = "cab_hpf";
+    inline constexpr const char* cabLpf           = "cab_lpf";
+}
+
+/** Parameter ID of the cab HPF or LPF for amp 0 (Rectifier) or 1 (5150). */
+const char* ampCabHpfId (int amp);
+const char* ampCabLpfId (int amp);
+
+/** Rev2.4 per-amp settings. Amp 0 = Rectifier (Red v1 / Red v2 / Orange share
+    ONE set: they are channels/voicings of one amp; its legacy IDs are its set),
+    amp 1 = 5150. Each slot below exists once per amp: amp 0 uses the legacy ID,
+    amp 1 the same ID with the "m5150_" prefix. Amp knobs are per amp by
+    construction (Rectifier: pre_gain..pre_presence, channel, red_voice, master;
+    5150: the m5150_* knobs above plus lead_presence / lead_resonance).
+    Global (not per amp): preamp_model, bypass, input_trim (shared input
+    calibration for both amps; no longer a per-amp head knob), and preamp_out
+    (Full Amp vs Preamp Out).
+    AmpSlot::inputTrim stays in this list so m5150_input_trim keeps its host
+    index, but that 5150 slot parameter is unused and hidden. See docs/per-amp-state.md. */
+enum class AmpSlot
+{
+    inputTrim, odEnable, odType, odDrive, odTone, odLevel,
+    eqEnable, eq100, eq200, eq400, eq800, eq1k6, eq3k2, eq6k4, eqLevel,
+    cabEnable, cabMicBlend, cabLevel,
+    gateEnable, gateThreshold, gateHold, gateRelease,
+    count
+};
+inline constexpr int numAmps = 2;
+inline constexpr int numAmpSlots = (int) AmpSlot::count;
+inline constexpr const char* amp5150Prefix = "m5150_";
+
+/** Parameter ID of a per-amp slot for amp 0 (Rectifier) or 1 (5150). */
+const char* ampId (int amp, AmpSlot slot);
+inline const char* ampEqBandId (int amp, int band) { return ampId (amp, (AmpSlot) ((int) AmpSlot::eq100 + band)); }
+/** Root-state property keys of the cab IR file paths per amp. */
+const char* ampIrKey (int amp, int slot);
 
 inline constexpr int versionHint = 1;
 

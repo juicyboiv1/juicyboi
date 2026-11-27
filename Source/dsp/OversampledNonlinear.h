@@ -42,6 +42,21 @@ public:
         os->processSamplesDown (block);
     }
 
+    /** Two same-latency output paths from one nonlinear callback. The second
+        upsampled block is scratch (overwritten by fn); its independent downsampler
+        keeps both model outputs warm without touching the legacy filter state. */
+    template <typename Fn>
+    void processParallel (juce::dsp::AudioBlock<float>& block,
+                          juce::dsp::AudioBlock<float>& otherBlock,
+                          OversampledNonlinear& other, Fn&& fn)
+    {
+        auto up = os->processSamplesUp (block);
+        auto otherUp = other.os->processSamplesUp (otherBlock);
+        fn (up, otherUp);
+        os->processSamplesDown (block);
+        other.os->processSamplesDown (otherBlock);
+    }
+
 private:
     std::unique_ptr<juce::dsp::Oversampling<float>> os;
 };

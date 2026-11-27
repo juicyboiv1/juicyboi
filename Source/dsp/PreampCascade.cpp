@@ -15,6 +15,11 @@ void PreampCascade::prepare (double sampleRate, const ChannelVoicing& voicing)
     {
         stageHP[(size_t) i].setup (OnePole::Type::highPass, v.stages[(size_t) i].couplingHpHz, fs);
         stageLP[(size_t) i].setup (OnePole::Type::lowPass,  v.stages[(size_t) i].plateLpHz,    fs);
+        const auto& st = v.stages[(size_t) i];
+        tube[(size_t) i].prepare (fs, v.tubes[(size_t) i]);
+        const auto sh = tube[(size_t) i].cathodeShelf();
+        shelfEq[(size_t) i].setup (sh.wz, sh.wp, fs);
+        map[(size_t) i] = triode::mapStage (v.tubes[(size_t) i], st.gain, st.bias, st.posHardness, st.negHardness, (double) v.triodeDrive[(size_t) i]);
     }
 
     // ~20 ms smoothing for the Gain pot
@@ -28,6 +33,8 @@ void PreampCascade::reset()
     inputTight.reset(); postLP.reset(); dcBlock.reset();
     for (auto& f : stageHP) f.reset();
     for (auto& f : stageLP) f.reset();
+    for (auto& t : tube) t.reset();
+    for (auto& e : shelfEq) e.reset();
 }
 
 void PreampCascade::setGain (float gain01) noexcept

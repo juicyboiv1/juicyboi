@@ -1,0 +1,44 @@
+* juicyboi Rev3.1 — SD-1 topology (Boutique-mod values) post-clip network (validation netlist, AC).
+* Stock SD-1 drawing (schematicheaven) + Wampler DIY "Boutique Overdrive" mod: R7 1k, C4 .15u,
+* C5 .15u, Tone 5k linear, R9 1k, C6 removed, C7 22u, R10 jumper, Level 100kA, R14 1k, C8 22u, C10 22u.
+* Vr ideal = AC ground; "clip" = clipper op-amp output (ideal source). Tone op-amp single-pole (gbw/a0).
+.param tau=0.5 lev=0.25119 gbw=1e13 a0=1e9
+Vcc vcc 0 DC 9
+Vr  vr  0 DC 4.5
+Vin clip 0 DC 0 AC 1
+* post-clip LP R7/C4 (no bias resistor at the tone op-amp input)
+R7  clip a 1k
+C4  a vr 0.15u
+* Tone 5k strung (+) a .. w .. n (-); wiper R8 470 / C5 .15u to ground
+RTA a w {max(tau*5k,1m)}
+RTN w n {max((1-tau)*5k,1m)}
+C5  w x 0.15u
+R8  x 0 470
+Gt  0 vt a n 1
+Ct  vt 0 {1/(2*3.14159265358979*gbw)}
+Rt  vt 0 {a0}
+Et  y 0 vt 0 1
+* R9 1k feedback, C6 removed
+R9  y n 1k
+* C7 22u (R10 jumpered) into Level 100k, bypass-JFET bias 1M at the wiper
+C7  y q 22u
+RLU q wv {max((1-lev)*100k,1m)}
+RLL wv vr {max(lev*100k,1m)}
+RD  wv vr 1meg
+* R14 1k / C8 22u into the 2SC732 follower (1M bias, 10k emitter), R16 1k / C10 22u / 100k, amp 1M
+R14 wv w2 1k
+C8  w2 b 22u
+RB  b vr 1meg
+Q2  vcc b e QNPN
+RE  e 0 10k
+R16 e o1 1k
+C10 o1 out 22u
+RPD out 0 100k
+RL  out 0 1meg
+.model QNPN NPN(IS=1e-14 BF=300 VAF=100 CJE=8p CJC=3p RB=50)
+.ac dec 48 10 40k
+.control
+run
+wrdata sd1-post.txt vdb(y) vdb(out)
+.endc
+.end

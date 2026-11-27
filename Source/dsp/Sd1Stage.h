@@ -1,83 +1,106 @@
 #pragma once
 
+#include "DiodeClipper.h"
 #include "Filters.h"
-#include "SoftClip.h"
+#include "PedalTone.h"
 
 namespace jb::dsp
 {
-/** SD-1–family Boost front end (Boutique Overdrive Mod RC cues).
+/** SD-1–topology Boost front end — Rev2.2 component-level clipper.
 
-    Behavioral model inspired by the publicly documented "Boutique Overdrive"
-    RC set for SD-1–topology pedals (fatter coupling, 500kA drive range,
-    retuned mid clip/LP, C6 removed for an open top). Original DSP of those
-    topology principles — not a product clone. No commercial branding.
+    Stock SD-1 circuit (schematicheaven drawing, reference designators as
+    used by the Wampler DIY write-up) with the publicly documented
+    "Boutique Overdrive" mod values that juicyboi has always used for this
+    voicing (Wampler DIY, "A few easy Boss SD-1 Super Overdrive Mods").
+    See docs/diode-clippers.md for both columns (stock / mod).
 
-    BOM → model map (Boutique OD cues):
-      R6=1k + C3=0.22u     gain-leg RC (~723 Hz) — mids get drive
-      R5=10k + OD pot 500kA feedback / drive range (audio taper)
-      D4/D5/D6             asymmetric 3-diode clip (1 vs 2 silicon)
-      R7=1k + C4=0.15u     post-clip LP (~1.06 kHz)
-      C5=0.15u + Tone 5k   passive tone LP + treble restore
-      C6                   omitted (open top — no recovery HF clamp)
-      Level 100kA          output level
-      C1=1u / C2=.055u     fatter input coupling HPs
+      C2=.055uF + R4=100k      input coupling / bias HP (28.9 Hz; R4 stock)
+      R6=1k + C3=0.22uF        gain leg to Vr (723 Hz)          [mod]
+      R5=10k + Gain 500kA      feedback resistance (audio taper) [mod]
+      (no feedback capacitor — none fitted on the SD-1 clipper)
+      D4/D5/D6 1N916-class     asymmetric: 2 in series for out > in, 1 for out < in
+      R7=1k + C4=0.15uF        post-clip LP (1.06 kHz)          [mod]
+      C5=0.15uF                tone LP cap                       [mod]
+      C6                       removed                           [mod]
+      Tone 5k linear [mod], R8=470 + C5 wiper to ground, R9=1k feedback [mod]
+      C7=22uF [mod], R10 jumper [mod], Level 100kA [mod], JFET bias 1M
+      R14=1k [mod] + C8=22uF [mod] into the 2SC732 follower (1M bias, 10k emitter)
+      R16=1k, C10=22uF [mod], 100k pulldown
 
-    Topology: out ≈ in + asym_clip(gain · hp_leg(in)), then post LP, tone, level.
-    Voiced slightly hot for surplus thickness into Dual Rec–style high gain. */
+    The op-amp clipping stage is SOLVED per sample (see OpAmpDiodeClipper).
+    Rev3.1: everything after it is the exact linear circuit (PedalPostStage).
+    Original modelling of the published topology, not a product clone. */
 class Sd1Stage
 {
 public:
+    static ClipperComponents clipperComponents() noexcept
+    {
+        ClipperComponents c;
+        c.rLeg = 1.0e3;  c.cLeg = 0.22e-6;           // R6, C3 (Boutique mod)
+        c.rFixed = 10e3; c.rDrivePot = 500e3;        // R5, Gain 500kA (Boutique mod)
+        c.cFeedback = 0.0;                           // not fitted
+        c.diodesPos = 2; c.diodesNeg = 1;            // D4-D6 asymmetric
+        c.is = 2.52e-9;  c.n = 1.752;                // 1N914-family model (assumption for 1N916/1S2473)
+        return c;
+    }
+
+    static PedalToneComponents toneComponents() noexcept
+    {
+        PedalToneComponents t;
+        t.rPost = 1.0e3;  t.cPost = 0.15e-6;         // R7, C4 [mod]
+        t.rBias = 0.0;                               // none on the SD-1
+        t.rPot = 5.0e3;   t.taper = PedalToneComponents::Taper::linear; // Tone 5k linear [mod]
+        t.rWiper = 470.0; t.cWiper = 0.15e-6;        // R8 (stock), C5 [mod]
+        t.rFb = 1.0e3;                               // R9 [mod]; C6 removed [mod]
+        return t;
+    }
+
+    static PedalOutputComponents outputComponents() noexcept
+    {
+        PedalOutputComponents o;
+        o.rSeries = 0.0;    o.cCoupling = 22e-6;     // R10 jumper, C7 [mod]
+        o.rLevel = 100e3;   o.rDrain = 1.0e6;        // Level 100kA [mod], JFET bias 1M
+        o.rSeries2 = 1.0e3; o.cBase = 22e-6;         // R14, C8 [mod]
+        o.rBase = 1.0e6;    o.rEmitter = 10e3;       // base bias 1M, emitter 10k
+        o.rOut = 1.0e3;     o.cOut = 22e-6;  o.rPulldown = 100e3; // R16, C10 [mod], 100k
+        return o;
+    }
+
     void prepare (double sampleRate);
     void reset();
 
-    /** drive01 / tone01 in 0..1, levelGain is linear output gain. */
     void setParameters (float drive01, float tone01, float levelGain);
+    void snap();
+
+    inline void beginFrame() noexcept
+    {
+        clipper.beginFrame();
+        post.beginFrame();
+    }
+
+    inline float processClipper (float x, int ch) noexcept
+    {
+        return (float) clipper.process ((double) inputHP.process (x, ch), ch);
+    }
 
     inline float process (float x, int ch) noexcept
     {
-        const auto in = inputHP.process (x, ch);
-
-        auto amp = driveGain * gainLegHP.process (in, ch);
-
-        // Asymmetric 3-diode clip on the amplified leg (Boutique keeps stock diodes)
-        amp = diodeVf * shape::diodeAsym3 (amp / diodeVf, 1.0f, 2.0f, diodeKnee);
-        const auto clipped = in + amp;
-
-        // Post-clip LP (R7/C4), then tone LP with treble restore (C6 omitted → open top)
-        const auto filtered = postLP.process (clipped, ch);
-        const auto lp = toneLP.process (filtered, ch);
-        const auto toned = lp + toneTreble * (filtered - lp);
-
-        return outputHP.process (toned * level, ch);
+        return post.process (processClipper (x, ch), ch);
     }
+
+    const OpAmpDiodeClipper& getClipper() const noexcept { return clipper; }
+    PedalPostStage& getPost() noexcept { return post; }
+
+    /** Fixed output makeup (not part of the circuit). See docs/pedal-tone.md. */
+    static constexpr double makeup = 3.8637; // +11.74 dB
 
 private:
     double fs = 44100.0;
 
-    OnePole inputHP, gainLegHP, postLP, toneLP, outputHP;
+    OnePole inputHP;
+    OpAmpDiodeClipper clipper;
+    PedalPostStage post;
 
-    float driveGain = 20.0f;
-    float toneTreble = 0.5f;
-    float level = 1.0f;
-
-    static constexpr float diodeVf = 0.60f;
-    static constexpr float diodeKnee = 2.6f;
-
-    // Boutique Overdrive Mod RC cues
-    static constexpr double rLeg        = 1.0e3;    // R6
-    static constexpr double cLeg        = 0.22e-6;  // C3
-    static constexpr double rFixed      = 10e3;     // R5
-    static constexpr double rDrivePot   = 500e3;    // Gain 500k audio
-    static constexpr double rPost       = 1.0e3;    // R7
-    static constexpr double cPost       = 0.15e-6;  // C4
-    static constexpr double rToneSeries = 1.0e3;    // into tone node
-    static constexpr double cTone       = 0.15e-6;  // C5
-    // Fatter coupling than stock / OD-808 (C1=1u, C2=.055u class)
-    static constexpr double inputHpHz   = 8.0;
-    static constexpr double outputHpHz  = 8.0;
-    // Slight makeup so A/B with OD-808 at matched Level feels thick into Dual Rec
-    static constexpr float  thicknessGain = 1.18f;
-
-    float lastDrive = -1.0f;
+    static constexpr double inputHpHz = 1.0 / (2.0 * kPi * 100e3 * 0.055e-6); // C2/R4
 };
 } // namespace jb::dsp

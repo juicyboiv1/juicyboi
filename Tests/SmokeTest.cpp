@@ -14,6 +14,24 @@ static void setParam (juce::AudioProcessor& p, const char* id, float plain)
     param->setValueNotifyingHost (param->convertTo0to1 (plain));
 }
 
+int legacyRegression();
+int triodeValidation();
+int modelValidation();
+int presenceValidation();
+int resonanceValidation();
+int levelTaperValidation();
+int editorValidation();
+int toneStackValidation();
+int clipperValidation();
+int pedalToneValidation();
+int speakerLoadValidation();
+int amp5150Validation();
+int perAmpValidation();
+int preampOutValidation();
+int tunerValidation();
+int graphicEqValidation();
+int cabFilterValidation();
+
 int main()
 {
     juce::ScopedJuceInitialiser_GUI init;
@@ -25,7 +43,7 @@ int main()
     p->prepareToPlay (sr, bs);
     std::printf ("latency: %d samples\n", p->getLatencySamples());
 
-    int failures = 0;
+    int failures = legacyRegression() + modelValidation() + presenceValidation() + resonanceValidation() + levelTaperValidation() + editorValidation() + toneStackValidation() + clipperValidation() + speakerLoadValidation() + amp5150Validation() + perAmpValidation() + preampOutValidation() + triodeValidation() + pedalToneValidation() + tunerValidation() + graphicEqValidation() + cabFilterValidation();
     juce::MidiBuffer midi;
 
     {
@@ -145,52 +163,57 @@ int main()
         if (! bpGate) ++failures;
     }
 
-    // Graphic EQ: standalone DSP checks (band gain, shelf, level, true bypass)
+    // Graphic EQ (Rev3.2 GEQ-7 circuit): standalone DSP checks at the plugin's 4x rate
+    // (band gain, shelf, level, true bypass) against the analytic circuit response with
+    // the dB-calibrated slider law; GraphicEqTest.cpp has the ngspice comparisons.
     {
         auto sineGainDb = [] (jb::dsp::GraphicEq& eq, double hz, double fs)
         {
             double inSq = 0.0, outSq = 0.0, ph = 0.0;
             const int n = 256;
-            for (int b = 0; b < 400; ++b)
+            for (int b = 0; b < 1500; ++b)
             {
                 float buf[n];
                 for (int i = 0; i < n; ++i) { buf[i] = (float) (0.1 * std::sin (ph)); ph += 2.0 * juce::MathConstants<double>::pi * hz / fs; }
                 float in[n]; std::copy (buf, buf + n, in);
                 float* ch[1] { buf };
                 eq.process (ch, 1, n);
-                if (b < 200) continue;
+                if (b < 1000) continue;
                 for (int i = 0; i < n; ++i) { inSq += (double) in[i] * in[i]; outSq += (double) buf[i] * buf[i]; }
             }
             return 10.0 * std::log10 (outSq / inSq);
         };
 
-        const double fs = 48000.0;
+        const double fs = 4 * 48000.0;
         std::array<float, 7> flat {};
         jb::dsp::GraphicEq eq;
         const bool defOff = dynamic_cast<JuicyboiAudioProcessor&> (*p).apvts.getRawParameterValue (jb::params::id::eqEnable)->load() < 0.5f;
 
-        auto test = [&] (const char* what, std::array<float, 7> g, float lvl, double hz, double expect, double tol)
+        auto test = [&] (const char* what, std::array<float, 7> g, float lvl, double hz, double tol)
         {
+            std::array<double, 7> w {};
+            for (int k = 0; k < 7; ++k) w[(size_t) k] = jb::dsp::GraphicEq::bandWiper (k, g[(size_t) k]);
+            const auto expect = 20.0 * std::log10 (std::abs (jb::dsp::GraphicEq::circuitResponse (hz, w, jb::dsp::GraphicEq::levelWiper (lvl))));
             eq.setParameters (true, g, lvl);
             eq.prepare (fs, 256);
             const auto got = sineGainDb (eq, hz, fs);
             const bool ok = std::abs (got - expect) < tol;
-            std::printf ("eq %-26s %7.2f dB (expect %6.1f)  %s\n", what, got, expect, ok ? "ok" : "FAIL");
+            std::printf ("eq %-26s %7.2f dB (circuit %6.2f)  %s\n", what, got, expect, ok ? "ok" : "FAIL");
             if (! ok) ++failures;
         };
-        test ("flat @ 1 kHz", flat, 0.0f, 1000.0, 0.0, 0.05);
-        test ("800 +15 @ 800 Hz",  { 0, 0, 0, 15, 0, 0, 0 }, 0.0f, 800.0, 15.0, 0.5);
-        test ("100 -15 @ 100 Hz",  { -15, 0, 0, 0, 0, 0, 0 }, 0.0f, 100.0, -15.0, 0.6);
-        test ("6.4k shelf +15 @ 14 kHz", { 0, 0, 0, 0, 0, 0, 15 }, 0.0f, 14000.0, 15.0, 1.0);
-        test ("800 +15 @ 6.4 kHz (isol.)", { 0, 0, 0, 15, 0, 0, 0 }, 0.0f, 6400.0, 0.0, 1.0);
-        test ("level +6 @ 1 kHz", flat, 6.0f, 1000.0, 6.0, 0.05);
+        test ("flat @ 1 kHz", flat, 0.0f, 1000.0, 0.1);
+        test ("800 +15 @ 800 Hz",  { 0, 0, 0, 15, 0, 0, 0 }, 0.0f, 800.0, 0.1);
+        test ("100 -15 @ 100 Hz",  { -15, 0, 0, 0, 0, 0, 0 }, 0.0f, 100.0, 0.1);
+        test ("6.4k +15 @ 12.8 kHz", { 0, 0, 0, 0, 0, 0, 15 }, 0.0f, 12800.0, 0.25);
+        test ("800 +15 @ 6.4 kHz (isol.)", { 0, 0, 0, 15, 0, 0, 0 }, 0.0f, 6400.0, 0.1);
+        test ("level +6 @ 1 kHz", flat, 6.0f, 1000.0, 0.1);
 
         // Off -> fades, then true bypass (bit-identical passthrough)
         eq.setParameters (true, { 15, -15, 15, -15, 15, -15, 15 }, 10.0f);
         eq.prepare (fs, 256);
         eq.setParameters (false, { 15, -15, 15, -15, 15, -15, 15 }, 10.0f);
         float tmp[512] {}; float* tch[1] { tmp };
-        eq.process (tch, 1, 512); // 10 ms fade at 48k = 480 samples
+        for (int k = 0; k < 5; ++k) eq.process (tch, 1, 512); // 10 ms fade at 4x48k = 1920 samples
         float buf[256], ref[256];
         for (int i = 0; i < 256; ++i) buf[i] = ref[i] = (float) std::sin (i * 0.1);
         float* bch[1] { buf };
