@@ -8,7 +8,7 @@ class JuicyboiAudioProcessor;
 
 namespace jb::gui
 {
-/** Rev3.2 "juicyboi TUNE" pedal: a small gloss-black enclosure with a dark
+/** Rev3.2 "TUNE" pedal: a small gloss-black enclosure with a dark
     display (fan of vertical LED segments across -50..+50 cents, a centre
     needle bar, flat/sharp arrows, a big note name) and a footswitch.
     Tuner on = output muted (TU-3 style). Original artwork (docs/tuner.md). */
@@ -30,6 +30,8 @@ public:
     static constexpr int numSegments = 21;
     static constexpr double inTuneCents = 2.0;
 
+    /** The engraved pedal name (just the model name, Rev3.2.1). */
+    static juce::String nameplateText() { return "TUNE"; }
     static constexpr float ledRadius = 5.0f;
     /** Mute LED position / glow footprint in this pedal's coordinates; lit only while the tuner is on (tests). */
     juce::Point<float> ledCentre() const noexcept;

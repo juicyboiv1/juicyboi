@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (Rev3, v3.2.0)
+# juicyboi — heavy-riff preamp (Rev3, v3.2.1)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -202,7 +202,7 @@ bitmap assets or commercial logos. The whole layout lives at a fixed design size
 The aspect ratio is fixed, so everything stays crisp at any size.
 
 **Head.** Black tolex with chrome corner caps and a blonde basketweave grille.
-The **juicyboi** badge appears on the grille and nowhere else. The black control
+The **juicyboi** badge, lettered in jagged metal capitals (see [docs/metal-badge.md](docs/metal-badge.md)), appears on the grille and nowhere else; no pedal carries the name. The black control
 panel has a small *Rev2* plate (the plate shows the build revision; the GUI design is the Rev1 amp head). Each knob has a small creme caption **below** it,
 and nothing above the knobs. Hover any knob for a tooltip with its name and value. Input Cal, Master, Boost Level and Cab Level
 tooltips also show the equivalent dB. A value bubble shows while you drag.
@@ -356,7 +356,7 @@ documented topology principles — not a product clone (no commercial branding).
 
 A component-level model of the classic 7-band gyrator pedal EQ (GE-7-style
 circuit, published part values, op-amp bandwidth and output follower included).
-In the UI it is the "juicyboi GEQ-7"; there is no affiliation. It sits
+In the UI it is the "GEQ-7"; there is no affiliation. It sits
 **post-ToneStack / pre-Cab**, so cuts and boosts shape what hits the IR. Full
 details: [docs/graphic-eq.md](docs/graphic-eq.md).
 

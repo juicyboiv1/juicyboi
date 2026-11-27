@@ -6,7 +6,7 @@
 
 namespace jb::dsp
 {
-/** Rev3.2 "juicyboi GEQ-7": component-level model of a classic 7-band guitar
+/** Rev3.2 "GEQ-7": component-level model of a classic 7-band guitar
     graphic EQ pedal (GE-7-style topology, values from the published redrawn
     schematic; docs/graphic-eq.md). Placed post-ToneStack / pre-Cab and run
     inside the 4x oversampled region so the bilinear (trapezoidal) mapping is

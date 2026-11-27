@@ -17,6 +17,8 @@ public:
     Pedal (Kind, juce::Colour body, juce::Colour bodyDark, juce::Colour textColour, juce::String title);
 
     void paint (juce::Graphics&) override;
+    /** The engraved pedal name ("BOOST", "GEQ-7", ...): never the plugin name (Rev3.2.1). */
+    const juce::String& getTitle() const noexcept { return title; }
 
     struct Caption { juce::Rectangle<float> area; juce::String text; float size; };
     std::vector<Caption> captions;

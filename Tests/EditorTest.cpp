@@ -6,6 +6,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
 #include "gui/AmpHead.h"
+#include "gui/MetalBadge.h"
 #include <cstdio>
 
 namespace
@@ -267,6 +268,49 @@ int editorValidation()
         setParam (q, "gate_enable", 0.0f);
         drawer.pollLedsNow();
         check ("gate LED goes dark when the gate is switched off", ! lit (sample (gp, gc, 6.0f)) && gp.getShownLed() < 0.01f);
+    }
+    // Rev3.2.1: jagged metal badge lettering and no plugin name on the pedals
+    {
+        namespace metal = jb::gui::metal;
+        const auto word = metal::wordPath ("JUICYBOI");
+        const auto wb = word.getBounds();
+        check ("metal badge can spell JUICYBOI (and takes lower case)",
+               metal::canSpell ("JUICYBOI") && metal::canSpell ("juicyboi") && ! metal::canSpell ("JUICYBOIZ"));
+        check ("metal badge path is the same on every call (no shimmer between repaints)",
+               metal::wordPath ("JUICYBOI").toString() == word.toString() && metal::wordPath ("juicyboi").toString() == word.toString());
+        check ("metal badge is tall and narrow: spikes overshoot above the cap line and below the baseline",
+               wb.getY() < -25.0f && wb.getBottom() > 125.0f && wb.getWidth() > 300.0f);
+        bool straight = true;
+        for (juce::Path::Iterator it (word); it.next();)
+            if (it.elementType == juce::Path::Iterator::quadraticTo || it.elementType == juce::Path::Iterator::cubicTo)
+                straight = false;
+        check ("metal badge outlines are straight segments only (no curves)", straight);
+
+        auto sampleBadge = [] (JuicyboiAudioProcessorEditor& e, float scale)
+        {
+            return e.getHead().createComponentSnapshot (jb::gui::AmpHead::badgeBounds().toNearestInt(), true, scale);
+        };
+        const auto a = sampleBadge (*ed, 2.0f), b = sampleBadge (*ed, 2.0f);
+        bool same = a.getWidth() == b.getWidth() && a.getHeight() == b.getHeight();
+        for (int y = 0; same && y < a.getHeight(); ++y)
+            for (int x = 0; same && x < a.getWidth(); ++x)
+                same = a.getPixelAt (x, y) == b.getPixelAt (x, y);
+        check ("badge paints identically twice", same);
+        int bright = 0;
+        for (int y = 0; y < a.getHeight(); ++y)
+            for (int x = 0; x < a.getWidth(); ++x)
+                if (a.getPixelAt (x, y).getBrightness() > 0.6f) ++bright;
+        check ("badge shows steel lettering on the dark plate", bright > 800);
+
+        auto& dr = ed->getDrawer();
+        const auto contains = [] (const juce::String& s) { return s.containsIgnoreCase ("juicyboi"); };
+        check ("no pedal carries the plugin name (BOOST, GEQ-7, GATE, CAB, TUNE)",
+               ! contains (dr.getBoostPedal().getTitle()) && ! contains (dr.getEqPedal().getTitle())
+               && ! contains (dr.getGatePedal().getTitle()) && ! contains (dr.getCabPedal().getTitle())
+               && ! contains (jb::gui::TunerPedal::nameplateText()));
+        check ("pedal names are the model names", dr.getEqPedal().getTitle() == "GEQ-7" && dr.getGatePedal().getTitle() == "GATE"
+               && dr.getBoostPedal().getTitle() == "BOOST" && jb::gui::TunerPedal::nameplateText() == "TUNE");
+        check ("plugin name is unchanged (juicyboi Rev3)", p.getName() == "juicyboi Rev3");
     }
     return failures;
 }

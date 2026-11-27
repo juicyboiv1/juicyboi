@@ -272,7 +272,7 @@ std::vector<Component*> Pedalboard::AmpControls::cabControls()
 Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
     : proc (p),
       boost (Pedal::Kind::stomp, colours::boostGreen, colours::boostGreenD, colours::creme, "BOOST"),
-      eq (Pedal::Kind::stomp, colours::eqCreme, colours::eqCremeD, colours::ink, "juicyboi GEQ-7"),
+      eq (Pedal::Kind::stomp, colours::eqCreme, colours::eqCremeD, colours::ink, "GEQ-7"),
       gate (Pedal::Kind::stomp, Colour (0xff2a2a2a), Colour (0xff121212), colours::creme, "GATE"),
       cab (Pedal::Kind::sidePanel, Colour (0xff1c1c1c), Colour (0xff0d0d0d), colours::creme, "CAB"),
       tuner (p, popupParent),

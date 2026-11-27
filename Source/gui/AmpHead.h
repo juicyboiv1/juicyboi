@@ -7,7 +7,7 @@ class JuicyboiAudioProcessor;
 
 namespace jb::gui
 {
-/** Rev1 amp head: tolex, corner caps, basketweave grille with the only juicyboi badge,
+/** Rev1 amp head: tolex, corner caps, basketweave grille with the only amp badge,
     and a black control panel with unlabelled chrome knobs (tooltips name them).
     The front-panel Model toggle is the `preamp_model` parameter: flipping it fades
     (~200 ms) between the Rectifier faceplate (blonde grille) and the all-black 5150 faceplate.
@@ -27,6 +27,8 @@ public:
     void syncModelNow();
     /** Revision plate text next to the knobs: "Rev3" / "Rev3 · 5150". */
     static juce::String revisionPlateText (bool leadFaceplate);
+    /** The badge plate on the grille, in AmpHead coordinates (the lettering is jagged metal, see MetalBadge.h). */
+    static juce::Rectangle<float> badgeBounds();
     /** 0 = Rectifier faceplate, 1 = 5150 faceplate (fade in between). */
     float getFaceplateMix() const noexcept { return mix; }
 

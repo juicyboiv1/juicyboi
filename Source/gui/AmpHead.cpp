@@ -3,6 +3,7 @@
 #include "../Parameters.h"
 #include "../LevelTaper.h"
 #include "../dsp/Amp5150.h"
+#include "MetalBadge.h"
 
 namespace jb::gui
 {
@@ -36,6 +37,11 @@ namespace
         return String (name) + " " + String (v, 1) + (v > 0.0 ? String (" = ") + String (20.0 * std::log10 (jb::dsp::audioTaper (v)), 1) + " dB re 10"
                                                              : String (" (silent)"));
     }
+}
+
+Rectangle<float> AmpHead::badgeBounds()
+{
+    return Rectangle<float> (310.0f, 112.0f).withCentre (grilleArea.getCentre().translated (0.0f, -4.0f));
 }
 
 AmpHead::AmpHead (JuicyboiAudioProcessor& p, Component* popupParent)
@@ -419,9 +425,9 @@ void AmpHead::paintStatic (Graphics& g, int m)
     g.setColour (Colours::black.withAlpha (0.6f));
     g.drawRoundedRectangle (grilleArea.expanded (5.0f), 6.0f, 1.0f);
 
-    // --- the one juicyboi badge (grille only)
+    // --- the one amp badge (grille only)
     {
-        const auto badge = Rectangle<float> (236.0f, 66.0f).withCentre (grilleArea.getCentre().translated (0.0f, -6.0f));
+        const auto badge = badgeBounds();
         g.setColour (Colours::black.withAlpha (0.55f));
         g.fillRoundedRectangle (badge.translated (2.0f, 4.0f), 12.0f);
         Path rim; rim.addRoundedRectangle (badge, 12.0f);
@@ -432,11 +438,8 @@ void AmpHead::paintStatic (Graphics& g, int m)
         g.fillRoundedRectangle (inner, 9.0f);
         g.setColour (colours::creme.withAlpha (0.7f));
         g.drawRoundedRectangle (inner.reduced (3.0f), 7.0f, 1.0f);
-        g.setFont (Font (FontOptions (Font::getDefaultSerifFontName(), 42.0f, Font::bold | Font::italic)));
-        g.setColour (Colours::black);
-        g.drawText ("juicyboi", inner.translated (1.0f, 2.0f), Justification::centred, false);
-        g.setColour (colours::creme);
-        g.drawText ("juicyboi", inner, Justification::centred, false);
+        // Rev3.2.1: jagged metal lettering (vector outlines, spikes overshoot the word body)
+        metal::drawWord (g, "JUICYBOI", inner.reduced (7.0f, 3.0f));
     }
 
     // --- control panel

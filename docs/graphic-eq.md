@@ -2,7 +2,7 @@
 
 Rev3.2 replaces the RBJ-biquad graphic EQ with a solved circuit model of the
 classic 7-band gyrator pedal EQ topology (GE-7 style). In the UI it is the
-"juicyboi GEQ-7"; it has no Boss branding and no affiliation. It stays where the
+"GEQ-7"; it has no Boss branding and no affiliation. It stays where the
 EQ was:
 - one EQ per amp (`eq_*` for the Rectifier, `m5150_eq_*` for the 5150);
 - post tone stack and pre cab;

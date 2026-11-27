@@ -120,5 +120,37 @@ int main (int argc, char** argv)
     shootPart (drawer, tunerRect, "rev3.2-tuner-off", 3.0f);
     shootPart (drawer, eqRect, "rev3.2-geq7", 3.0f);
     shoot (ed, "rev3.2-editor-drawer-open");
+    // Rev3.2.1: jagged metal amp badge close-ups (6x), full UI and the pedalboard (no "juicyboi" on any pedal)
+    {
+        const auto badge = jb::gui::AmpHead::badgeBounds().expanded (10.0f).toNearestInt();
+        set (p, "tuner_on", 0.0f);
+        ed.setDrawerOpen (false);
+        set (p, "preamp_model", 0.0f);
+        ed.getHead().syncModelNow();
+        shootPart (ed.getHead(), badge, "rev3.2.1-badge-rectifier", 6.0f);
+        shoot (ed, "rev3.2.1-editor-rectifier");
+        set (p, "preamp_model", 1.0f);
+        ed.getHead().syncModelNow();
+        shootPart (ed.getHead(), badge, "rev3.2.1-badge-5150", 6.0f);
+        shoot (ed, "rev3.2.1-editor-5150");
+        ed.setDrawerOpen (true);
+        ed.getDrawer().syncAmpNow();
+        shoot (ed, "rev3.2.1-editor-5150-drawer-open");
+        shootPart (drawer, drawer.getLocalBounds(), "rev3.2.1-pedalboard-5150", 2.0f);
+        set (p, "preamp_model", 0.0f);
+        ed.getHead().syncModelNow();
+        ed.getDrawer().syncAmpNow();
+        shoot (ed, "rev3.2.1-editor-rectifier-drawer-open");
+        shootPart (drawer, drawer.getLocalBounds(), "rev3.2.1-pedalboard-rectifier", 2.0f);
+        set (p, "tuner_on", 1.0f);
+        tp.previewDisplay = reading (40, 0.4);
+        tp.refreshNow();
+        shootPart (drawer, tunerRect, "rev3.2.1-tuner-on", 4.0f);
+        set (p, "tuner_on", 0.0f);
+        tp.previewDisplay.reset();
+        tp.refreshNow();
+        shootPart (drawer, tunerRect, "rev3.2.1-tuner-off", 4.0f);
+        shootPart (drawer, eqRect, "rev3.2.1-geq7", 4.0f);
+    }
     return 0;
 }

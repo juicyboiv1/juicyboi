@@ -1,4 +1,4 @@
-# Tuner pedal ("juicyboi TUNE", Rev3.2)
+# Tuner pedal ("TUNE", Rev3.2)
 
 A chromatic pedal tuner sits first on the pedalboard, before the Boost. It has
 two parameters, both appended after `preamp_out`, so older sessions load with
@@ -84,4 +84,4 @@ tuners:
 - a CAL knob, a footswitch and a red mute LED.
 
 Segments are amber off pitch and turn bright green within ±2 cents. The pedal
-uses no third-party names, logos or artwork. The label reads "juicyboi TUNE".
+uses no third-party names, logos or artwork. The label reads "TUNE" (since Rev3.2.1; it used to carry a small "juicyboi" line above it).

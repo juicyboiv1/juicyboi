@@ -150,14 +150,11 @@ void TunerPedal::paint (Graphics& g)
     // nameplate (embossed, low contrast like a moulded logo)
     {
         const auto plate = Rectangle<float> (10.0f, 176.0f, b.getWidth() - 50.0f, 30.0f);
-        g.setFont (uiFont (10.0f, false));
-        g.setColour (Colours::white.withAlpha (0.45f));
-        g.drawText ("juicyboi", plate.withHeight (12.0f), Justification::centredLeft, false);
         g.setFont (uiFont (17.0f));
         g.setColour (Colours::black.withAlpha (0.6f));
-        g.drawText ("TUNE", plate.withTrimmedTop (11.0f).translated (0.0f, 1.0f), Justification::centredLeft, false);
+        g.drawText (nameplateText(), plate.translated (0.0f, 3.0f), Justification::centredLeft, false);
         g.setColour (Colour (0xffc8ccd4));
-        g.drawText ("TUNE", plate.withTrimmedTop (11.0f), Justification::centredLeft, false);
+        g.drawText (nameplateText(), plate.translated (0.0f, 2.0f), Justification::centredLeft, false);
         g.setFont (uiFont (8.0f, false));
         g.setColour (Colours::white.withAlpha (0.5f));
         g.drawText ("CAL", Rectangle<float> (b.getRight() - 42.0f, 202.0f, 34.0f, 10.0f), Justification::centred, false);
