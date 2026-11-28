@@ -2,6 +2,7 @@
 
 #include "Rev1Style.h"
 #include "TunerPedal.h"
+#include "PitchPedal.h"
 #include <array>
 
 class JuicyboiAudioProcessor;
@@ -70,7 +71,7 @@ private:
     std::unique_ptr<juce::FileChooser> chooser;
 };
 
-/** The pedalboard drawer under the head: Tuner (Rev3.2, shared), Boost, GEQ-7 and Gate
+/** The pedalboard drawer under the head: Tuner (Rev3.2, shared), PITCH (Rev3.3, slim), Boost, GEQ-7 and Gate
     stompboxes plus the Cab side panel. Closed = only the wooden drawer front shows; click it to open/close.
     Rev2.4: there is one control set per amp (docs/per-amp-state.md); the set of the amp
     selected by `preamp_model` is shown, the other is hidden but stays bound.
@@ -106,7 +107,7 @@ private:
     {
         void paint (juce::Graphics&) override;
         void mouseUp (const juce::MouseEvent&) override { if (onClick) onClick(); }
-        juce::String getTooltip() override { return open ? "Close the pedalboard drawer" : "Open the pedalboard drawer (Tuner, Boost, EQ, Gate, Cab)"; }
+        juce::String getTooltip() override { return open ? "Close the pedalboard drawer" : "Open the pedalboard drawer (Tuner, Pitch, Boost, EQ, Gate, Cab)"; }
         std::function<void()> onClick;
         bool open = true;
     };
@@ -116,6 +117,7 @@ private:
 
     Pedal boost, eq, gate, cab;
     TunerPedal tuner;   // shared by both amps (Rev3.2)
+    Pedal pitch;        // Rev3.3 slim PITCH pedal (per amp controls)
 
 public:
     TunerPedal& getTunerPedal() noexcept { return tuner; }
@@ -123,6 +125,9 @@ public:
     Pedal& getBoostPedal() noexcept { return boost; }
     Pedal& getEqPedal() noexcept { return eq; }
     Pedal& getCabPedal() noexcept { return cab; }
+    Pedal& getPitchPedal() noexcept { return pitch; }
+    /** Refresh the PITCH value readouts (normally the 30 Hz timer). */
+    void syncPitchReadouts();
     /** Run the LED poll of every pedal now (normally a 30 Hz timer, plus footswitch changes). */
     void pollLedsNow();
 private:
@@ -141,10 +146,20 @@ private:
         ToggleSwitch cabOn;
         ParamSlider cabBlend, cabLevel, cabHpf, cabLpf;
         std::array<std::unique_ptr<IRDropZone>, 2> irZones;
+        // Rev3.3 PITCH
+        ParamSlider pitchShift, pitchDetune, pitchMix, pitchSweep;
+        std::array<std::unique_ptr<ModeButton>, 4> pitchModes; // WHAM, TRANS, HARM, POLY
+        Footswitch pitchSwitch;
         std::vector<juce::Component*> all();
         std::vector<juce::Component*> cabControls();
     };
     std::array<std::unique_ptr<AmpControls>, 2> sets;
+public:
+    ParamSlider& getPitchKnob (int amp, int i) noexcept;
+    ModeButton& getPitchMode (int amp, int i) noexcept { return *sets[(size_t) amp]->pitchModes[(size_t) i]; }
+    Footswitch& getPitchSwitch (int amp) noexcept { return sets[(size_t) amp]->pitchSwitch; }
+private:
+    std::array<int, 4> pitchValueCaption { -1, -1, -1, -1 };
     int shownAmp = -1;
     int activeAmp() const;
     void showAmp (int amp);

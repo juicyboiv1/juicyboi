@@ -67,13 +67,14 @@ int preampOutValidation()
     {
         P p;
         // Rev3.2 appends tuner_on, tuner_ref after it; Rev3.2.2 appends the
-        // four cab filter params after those.
+        // four cab filter params after those; Rev3.3 the 18 PITCH params
+        // (PitchShiftTest checks their order).
         const auto& ps = p.getParameters();
         auto* po = dynamic_cast<juce::AudioProcessorParameterWithID*> (p.apvts.getParameter ("preamp_out"));
         const auto idx = ps.indexOf (po);
         auto idAt = [&] (int i) { auto* w = dynamic_cast<juce::AudioProcessorParameterWithID*> (ps[i]); return w != nullptr ? w->paramID : juce::String(); };
-        check ("preamp_out appended after Rev3.0 params (then tuner, then cab HPF/LPF), default Full Amp, gain is unity",
-               po != nullptr && idx == ps.size() - 7
+        check ("preamp_out appended after Rev3.0 params (then tuner, cab HPF/LPF, PITCH), default Full Amp, gain is unity",
+               po != nullptr && idx == ps.size() - 7 - 2 * jb::params::numPitchSlots
                    && idAt (idx + 1) == "tuner_on" && idAt (idx + 2) == "tuner_ref"
                    && idAt (idx + 3) == "cab_hpf" && idAt (idx + 4) == "cab_lpf"
                    && idAt (idx + 5) == "m5150_cab_hpf" && idAt (idx + 6) == "m5150_cab_lpf"

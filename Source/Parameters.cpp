@@ -123,6 +123,22 @@ const char* ampCabLpfId (int amp)
     return amp == 0 ? id::cabLpf : p5.c_str();
 }
 
+const char* ampPitchId (int amp, PitchSlot slot)
+{
+    static const char* const bare[numPitchSlots] = {
+        id::pitchOn, id::pitchShift, id::pitchDetune, id::pitchMix, id::pitchSweep,
+        id::pitchWhammy, id::pitchTranspose, id::pitchHarmony, id::pitchPoly
+    };
+    struct Prefixed
+    {
+        Prefixed() { for (int i = 0; i < numPitchSlots; ++i) ids[(size_t) i] = std::string (amp5150Prefix) + bare[i]; }
+        std::array<std::string, numPitchSlots> ids;
+    };
+    static const Prefixed p5;
+    const auto i = jlimit (0, numPitchSlots - 1, (int) slot);
+    return amp == 0 ? bare[i] : p5.ids[(size_t) i].c_str();
+}
+
 /** The per-amp slot parameters (boost, post EQ, cab, gate) for one amp.
     AmpSlot::inputTrim is still appended for amp 1 so m5150_input_trim keeps its
     host index; it is unused (both amps use the shared input_trim calibration). */
@@ -262,6 +278,37 @@ AudioProcessorValueTreeState::ParameterLayout createLayout()
         const String pre = amp == 0 ? String() : String ("5150 ");
         layout.add (freqHz (ampCabHpfId (amp), pre + "Cab HPF", 20.0f, 300.0f, 20.0f));
         layout.add (freqHz (ampCabLpfId (amp), pre + "Cab LPF", 2000.0f, 20000.0f, 20000.0f));
+    }
+
+    // Rev3.3 (appended after the cab filters): PITCH pedal, one set per amp.
+    // Off by default (true bypass), so every older session sounds the same and
+    // every earlier host index stays put. Mode toggle defaults: Transpose on,
+    // Shift +12, so stomping the pedal gives an octave up. docs/pitch-shift.md
+    for (int amp = 0; amp < numAmps; ++amp)
+    {
+        const String pre = amp == 0 ? String() : String ("5150 ");
+        auto pid = [amp] (PitchSlot s) { return ParameterID { ampPitchId (amp, s), versionHint }; };
+        layout.add (std::make_unique<AudioParameterBool> (pid (PitchSlot::on), pre + "Pitch On", false));
+        layout.add (std::make_unique<AudioParameterFloat> (pid (PitchSlot::shift), pre + "Pitch Shift",
+                                                           NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 12.0f,
+                                                           AudioParameterFloatAttributes().withLabel ("st").withStringFromValueFunction (
+                                                               [] (float v, int) { const auto n = roundToInt (v); return (n > 0 ? "+" : "") + String (n) + " st"; })));
+        layout.add (std::make_unique<AudioParameterFloat> (pid (PitchSlot::detune), pre + "Pitch Detune",
+                                                           NormalisableRange<float> (-50.0f, 50.0f, 1.0f), 0.0f,
+                                                           AudioParameterFloatAttributes().withLabel ("ct").withStringFromValueFunction (
+                                                               [] (float v, int) { const auto n = roundToInt (v); return (n > 0 ? "+" : "") + String (n) + " ct"; })));
+        layout.add (std::make_unique<AudioParameterFloat> (pid (PitchSlot::mix), pre + "Pitch Mix",
+                                                           NormalisableRange<float> (0.0f, 100.0f, 1.0f), 50.0f,
+                                                           AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (
+                                                               [] (float v, int) { return String (roundToInt (v)) + "%"; })));
+        layout.add (std::make_unique<AudioParameterFloat> (pid (PitchSlot::sweep), pre + "Pitch Sweep",
+                                                           NormalisableRange<float> (0.0f, 1.0f), 1.0f,
+                                                           AudioParameterFloatAttributes().withStringFromValueFunction (
+                                                               [] (float v, int) { return String (roundToInt (v * 100.0f)) + "%"; })));
+        layout.add (std::make_unique<AudioParameterBool> (pid (PitchSlot::whammy), pre + "Pitch Whammy", false));
+        layout.add (std::make_unique<AudioParameterBool> (pid (PitchSlot::transpose), pre + "Pitch Transpose", true));
+        layout.add (std::make_unique<AudioParameterBool> (pid (PitchSlot::harmony), pre + "Pitch Harmony", false));
+        layout.add (std::make_unique<AudioParameterBool> (pid (PitchSlot::poly), pre + "Pitch Poly", false));
     }
 
     return layout;

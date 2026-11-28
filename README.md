@@ -1,4 +1,4 @@
-# juicyboi — heavy-riff preamp (Rev3, v3.2.2)
+# juicyboi — heavy-riff preamp (Rev3, v3.3.0)
 
 A desktop guitar preamp plugin / standalone app (e.g. guitar DI through a Focusrite
 interface) built with JUCE 9.
@@ -385,6 +385,21 @@ segments turn bright green within ±2 cents. The CAL knob sets the reference A
 (436–445 Hz, double-click = 440). Off, the signal is untouched. See
 [docs/tuner.md](docs/tuner.md).
 
+## PITCH pedal (Rev3.3)
+
+Second on the board (after TUNE, before BOOST), in a slim TUNE-style enclosure,
+with one set of settings per amp. **SHIFT** sets −24…+24 semitones and
+**DETUNE** ±50 cents. **MIX** and **SWEEP** (heel→toe, automatable) are the
+other two knobs, plus four mode buttons, each on its own:
+- **WHAM**: SWEEP glides from dry pitch to SHIFT;
+- **TRANS**: drop or raise tuning by SHIFT + DETUNE;
+- **HARM**: MIX blends in the dry signal;
+- **POLY**: chord-quality phase vocoder, ~43 ms, instead of the ~5–12 ms
+  single-note grain shifter.
+
+Off is true bypass after a 15 ms fade, bit-identical to v3.2.2. PITCH latency
+is not reported to the host. See [docs/pitch-shift.md](docs/pitch-shift.md).
+
 ## Cab (IR) section
 
 Two-IR cabinet simulator after tone/presence, before Master.
@@ -473,6 +488,12 @@ until the hiss between palm-mutes is gone. For staccato chugs, use short Hold
 | `master`       | Master      | 0 … 10 audio taper (0 = mute, 7.5 = 0 dB, 10 = +12 dB) | 6.5 (= −6 dB) |
 | `bypass`       | Bypass      | bool (host bypass param) | off |
 | `preamp_out`   | Preamp Out  | Full Amp / Preamp Out (appended; default Full Amp) | Full Amp |
+| `pitch_on` (+ `m5150_`) | Pitch On | bool (appended Rev3.3, after the cab filters) | off |
+| `pitch_shift`  | Pitch Shift | −24 … +24 st | +12 |
+| `pitch_detune` | Pitch Detune | −50 … +50 ct | 0 |
+| `pitch_mix`    | Pitch Mix   | 0 … 100 % (Harmony) | 50 % |
+| `pitch_sweep`  | Pitch Sweep | 0 … 1 (Whammy heel … toe) | 1 |
+| `pitch_whammy` / `pitch_transpose` / `pitch_harmony` / `pitch_poly` | mode toggles | bool | off / **on** / off / off |
 | `tuner_on`     | Tuner       | bool (on = output muted; appended Rev3.2) | off |
 | `tuner_ref`    | Tuner Reference A | 436 … 445 Hz (appended Rev3.2) | 440 Hz |
 
@@ -521,6 +542,9 @@ tools/tonestack/
   Screenshots.cpp          juicyboi_screenshots <dir> [scale]: offscreen editor PNGs
   CabFilterTest.cpp        cab HPF/LPF vs analytic biquad, bypass, state, sample rates
 docs/cab-filters.md        Rev3.2.2 cab HPF/LPF placement, ranges, bypass, tests
+docs/pitch-shift.md        Rev3.3 PITCH pedal: modes, engines, latency decision, tests
+  PitchShiftTest.cpp       Rev3.3 PITCH: intervals, toggles, bypass vs v3.2.2, clicks, latency, CPU
+  BypassRender.h           renders behind Tests/rev3.2.2-bypass.f32 (captured once from v3.2.2)
 ```
 
 ## DSP stage notes

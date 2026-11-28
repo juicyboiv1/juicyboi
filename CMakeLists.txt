@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 
-project(JUICYBOI VERSION 3.2.2 LANGUAGES C CXX)
+project(JUICYBOI VERSION 3.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -116,6 +116,7 @@ target_sources(juicyboi
         Source/gui/Pedalboard.cpp
         Source/gui/TunerPedal.cpp
         Source/gui/MetalBadge.cpp
+        Source/gui/PitchPedal.cpp
         Source/dsp/Od808Stage.cpp
         Source/dsp/Sd1Stage.cpp
         Source/dsp/PreampCascade.cpp
@@ -124,7 +125,8 @@ target_sources(juicyboi
         Source/dsp/PitchDetector.cpp
         Source/dsp/Tuner.cpp
         Source/dsp/CabSim.cpp
-        Source/dsp/NoiseGate.cpp)
+        Source/dsp/NoiseGate.cpp
+        Source/dsp/PitchShifter.cpp)
 
 target_include_directories(juicyboi PRIVATE Source)
 
@@ -147,10 +149,10 @@ target_link_libraries(juicyboi
 option(JUICYBOI_BUILD_TESTS "Build the headless smoke test" ON)
 if(JUICYBOI_BUILD_TESTS)
     juce_add_console_app(juicyboi_smoketest PRODUCT_NAME "juicyboi_smoketest")
-    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp Tests/SpeakerLoadTest.cpp Tests/Amp5150Test.cpp Tests/PerAmpTest.cpp Tests/PreampOutTest.cpp Tests/TriodeTest.cpp Tests/PedalToneTest.cpp Tests/TunerTest.cpp Tests/GraphicEqTest.cpp Tests/CabFilterTest.cpp)
+    target_sources(juicyboi_smoketest PRIVATE Tests/SmokeTest.cpp Tests/PreampModelTest.cpp Tests/ModelValidation.cpp Tests/PresenceTest.cpp Tests/ResonanceTest.cpp Tests/LevelTaperTest.cpp Tests/EditorTest.cpp Tests/ToneStackTest.cpp Tests/ClipperTest.cpp Tests/SpeakerLoadTest.cpp Tests/Amp5150Test.cpp Tests/PerAmpTest.cpp Tests/PreampOutTest.cpp Tests/TriodeTest.cpp Tests/PedalToneTest.cpp Tests/TunerTest.cpp Tests/GraphicEqTest.cpp Tests/CabFilterTest.cpp Tests/PitchShiftTest.cpp)
     # Reuse the plugin's JUCE module objects/includes/defines rather than
     # compiling the modules a second time.
-    target_include_directories(juicyboi_smoketest PRIVATE Source
+    target_include_directories(juicyboi_smoketest PRIVATE Source Tests
         $<TARGET_PROPERTY:juicyboi,INCLUDE_DIRECTORIES>)
     target_compile_definitions(juicyboi_smoketest PRIVATE
         JUICYBOI_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Tests"
@@ -213,6 +215,16 @@ if(JUICYBOI_BUILD_TESTS)
     # Rev3 triode stage dump (plain C++, no JUCE): tools/triode/plot_triode.py
     add_executable(juicyboi_triode_dump Tests/TriodeDump.cpp)
     target_include_directories(juicyboi_triode_dump PRIVATE Source)
+
+    # Rev3.3 PITCH pedal validation only (pitch accuracy, bypass, clicks, latency, CPU)
+    juce_add_console_app(juicyboi_pitchprobe PRODUCT_NAME "juicyboi_pitchprobe")
+    target_sources(juicyboi_pitchprobe PRIVATE Tests/PitchProbe.cpp Tests/PitchShiftTest.cpp)
+    target_include_directories(juicyboi_pitchprobe PRIVATE Source Tests
+        $<TARGET_PROPERTY:juicyboi,INCLUDE_DIRECTORIES>)
+    target_compile_definitions(juicyboi_pitchprobe PRIVATE
+        JUICYBOI_TEST_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Tests"
+        $<TARGET_PROPERTY:juicyboi,COMPILE_DEFINITIONS>)
+    target_link_libraries(juicyboi_pitchprobe PRIVATE juicyboi juce::juce_recommended_config_flags)
 
     # Offscreen editor screenshots: juicyboi_screenshots <output-dir>
     juce_add_console_app(juicyboi_screenshots PRODUCT_NAME "juicyboi_screenshots")

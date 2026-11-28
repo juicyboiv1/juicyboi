@@ -179,3 +179,20 @@ session with Boost on.
 - `JB_CPU_CABFILT=1 juicyboi_dynamics cpu` measures the cost with cab on and
   both filters engaged (no IR loaded).
 
+## Rev3.3
+
+- **`PitchShiftTest.cpp`** (in the smoketest; `juicyboi_pitchprobe` runs only these tests).
+  - `rev3.2.2-bypass.f32` was captured ONCE from the v3.2.2 build (297dbd4)
+    with `BypassRender.h`. With PITCH off, all four scenarios must match it
+    bit for bit, including with every PITCH knob and mode changed.
+  - −24…+24 st, mono and poly, within 1 cent by `PitchDetector` and a
+    spectral-peak search. Poly chord: the old partials are gone.
+  - Toggle logic, exact-dry cases, true bypass, click-free moves, NaN /
+    denormal checks at four rates and odd block sizes, latency, per-amp
+    independence, CPU.
+- **`EditorTest`**: the slim PITCH pedal sits between TUNE and BOOST, no pedals
+  overlap, every control and readout fits, and the buttons and LED are bound.
+- `juicyboi_screenshots` writes `rev3.3-*.png`.
+- `JB_CPU_PITCH=mono|poly juicyboi_dynamics cpu` measures the whole plugin with
+  PITCH on (−12 st).
+- Do not regenerate `rev3.2.2-bypass.f32` from later code.

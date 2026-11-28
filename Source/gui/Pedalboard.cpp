@@ -12,12 +12,16 @@ namespace
 {
     constexpr float pedalTop = 36.0f, pedalH = 282.0f, switchY = 238.0f;
     // Rev3.2: Tuner first in the chain (left), then Boost, GEQ-7, Gate, Cab.
-    const Rectangle<int> tunerArea { 34, (int) pedalTop, 128, (int) pedalH };
-    const Rectangle<int> boostArea { 172, (int) pedalTop, 214, (int) pedalH };
-    const Rectangle<int> eqArea    { 396, (int) pedalTop, 304, (int) pedalH };
-    const Rectangle<int> gateArea  { 710, (int) pedalTop, 200, (int) pedalH };
-    const Rectangle<int> cabArea   { 920, (int) pedalTop, 148, (int) pedalH };
-    constexpr int eqPitch = 34, eqX0 = 12, eqLevelX = 264;
+    // Rev3.3: the slim PITCH pedal goes between TUNE and BOOST; every pedal was
+    // tightened a little (6 px gaps, narrower Boost / Gate / Cab) to make room
+    // inside the same 1100-wide drawer.
+    const Rectangle<int> tunerArea { 32, (int) pedalTop, 120, (int) pedalH };
+    const Rectangle<int> pitchArea { 158, (int) pedalTop, pitchLayout::width, (int) pedalH };
+    const Rectangle<int> boostArea { 268, (int) pedalTop, 184, (int) pedalH };
+    const Rectangle<int> eqArea    { 458, (int) pedalTop, 300, (int) pedalH };
+    const Rectangle<int> gateArea  { 764, (int) pedalTop, 160, (int) pedalH };
+    const Rectangle<int> cabArea   { 930, (int) pedalTop, 136, (int) pedalH };
+    constexpr int eqPitch = 34, eqX0 = 10, eqLevelX = 262;
 
     void paintWood (Graphics& g, Rectangle<float> r, int seed, bool horizontal, float brightness = 0.0f)
     {
@@ -247,8 +251,23 @@ Pedalboard::AmpControls::AmpControls (JuicyboiAudioProcessor& p, int amp)
                 { return "Cab Level " + String (v, 1) + " = " + String (taper::cabLevelKnobToDb (v), 1)
                          + " dB (5 = unity, 4.8 dB per number)"; }),
       cabHpf (p.apvts, params::ampCabHpfId (amp), ParamSlider::Style::pedalKnob),
-      cabLpf (p.apvts, params::ampCabLpfId (amp), ParamSlider::Style::pedalKnob)
+      cabLpf (p.apvts, params::ampCabLpfId (amp), ParamSlider::Style::pedalKnob),
+      pitchShift (p.apvts, params::ampPitchId (amp, params::PitchSlot::shift), ParamSlider::Style::pedalKnob),
+      pitchDetune (p.apvts, params::ampPitchId (amp, params::PitchSlot::detune), ParamSlider::Style::pedalKnob),
+      pitchMix (p.apvts, params::ampPitchId (amp, params::PitchSlot::mix), ParamSlider::Style::pedalKnob),
+      pitchSweep (p.apvts, params::ampPitchId (amp, params::PitchSlot::sweep), ParamSlider::Style::pedalKnob),
+      pitchSwitch (p.apvts, params::ampPitchId (amp, params::PitchSlot::on), "Pitch")
 {
+    using PS = params::PitchSlot;
+    pitchModes[0] = std::make_unique<ModeButton> (p.apvts, params::ampPitchId (amp, PS::whammy), "WHAM",
+                                                  "Whammy: SWEEP (heel..toe, automatable / MIDI-learnable) glides from dry pitch to SHIFT.");
+    pitchModes[1] = std::make_unique<ModeButton> (p.apvts, params::ampPitchId (amp, PS::transpose), "TRANS",
+                                                  "Transpose: drop or raise tuning by SHIFT (-24..+24 semitones) plus DETUNE (+/-50 cents).");
+    pitchModes[2] = std::make_unique<ModeButton> (p.apvts, params::ampPitchId (amp, PS::harmony), "HARM",
+                                                  "Harmony: MIX blends dry and shifted (octaves / harmonies). Off = 100% shifted.");
+    pitchModes[3] = std::make_unique<ModeButton> (p.apvts, params::ampPitchId (amp, PS::poly), "POLY",
+                                                  "Poly: high-quality chord shifter (~37 ms latency). Off = low-latency mono shifter (~6 ms).",
+                                                  Colour (0xffffb340));
     for (size_t b = 0; b < eqBands.size(); ++b)
         eqBands[b] = std::make_unique<ParamSlider> (p.apvts, params::ampEqBandId (amp, (int) b), ParamSlider::Style::fader);
     for (int s = 0; s < 2; ++s)
@@ -259,7 +278,8 @@ std::vector<Component*> Pedalboard::AmpControls::all()
 {
     std::vector<Component*> v { &odDrive, &odTone, &odLevel, &odType, &odSwitch, &eqLevel, &eqSwitch,
                                 &gateThreshold, &gateHold, &gateRelease, &gateSwitch, &cabOn, &cabBlend, &cabLevel,
-                                &cabHpf, &cabLpf };
+                                &cabHpf, &cabLpf, &pitchShift, &pitchDetune, &pitchMix, &pitchSweep, &pitchSwitch };
+    for (auto& m : pitchModes) v.push_back (m.get());
     for (auto& b : eqBands) v.push_back (b.get());
     for (auto& z : irZones) v.push_back (z.get());
     return v;
@@ -279,6 +299,7 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
       gate (Pedal::Kind::stomp, Colour (0xff2a2a2a), Colour (0xff121212), colours::creme, "GATE"),
       cab (Pedal::Kind::sidePanel, Colour (0xff1c1c1c), Colour (0xff0d0d0d), colours::creme, "CAB"),
       tuner (p, popupParent),
+      pitch (Pedal::Kind::stomp, Colour (0xff4b2a63), Colour (0xff24122f), colours::creme, "PITCH"),
       inputCal (p.apvts, pid::inputTrim, ParamSlider::Style::pedalKnob,
                 [] (double v)
                 {
@@ -289,7 +310,7 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
       unused5150Input (p.apvts, jb::params::ampId (1, jb::params::AmpSlot::inputTrim), ParamSlider::Style::pedalKnob),
       preampOut (p.apvts, pid::preampOut, "PRE", "FULL", true, true)
 {
-    for (auto* pd : { &boost, &eq, &gate, &cab })
+    for (auto* pd : { &boost, &eq, &gate, &cab, &pitch })
         addAndMakeVisible (*pd);
     addAndMakeVisible (tuner);
 
@@ -302,19 +323,19 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
 
         // --- Boost
         {
-            const float xs[] = { 39.0f, 107.0f, 175.0f };
+            const float xs[] = { 34.0f, 92.0f, 150.0f };
             ParamSlider* ks[] = { &c.odDrive, &c.odTone, &c.odLevel };
             for (int i = 0; i < 3; ++i)
             {
                 popup (*ks[i]);
                 boost.addChildComponent (*ks[i]);
-                ks[i]->setBounds (Rectangle<int> (60, 60).withCentre ({ (int) xs[i], 48 }));
+                ks[i]->setBounds (Rectangle<int> (56, 56).withCentre ({ (int) xs[i], 48 }));
             }
             c.odType.extraTip = "OD-808 = symmetric mid hump; SD-1 = asymmetric, open-top voicing.";
             boost.addChildComponent (c.odType);
-            c.odType.setBounds (Rectangle<int> (100, 30).withCentre ({ 107, 116 }));
+            c.odType.setBounds (Rectangle<int> (100, 30).withCentre ({ 92, 116 }));
             boost.addChildComponent (c.odSwitch);
-            c.odSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 107, (int) switchY }));
+            c.odSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 92, (int) switchY }));
         }
         // --- 7-band EQ (100 Hz .. 6.4 kHz) + Level
         {
@@ -330,30 +351,30 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
             eq.addChildComponent (c.eqLevel);
             c.eqLevel.setBounds (eqLevelX, 14, 32, 136);
             eq.addChildComponent (c.eqSwitch);
-            c.eqSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 152, (int) switchY }));
+            c.eqSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 150, (int) switchY }));
         }
         // --- Gate
         {
-            const float xs[] = { 36.0f, 100.0f, 164.0f };
+            const float xs[] = { 30.0f, 80.0f, 130.0f };
             ParamSlider* ks[] = { &c.gateThreshold, &c.gateHold, &c.gateRelease };
             for (int i = 0; i < 3; ++i)
             {
                 popup (*ks[i]);
                 gate.addChildComponent (*ks[i]);
-                ks[i]->setBounds (Rectangle<int> (60, 60).withCentre ({ (int) xs[i], 48 }));
+                ks[i]->setBounds (Rectangle<int> (48, 48).withCentre ({ (int) xs[i], 48 }));
             }
             gate.addChildComponent (c.gateSwitch);
-            c.gateSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 100, (int) switchY }));
+            c.gateSwitch.setBounds (Rectangle<int> (52, 52).withCentre ({ 80, (int) switchY }));
         }
         // --- Cab side panel (Rev3.2.2: HPF / LPF under Blend / Level)
         {
             c.cabOn.extraTip = "Off = hard bypass (e.g. into a real power amp / FX return). No IRs loaded = passthrough; HPF/LPF still apply when Cab is on.";
             cab.addChildComponent (c.cabOn);
-            c.cabOn.setBounds (Rectangle<int> (104, 24).withCentre ({ 74, 38 }));
+            c.cabOn.setBounds (Rectangle<int> (104, 24).withCentre ({ 68, 38 }));
             c.cabBlend.extraTip = "(left = IR A, right = IR B)";
             c.cabHpf.extraTip = "(post-IR high-pass, 12 dB/oct; 20 Hz = off / bypass)";
             c.cabLpf.extraTip = "(post-IR low-pass, 12 dB/oct; 20 kHz = off / bypass)";
-            const float xs[] = { 40.0f, 108.0f };
+            const float xs[] = { 36.0f, 100.0f };
             const int ys[] = { 78, 144 };
             ParamSlider* ks[] = { &c.cabBlend, &c.cabLevel, &c.cabHpf, &c.cabLpf };
             for (int i = 0; i < 4; ++i)
@@ -366,20 +387,43 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
             for (int s = 0; s < 2; ++s)
             {
                 cab.addChildComponent (*c.irZones[(size_t) s]);
-                c.irZones[(size_t) s]->setBounds (10, 192 + s * 38, 128, 32);
+                c.irZones[(size_t) s]->setBounds (10, 192 + s * 38, 116, 32);
             }
+        }
+        // --- PITCH (Rev3.3, slim): SHIFT / DETUNE over MIX / SWEEP, four mode buttons, footswitch
+        {
+            namespace L = pitchLayout;
+            c.pitchShift.extraTip = "(semitones; drop or raise tuning, and the Whammy toe interval; double-click = +12)";
+            c.pitchDetune.extraTip = "(fine tune of the Transpose interval, cents; double-click = 0)";
+            c.pitchMix.extraTip = "(Harmony only: 0 = dry, 100 = all shifted)";
+            c.pitchSweep.extraTip = "(Whammy only: heel = dry pitch, toe = SHIFT; map it to an expression pedal / CC)";
+            ParamSlider* ks[] = { &c.pitchShift, &c.pitchDetune, &c.pitchMix, &c.pitchSweep };
+            for (int i = 0; i < 4; ++i)
+            {
+                popup (*ks[i]);
+                pitch.addChildComponent (*ks[i]);
+                ks[i]->setBounds (Rectangle<int> (L::knobSize, L::knobSize).withCentre ({ (int) L::colX[i % 2], (int) L::knobY[i / 2] }));
+            }
+            for (int i = 0; i < 4; ++i)
+            {
+                pitch.addChildComponent (*c.pitchModes[(size_t) i]);
+                c.pitchModes[(size_t) i]->setBounds (Rectangle<int> (L::modeW, L::modeH)
+                                                         .withCentre ({ (int) L::colX[i % 2], (int) L::modeY[i / 2] }));
+            }
+            pitch.addChildComponent (c.pitchSwitch);
+            c.pitchSwitch.setBounds (Rectangle<int> (L::switchSize, L::switchSize).withCentre ({ L::width / 2, (int) L::switchY }));
         }
     }
 
     // captions, titles and LEDs are shared by both sets; the LEDs follow the shown amp
     {
-        const float xs[] = { 39.0f, 107.0f, 175.0f };
+        const float xs[] = { 34.0f, 92.0f, 150.0f };
         const char* caps[] = { "DRIVE", "TONE", "LEVEL" };
         for (int i = 0; i < 3; ++i)
-            boost.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 11.0f });
-        boost.titleArea = { 0.0f, 140.0f, 214.0f, 40.0f };
+            boost.captions.push_back ({ Rectangle<float> (58.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 11.0f });
+        boost.titleArea = { 0.0f, 140.0f, 184.0f, 40.0f };
         boost.titleSize = 32.0f;
-        boost.ledCentre = { 169.0f, switchY };
+        boost.ledCentre = { 150.0f, switchY };
         boost.ledAmount = [this] { return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::odEnable)) > 0.5f ? 1.0f : 0.0f; };
     }
     {
@@ -387,19 +431,19 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
         for (int b = 0; b < 7; ++b)
             eq.captions.push_back ({ Rectangle<float> ((float) (eqX0 + b * eqPitch) - 2.0f, 152.0f, 36.0f, 13.0f), caps[b], 10.0f });
         eq.captions.push_back ({ Rectangle<float> ((float) eqLevelX - 2.0f, 152.0f, 36.0f, 13.0f), "LEVEL", 9.0f });
-        eq.titleArea = { 0.0f, 172.0f, 304.0f, 32.0f };
+        eq.titleArea = { 0.0f, 172.0f, 300.0f, 32.0f };
         eq.titleSize = 24.0f;
-        eq.ledCentre = { 216.0f, switchY };
+        eq.ledCentre = { 214.0f, switchY };
         eq.ledAmount = [this] { return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::eqEnable)) > 0.5f ? 1.0f : 0.0f; };
     }
     {
-        const float xs[] = { 40.0f, 110.0f, 180.0f };
+        const float xs[] = { 30.0f, 80.0f, 130.0f };
         const char* caps[] = { "THRESH", "HOLD", "RELEASE" };
         for (int i = 0; i < 3; ++i)
-            gate.captions.push_back ({ Rectangle<float> (70.0f, 12.0f).withCentre ({ xs[i], 86.0f }), caps[i], 11.0f });
-        gate.titleArea = { 0.0f, 140.0f, 200.0f, 40.0f };
+            gate.captions.push_back ({ Rectangle<float> (52.0f, 12.0f).withCentre ({ xs[i], 82.0f }), caps[i], 10.0f });
+        gate.titleArea = { 0.0f, 140.0f, 160.0f, 40.0f };
         gate.titleSize = 32.0f;
-        gate.ledCentre = { 156.0f, switchY };
+        gate.ledCentre = { 128.0f, switchY };
         gate.ledAmount = [this]
         {
             // lit whenever the gate is switched on (the parameter), independent of whether the
@@ -414,15 +458,30 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
         };
     }
     {
-        const float xs[] = { 40.0f, 108.0f };
+        const float xs[] = { 36.0f, 100.0f };
         const char* caps[] = { "BLEND", "LEVEL", "HPF", "LPF" };
         const float capY[] = { 108.0f, 174.0f };
         for (int i = 0; i < 4; ++i)
-            cab.captions.push_back ({ Rectangle<float> (64.0f, 12.0f).withCentre ({ xs[i % 2], capY[i / 2] }), caps[i], 10.5f });
-        cab.titleArea = { 0.0f, 6.0f, 148.0f, 16.0f };
+            cab.captions.push_back ({ Rectangle<float> (60.0f, 12.0f).withCentre ({ xs[i % 2], capY[i / 2] }), caps[i], 10.5f });
+        cab.titleArea = { 0.0f, 6.0f, 136.0f, 16.0f };
         cab.titleSize = 14.0f;
-        cab.ledCentre = { 126.0f, 15.0f };
+        cab.ledCentre = { 116.0f, 15.0f };
         cab.ledAmount = [this] { return rawParam (proc, params::ampId (activeAmp(), params::AmpSlot::cabEnable)) > 0.5f ? 1.0f : 0.0f; };
+    }
+    {
+        namespace L = pitchLayout;
+        const char* caps[] = { "SHIFT", "DETUNE", "MIX", "SWEEP" };
+        for (int i = 0; i < 4; ++i)
+        {
+            const auto cx = L::colX[i % 2], ky = L::knobY[i / 2];
+            pitch.captions.push_back ({ Rectangle<float> (46.0f, 10.0f).withCentre ({ cx, ky + L::captionDy }), caps[i], 9.0f });
+            pitchValueCaption[(size_t) i] = (int) pitch.captions.size();
+            pitch.captions.push_back ({ Rectangle<float> (46.0f, 10.0f).withCentre ({ cx, ky + L::valueDy }), String(), 8.5f });
+        }
+        pitch.titleArea = { 0.0f, 192.0f, (float) L::width, 22.0f };
+        pitch.titleSize = 19.0f;
+        pitch.ledCentre = { (float) L::width - 18.0f, L::switchY };
+        pitch.ledAmount = [this] { return rawParam (proc, params::ampPitchId (activeAmp(), params::PitchSlot::on)) > 0.5f ? 1.0f : 0.0f; };
     }
     showAmp (activeAmp());
 
@@ -461,7 +520,7 @@ Pedalboard::Pedalboard (JuicyboiAudioProcessor& p, Component* popupParent)
 
     // Switching a pedal updates its LED straight away (the 30 Hz poll stays as the safety net).
     for (auto& set : sets)
-        for (auto* sw : { &set->odSwitch, &set->eqSwitch, &set->gateSwitch })
+        for (auto* sw : { &set->odSwitch, &set->eqSwitch, &set->gateSwitch, &set->pitchSwitch })
             sw->onChange = [this] { pollLedsNow(); };
     for (auto& set : sets)
         set->cabOn.onChange = [this] { pollLedsNow(); };
@@ -481,14 +540,41 @@ void Pedalboard::showAmp (int amp)
         for (auto* c : sets[(size_t) a]->all())
             c->setVisible (a == amp);
     for (auto& z : sets[(size_t) amp]->irZones) z->refresh();
+    syncPitchReadouts();
 }
 
 Pedalboard::~Pedalboard() { stopTimer(); }
 
 void Pedalboard::pollLedsNow()
 {
-    for (auto* pd : { &boost, &eq, &gate, &cab })
+    for (auto* pd : { &boost, &eq, &gate, &cab, &pitch })
         pd->pollLed();
+}
+
+ParamSlider& Pedalboard::getPitchKnob (int amp, int i) noexcept
+{
+    auto& c = *sets[(size_t) amp];
+    ParamSlider* ks[] = { &c.pitchShift, &c.pitchDetune, &c.pitchMix, &c.pitchSweep };
+    return *ks[jlimit (0, 3, i)];
+}
+
+void Pedalboard::syncPitchReadouts()
+{
+    const auto amp = activeAmp();
+    bool changed = false;
+    for (int i = 0; i < 4; ++i)
+    {
+        const auto idx = pitchValueCaption[(size_t) i];
+        if (idx < 0) continue;
+        auto& k = getPitchKnob (amp, i);
+        auto* prm = proc.apvts.getParameter (k.getComponentID().isNotEmpty() ? k.getComponentID() : String());
+        String t;
+        if (prm != nullptr)
+            t = prm->getCurrentValueAsText();
+        auto& cap = pitch.captions[(size_t) idx];
+        if (cap.text != t) { cap.text = t; changed = true; }
+    }
+    if (changed) pitch.repaint();
 }
 
 void Pedalboard::timerCallback()
@@ -496,6 +582,7 @@ void Pedalboard::timerCallback()
     showAmp (activeAmp());
     syncPreampOutDim();
     if (! open) return;
+    syncPitchReadouts();
     pollLedsNow();
 }
 
@@ -517,7 +604,7 @@ void Pedalboard::setOpen (bool o)
 {
     open = o;
     front.open = o;
-    for (auto* pd : { &boost, &eq, &gate, &cab })
+    for (auto* pd : { &boost, &eq, &gate, &cab, &pitch })
         pd->setVisible (o);
     tuner.setVisible (o);
     front.repaint();
@@ -528,6 +615,7 @@ void Pedalboard::setOpen (bool o)
 void Pedalboard::resized()
 {
     tuner.setBounds (tunerArea);
+    pitch.setBounds (pitchArea);
     boost.setBounds (boostArea);
     eq.setBounds (eqArea);
     gate.setBounds (gateArea);

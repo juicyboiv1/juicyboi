@@ -64,6 +64,9 @@ JuicyboiAudioProcessor::JuicyboiAudioProcessor()
     pPreampOut   = apvts.getRawParameterValue (params::id::preampOut);
     pTunerOn     = apvts.getRawParameterValue (params::id::tunerOn);
     pTunerRef    = apvts.getRawParameterValue (params::id::tunerRef);
+    for (int a = 0; a < 2; ++a)
+        for (int s = 0; s < params::numPitchSlots; ++s)
+            pPitch[(size_t) a][(size_t) s] = apvts.getRawParameterValue (params::ampPitchId (a, (params::PitchSlot) s));
 
     voicingA   = dsp::voicings::riffA();   // Red v2
     voicingAv1 = dsp::voicings::riffAv1(); // Red v1
@@ -226,6 +229,11 @@ void JuicyboiAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlo
     graphicEq.prepare (osRate, maxChunk * oversampler.getFactor()); // after params: snaps EQ to current settings (no fade-in on load)
     rectEqRunning = leadEqRunning = false;
     tuner.prepare (sampleRate, maxChunk);
+    // Rev3.3 PITCH: after updateParameters(), so it starts on the session's
+    // settings (no fade-in). Its latency is deliberately NOT added to
+    // setLatencySamples (docs/pitch-shift.md).
+    for (auto& pp : pitchPedals)
+        pp.prepare (sampleRate, maxChunk, numCh);
 }
 
 void JuicyboiAudioProcessor::releaseResources()
@@ -337,6 +345,24 @@ void JuicyboiAudioProcessor::updateParameters()
 
     tuner.setEnabled (pTunerOn->load() > 0.5f);
     tuner.setReference (pTunerRef->load());
+
+    // Rev3.3 PITCH pedal (per amp)
+    for (size_t a = 0; a < 2; ++a)
+    {
+        using PS = params::PitchSlot;
+        auto v = [this, a] (PS s) { return pPitch[a][(size_t) s]->load(); };
+        dsp::PitchPedal::Settings ps;
+        ps.on = v (PS::on) > 0.5f;
+        ps.shift = v (PS::shift);
+        ps.detuneCents = v (PS::detune);
+        ps.mix = v (PS::mix);
+        ps.sweep = v (PS::sweep);
+        ps.whammy = v (PS::whammy) > 0.5f;
+        ps.transpose = v (PS::transpose) > 0.5f;
+        ps.harmony = v (PS::harmony) > 0.5f;
+        ps.poly = v (PS::poly) > 0.5f;
+        pitchPedals[a].setParameters (ps);
+    }
 }
 
 void JuicyboiAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
@@ -435,6 +461,25 @@ void JuicyboiAudioProcessor::processChunk (juce::AudioBuffer<float>& buffer, int
     }
     for (int ch = 0; ch < numProc; ++ch)
         leadBuffer.copyFrom (ch, 0, buffer, ch, start, len);
+
+    // 1a) Rev3.3 PITCH pedal: first stomp after the tuner, before each amp's
+    //     Boost, at the base rate. Off (and faded) = the buffers are not touched.
+    //     Like the solved cascades, an amp that cannot be heard skips its pedal
+    //     (its shifter history restarts when it becomes audible again).
+    {
+        const bool warmAll = keepAllCascadesWarm;
+        const bool audible[2] { warmAll || modelMix.getCurrentValue() < 1.0f || modelMix.isSmoothing(),
+                                warmAll || modelMix.getCurrentValue() > 0.0f || modelMix.isSmoothing() };
+        for (int a = 0; a < 2; ++a)
+        {
+            auto& pp = pitchPedals[(size_t) a];
+            if (! audible[a]) { pp.resetEngines(); continue; }
+            float* chans[dsp::kMaxChannels] {};
+            for (int ch = 0; ch < numProc; ++ch)
+                chans[ch] = a == 0 ? buffer.getWritePointer (ch, start) : leadBuffer.getWritePointer (ch);
+            pp.process (chans, numProc, len);
+        }
+    }
 
     // 1b) Gate keys: clean post-trim guitar (mono sum), captured before any
     //     gain stage so the detector follows picking, not preamp hiss.

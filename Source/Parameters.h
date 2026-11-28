@@ -68,11 +68,29 @@ namespace id
     // addAmpSlots (and every earlier host index) stays unchanged.
     inline constexpr const char* cabHpf           = "cab_hpf";
     inline constexpr const char* cabLpf           = "cab_lpf";
+    // Rev3.3 (appended, after the cab filters): PITCH pedal, one set per amp
+    // (amp 1 = m5150_ prefix). Defaults: pedal off = true bypass, so older
+    // sessions load unchanged. docs/pitch-shift.md
+    inline constexpr const char* pitchOn        = "pitch_on";
+    inline constexpr const char* pitchShift     = "pitch_shift";     // semitones -24..+24
+    inline constexpr const char* pitchDetune    = "pitch_detune";    // cents -50..+50
+    inline constexpr const char* pitchMix       = "pitch_mix";       // Harmony blend, % shifted
+    inline constexpr const char* pitchSweep     = "pitch_sweep";     // Whammy heel 0 .. toe 1
+    inline constexpr const char* pitchWhammy    = "pitch_whammy";    // mode toggles
+    inline constexpr const char* pitchTranspose = "pitch_transpose";
+    inline constexpr const char* pitchHarmony   = "pitch_harmony";
+    inline constexpr const char* pitchPoly      = "pitch_poly";
 }
 
 /** Parameter ID of the cab HPF or LPF for amp 0 (Rectifier) or 1 (5150). */
 const char* ampCabHpfId (int amp);
 const char* ampCabLpfId (int amp);
+
+/** Rev3.3 PITCH pedal parameters (per amp, appended after the cab filters). */
+enum class PitchSlot { on, shift, detune, mix, sweep, whammy, transpose, harmony, poly, count };
+inline constexpr int numPitchSlots = (int) PitchSlot::count;
+/** Parameter ID of a PITCH setting for amp 0 (Rectifier) or 1 (5150). */
+const char* ampPitchId (int amp, PitchSlot slot);
 
 /** Rev2.4 per-amp settings. Amp 0 = Rectifier (Red v1 / Red v2 / Orange share
     ONE set: they are channels/voicings of one amp; its legacy IDs are its set),

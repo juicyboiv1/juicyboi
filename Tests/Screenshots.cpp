@@ -94,7 +94,7 @@ int main (int argc, char** argv)
     auto& drawer = ed.getDrawer();
     auto& tp = drawer.getTunerPedal();
     const auto tb = tp.getBounds();
-    const auto eqRect = juce::Rectangle<int> (396, tb.getY(), 304, tb.getHeight()).expanded (6);
+    const auto eqRect = drawer.getEqPedal().getBounds().expanded (6);
     const auto tunerRect = tb.expanded (6);
     auto reading = [] (int note, double cents)
     {
@@ -168,7 +168,7 @@ int main (int argc, char** argv)
         ed.setDrawerOpen (true);
         ed.getHead().syncModelNow();
         ed.getDrawer().syncAmpNow();
-        const auto cabRect = juce::Rectangle<int> (920, tb.getY(), 148, tb.getHeight()).expanded (8);
+        const auto cabRect = drawer.getCabPedal().getBounds().expanded (8);
         shootPart (drawer, cabRect, "rev3.2.2-cab-hpf-lpf", 4.0f);
         shootPart (drawer, drawer.getLocalBounds(), "rev3.2.2-pedalboard-rectifier", 2.0f);
         shoot (ed, "rev3.2.2-editor-rectifier-drawer-open");
@@ -184,6 +184,55 @@ int main (int argc, char** argv)
         set (p, "preamp_model", 0.0f);
         ed.getHead().syncModelNow();
         ed.getDrawer().syncAmpNow();
+    }
+    // Rev3.3: slim PITCH pedal between TUNE and BOOST (pedalboard + close-ups)
+    {
+        set (p, "tuner_on", 0.0f);
+        tp.previewDisplay.reset();
+        tp.refreshNow();
+        set (p, "preamp_model", 0.0f);
+        set (p, "pitch_on", 1.0f);
+        set (p, "pitch_shift", -2.0f);   // drop a whole step (Transpose, the default mode)
+        ed.setDrawerOpen (true);
+        ed.getHead().syncModelNow();
+        drawer.syncAmpNow();
+        drawer.syncPitchReadouts();
+        drawer.pollLedsNow();
+        const auto pitchRect = drawer.getPitchPedal().getBounds().expanded (6);
+        shootPart (drawer, pitchRect, "rev3.3-pitch-closeup-transpose-drop", 4.0f);
+        shootPart (drawer, drawer.getLocalBounds(), "rev3.3-pedalboard-rectifier", 2.0f);
+        shoot (ed, "rev3.3-editor-rectifier-drawer-open");
+        // every mode on: Whammy at half sweep, Harmony 60 %, Poly
+        set (p, "pitch_shift", 12.0f);
+        set (p, "pitch_detune", 7.0f);
+        set (p, "pitch_whammy", 1.0f);
+        set (p, "pitch_sweep", 0.5f);
+        set (p, "pitch_harmony", 1.0f);
+        set (p, "pitch_mix", 60.0f);
+        set (p, "pitch_poly", 1.0f);
+        drawer.syncPitchReadouts();
+        drawer.pollLedsNow();
+        shootPart (drawer, pitchRect, "rev3.3-pitch-closeup-all-modes", 4.0f);
+        // pedal off (true bypass): LED dark
+        set (p, "pitch_on", 0.0f);
+        drawer.pollLedsNow();
+        shootPart (drawer, pitchRect, "rev3.3-pitch-closeup-off", 4.0f);
+        // the 5150 has its own PITCH settings
+        set (p, "preamp_model", 1.0f);
+        set (p, "m5150_pitch_on", 1.0f);
+        set (p, "m5150_pitch_whammy", 1.0f);
+        set (p, "m5150_pitch_transpose", 0.0f);
+        set (p, "m5150_pitch_sweep", 0.8f);
+        ed.getHead().syncModelNow();
+        drawer.syncAmpNow();
+        drawer.syncPitchReadouts();
+        drawer.pollLedsNow();
+        shootPart (drawer, pitchRect, "rev3.3-pitch-closeup-5150-whammy", 4.0f);
+        shootPart (drawer, drawer.getLocalBounds(), "rev3.3-pedalboard-5150", 2.0f);
+        shoot (ed, "rev3.3-editor-5150-drawer-open");
+        set (p, "preamp_model", 0.0f);
+        ed.getHead().syncModelNow();
+        drawer.syncAmpNow();
     }
     // Filter-response plot (analytic digital biquads, 48 kHz)
     {

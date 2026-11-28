@@ -19,11 +19,13 @@
 #include "dsp/CabSim.h"
 #include "dsp/NoiseGate.h"
 #include "dsp/Tuner.h"
+#include "dsp/PitchShifter.h"
 
 /** juicyboi — heavy-riff preamp. Two amps, each with its OWN full settings set
     (Rev2.4, docs/per-amp-state.md); `preamp_model` picks the one you hear:
       Tuner (Rev3.2, shared; listens to the input, mutes the output while on)
-      Shared input calibration (input_trim) then:
+      Shared input calibration (input_trim) then, per amp:
+      PITCH (Rev3.3, docs/pitch-shift.md; base rate, true bypass when off) ->
       Rectifier: [4x: Boost -> Red v1|v2 / Orange cascade -> TMB ->
                  recovery -> (Red v2) 4x12 load -> GEQ-7] -> Cab (IR + HPF/LPF) -> Gate -> Master
       5150:      [4x: Boost -> Rhythm|Lead cascade (Pre Gain networks)
@@ -104,6 +106,10 @@ public:
     jb::dsp::Tuner& getTuner() noexcept { return tuner; }
     /** Tests: stop the background analysis thread (then call getTuner().analyse() directly). */
     void stopTunerThread();
+
+    /** Rev3.3 PITCH pedal of amp 0 (Rectifier) or 1 (5150). Its latency is
+        not reported to the host (docs/pitch-shift.md). */
+    const jb::dsp::PitchPedal& getPitchPedal (int amp) const noexcept { return pitchPedals[(size_t) (amp == 0 ? 0 : 1)]; }
 
     /** The amp whose settings are shown/heard: 0 = Rectifier, 1 = 5150. */
     int activeAmp() const noexcept { return pPreampModel->load() > 0.5f ? 1 : 0; }
@@ -186,6 +192,7 @@ private:
     std::atomic<float>* pPreampOut = nullptr; // 0 = Full Amp, 1 = Preamp Out
     std::atomic<float>* pTunerOn = nullptr;   // Rev3.2
     std::atomic<float>* pTunerRef = nullptr;
+    std::array<std::array<std::atomic<float>*, jb::params::numPitchSlots>, 2> pPitch {}; // Rev3.3
     float p5 (jb::params::AmpSlot s) const noexcept { return p5150[(size_t) s]->load(); }
     juce::AudioParameterBool* bypassParam = nullptr;
     int baseLatency = 0;
@@ -210,6 +217,7 @@ private:
     jb::dsp::GraphicEq graphicEq, leadGraphicEq; // Rectifier / 5150 GEQ-7 (Rev3.2: at 4x)
     bool rectEqRunning = false, leadEqRunning = false;
     jb::dsp::Tuner tuner;
+    std::array<jb::dsp::PitchPedal, 2> pitchPedals; // Rev3.3, per amp (before each Boost)
     struct TunerThread final : juce::Thread
     {
         explicit TunerThread (jb::dsp::Tuner& t) : juce::Thread ("juicyboi tuner"), tuner (t) {}

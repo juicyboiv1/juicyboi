@@ -371,5 +371,80 @@ int editorValidation()
         }
         check ("IR A/B drop zones remain inside the CAB panel under the filters", irsOk);
     }
+    // Rev3.3: slim PITCH pedal between TUNE and BOOST, every control fits legibly
+    {
+        auto& drawer = ed->getDrawer();
+        ed->setDrawerOpen (true);
+        auto& pp = drawer.getPitchPedal();
+        const auto tb = drawer.getTunerPedal().getBounds(), pb = pp.getBounds(), bb = drawer.getBoostPedal().getBounds();
+        check ("PITCH sits between TUNE and BOOST and is slim (no wider than TUNE)",
+               tb.getRight() < pb.getX() && pb.getRight() < bb.getX() && pb.getWidth() <= tb.getWidth());
+        check ("PITCH is named PITCH (no plugin name on it)", pp.getTitle() == "PITCH" && ! pp.getTitle().containsIgnoreCase ("juicyboi"));
+        // all pedals inside the drawer walls, none overlapping
+        std::vector<juce::Rectangle<int>> all { tb, pb, bb, drawer.getEqPedal().getBounds(), drawer.getGatePedal().getBounds(), drawer.getCabPedal().getBounds() };
+        bool board = true;
+        for (size_t i = 0; i < all.size(); ++i)
+        {
+            board = board && all[i].getX() >= 26 && all[i].getRight() <= jb::gui::Pedalboard::designWidth - 26;
+            for (size_t j = i + 1; j < all.size(); ++j) board = board && ! all[i].intersects (all[j]);
+        }
+        check ("six pedals fit inside the drawer walls without overlapping", board);
+
+        bool inside = true, apart = true, textFits = true, capsClear = true;
+        const auto local = pp.getLocalBounds().reduced (4);
+        for (int amp = 0; amp < 2; ++amp)
+        {
+            setParam (p, "preamp_model", (float) amp);
+            drawer.syncAmpNow();
+            std::vector<juce::Rectangle<int>> rs;
+            for (int i = 0; i < 4; ++i) rs.push_back (drawer.getPitchKnob (amp, i).getBounds());
+            for (int i = 0; i < 4; ++i) rs.push_back (drawer.getPitchMode (amp, i).getBounds());
+            rs.push_back (drawer.getPitchSwitch (amp).getBounds());
+            for (size_t i = 0; i < rs.size(); ++i)
+            {
+                inside = inside && local.contains (rs[i]);
+                for (size_t j = i + 1; j < rs.size(); ++j) apart = apart && ! rs[i].intersects (rs[j]);
+                for (auto& cap : pp.captions)
+                    if (cap.area.toNearestInt().getIntersection (rs[i]).getHeight() > 3) capsClear = false;
+            }
+            const auto led = juce::Rectangle<float> (12.0f, 12.0f).withCentre (pp.ledCentre).toNearestInt();
+            apart = apart && ! led.intersects (drawer.getPitchSwitch (amp).getBounds());
+            for (int i = 0; i < 4; ++i)
+            {
+                auto& m = drawer.getPitchMode (amp, i);
+                textFits = textFits && juce::GlyphArrangement::getStringWidth (jb::gui::uiFont (8.5f), m.getLabel()) <= (float) m.getWidth() - 12.0f;
+            }
+        }
+        drawer.syncPitchReadouts();
+        juce::StringArray caps;
+        for (auto& cap : pp.captions)
+        {
+            caps.add (cap.text);
+            textFits = textFits && juce::GlyphArrangement::getStringWidth (jb::gui::uiFont (cap.size), cap.text) <= cap.area.getWidth();
+            inside = inside && local.toFloat().contains (cap.area);
+        }
+        check ("PITCH: SHIFT DETUNE MIX SWEEP knobs, 4 mode buttons and footswitch inside the slim pedal, both amps", inside);
+        check ("PITCH: no control overlaps another (or the LED)", apart);
+        check ("PITCH: captions / value readouts never cover a control", capsClear);
+        check ("PITCH: every label and readout fits its slot (\"+12 st\", \"WHAM\" ...)",
+               textFits && caps.contains ("SHIFT") && caps.contains ("DETUNE") && caps.contains ("MIX") && caps.contains ("SWEEP") && caps.contains ("+12 st"));
+
+        // mode buttons and footswitch are bound to the active amp's parameters
+        setParam (p, "preamp_model", 0.0f);
+        drawer.syncAmpNow();
+        auto& wham = drawer.getPitchMode (0, 0);
+        const bool before = p.apvts.getRawParameterValue ("pitch_whammy")->load() > 0.5f;
+        wham.flip();
+        const bool after = p.apvts.getRawParameterValue ("pitch_whammy")->load() > 0.5f;
+        wham.flip();
+        setParam (p, "pitch_on", 1.0f);
+        drawer.pollLedsNow();
+        const bool lit = pp.getShownLed() > 0.5f;
+        setParam (p, "pitch_on", 0.0f);
+        drawer.pollLedsNow();
+        const bool dark = pp.getShownLed() < 0.5f;
+        check ("PITCH mode button toggles its parameter; LED follows pitch_on", before != after && lit && dark
+               && drawer.getPitchMode (1, 0).getComponentID() == "m5150_pitch_whammy");
+    }
     return failures;
 }

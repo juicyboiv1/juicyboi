@@ -80,6 +80,13 @@ std::unique_ptr<juce::AudioProcessor> make (const Cfg& c, int bs)
             setParam (*p, (juce::String (pre) + "cab_hpf").toRawUTF8(), 80.0f);
             setParam (*p, (juce::String (pre) + "cab_lpf").toRawUTF8(), 5000.0f);
         }
+    if (const auto* pm = std::getenv ("JB_CPU_PITCH")) // Rev3.3: PITCH on (-12 st), "poly" = Poly engine
+        for (auto* pre : { "", "m5150_" })
+        {
+            setParam (*p, (juce::String (pre) + "pitch_on").toRawUTF8(), 1.0f);
+            setParam (*p, (juce::String (pre) + "pitch_shift").toRawUTF8(), -12.0f);
+            setParam (*p, (juce::String (pre) + "pitch_poly").toRawUTF8(), juce::String (pm) == "poly" ? 1.0f : 0.0f);
+        }
     p->prepareToPlay (sr, bs);
     return p;
 }
